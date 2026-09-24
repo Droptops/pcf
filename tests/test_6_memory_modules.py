@@ -86,15 +86,17 @@ def test_tail_memory_renders_as_one_user_message_with_the_turn():
     assert '"source":null' in inputs[-2]["content"][0]["text"] and inputs[-1]["content"][0]["text"] == "hi"
 
 
-def _placed_session(edits: list[int], place: bool) -> tuple[int, list[str]]:
+def _placed_session(edits: list[int], place: bool, cold_at: tuple[int, ...] = (),
+                    report_cold: bool = True) -> tuple[int, list[str]]:
     from pcf.families.sim import WordTokenizer
     from pcf.placement import MemoryPlacer
-    engine, placer, history, total, tail = family_a(), MemoryPlacer(WordTokenizer()), [], 0, []
+    engine, placer, history, total, tail, now = family_a(), MemoryPlacer(WordTokenizer()), [], 0, [], 0
     for n, version in enumerate(edits):
+        now += 1000 if n in cold_at else 10  # 1000s outlives the 300s TTL
         memory = [Segment("ma", "memory", _module("a")), Segment("mc", "memory", _module("c", version))]
-        front, tail = placer.split(memory, history) if place else (memory, [])
+        front, tail = placer.split(memory, history, cold=report_cold and n in cold_at) if place else (memory, [])
         ctx = Context([Segment("s", "system", SYSTEM), *front, *history, *tail, Segment("u", "user", "hi", stable=False)])
-        total += engine.run(ctx, n * 10)[0].cold_tokens
+        total += engine.run(ctx, now)[0].cold_tokens
         history.append(_history(n))
     return total, [s.id for s in tail]
 
@@ -120,3 +122,35 @@ def test_placer_keeps_changing_memory_in_front_without_history_and_rejects_other
         assert tail == []  # with no history after it, the front never costs more than the tail
     with pytest.raises(ValueError, match="memory"):
         placer.split([Segment("d", "document", "x")], [])
+
+
+BUSY_THEN_QUIET = [*range(8), *[7] * 16]
+
+
+def test_quiet_module_returns_to_front_only_when_the_cache_is_cold():
+    warm_cost, warm_tail = _placed_session(BUSY_THEN_QUIET, place=True)
+    assert warm_tail == ["mc"]  # moving back while warm would re-bill the history
+    cold_cost, cold_tail = _placed_session(BUSY_THEN_QUIET, place=True, cold_at=(8, 16))
+    assert cold_tail == []
+    unreported, unreported_tail = _placed_session(BUSY_THEN_QUIET, place=True, cold_at=(8, 16), report_cold=False)
+    assert unreported_tail == ["mc"] and cold_cost < unreported
+    assert cold_cost < _placed_session(BUSY_THEN_QUIET, place=False, cold_at=(8, 16))[0]
+
+
+def test_decay_must_be_a_fraction():
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import MemoryPlacer
+    for bad in (1, -0.1, float("nan"), True):
+        with pytest.raises(ValueError):
+            MemoryPlacer(WordTokenizer(), decay=bad)
+
+
+def test_tail_is_sticky_while_the_cache_is_warm():
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import MemoryPlacer
+    placer, history = MemoryPlacer(WordTokenizer()), [_history(n) for n in range(5)]
+    versions = [0, 1] + [1] * 10  # one change, then quiet: the lifetime rate falls below the threshold
+    tails = [placer.split([Segment("mc", "memory", _module("c", v))], history)[1] for v in versions]
+    assert tails[1] and all(tails[1:])
+    assert placer.split([Segment("mc", "memory", _module("c", 1))], history, cold=True) == (
+        [Segment("mc", "memory", _module("c", 1))], [])
