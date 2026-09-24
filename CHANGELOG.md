@@ -27,6 +27,13 @@ Fixes from coding reviews. Portable segment hashes and PCF document wire format 
 - OpenAI history caching (checked live on gpt-5.6, explicit mode): a history segment ending in assistant text is
   marked on its last user/tool item, since a marker on assistant `output_text` is accepted but writes nothing.
   Reads only hit markers present in the request, so earlier history endpoints stay marked.
+- OpenAI write estimates stop at the history marker: `ContextCompiler.covered_tokens()` reports how much of the
+  prefix a marker caches, and the OpenAI adapter excludes assistant turns after a history segment's last user/tool
+  item, so `warmth()` and router cost no longer count them as written.
+- `MemoryPlacer(write_multiplier=, read_multiplier=)`: the tail rule weighs cache prices,
+  p·(w−r)·(m+H) > (1−r)·m. Defaults (w=1, r=0) keep the plain token rule.
+- `scripts/live_memory_placement.py` compares three arms (front, tail, placed) over four modules with different
+  change rates, repeats runs, and scores stale-history traps separately.
 - Breakpoints over budget keep the first stable anchor as well as the last (budget ≥ 4), so one volatile module
   left `stable` no longer takes the system prompt out of cache.
 - `scripts/live_memory_placement.py`: low reasoning effort and 512 output tokens (64 returned empty answers), and a

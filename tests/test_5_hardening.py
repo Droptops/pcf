@@ -9,6 +9,7 @@ import pytest
 from pcf import Context, Segment, Usage, canonical_bytes
 from pcf.cache import PrefixCache
 from pcf.compiler import UnsupportedRequest, choose_breakpoints
+from pcf.segments import text_content
 from pcf.families.anthropic_adapter import AnthropicCompiler, history_from_response as anthropic_history
 from pcf.families.capabilities import OpenAICapabilities
 from pcf.families.openai_adapter import OpenAICompiler, history_from_response as openai_history
@@ -317,3 +318,14 @@ def test_over_budget_selection_keeps_first_anchor_as_well_as_last():
                    Segment("u", "user", "next", stable=False)])
     assert choose_breakpoints(ctx, 4) == [0, 1, 4, 5]
     assert choose_breakpoints(ctx, 3) == [1, 4, 5]
+
+
+def test_openai_write_estimate_excludes_trailing_assistant_text():
+    # The history marker sits on the user item, so the assistant reply after it is not written this request.
+    reply = "word " * 2000
+    hist = Segment("h", "history", [{"role": "user", "content": "q"}, {"role": "assistant", "content": reply}])
+    ctx = Context([Segment("s", "system", "rule " * 2000), hist, Segment("u", "user", "next", stable=False)])
+    c = OpenAICompiler("gpt-5.6")
+    w, cum = c.warmth(ctx, PrefixCache(1800), 0.0), c.compile(ctx).cum_tokens
+    trailing = c.tokenizer.count(text_content([{"role": "assistant", "content": reply}]))
+    assert w.cache_creation_tokens == cum[1] - trailing and trailing > 2000

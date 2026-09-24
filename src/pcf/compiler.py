@@ -141,6 +141,10 @@ class ContextCompiler(ABC):
     def supports_boundary(self, ctx: Context, index: int) -> bool:
         return bool(ctx.segments[index].content)
 
+    def covered_tokens(self, ctx: Context, index: int, cum_tokens: list[int]) -> int:
+        """Prefix tokens a marker on segment ``index`` caches; adapters whose marker sits inside a segment trim it."""
+        return cum_tokens[index]
+
     def native_input(self, request: dict) -> dict:
         """Subclasses must include every input-affecting field, excluding generation controls."""
         return {k: v for k, v in request.items() if k not in {
@@ -206,13 +210,14 @@ class ContextCompiler(ABC):
         hit = cache.peek(compiled.cache_key, compiled.native_chain, now, namespace=ctx.cache_namespace,
                          eligible_indices=compiled.lookup_indices) if simulated else -1
         warm = compiled.cum_tokens[hit] if hit >= 0 else 0
-        last_write = hit
         # An implicit breakpoint's position is unknown; assume the most it could write (the whole prompt).
         implicit = (len(ctx.segments) - 1,) if self.implicit_breakpoint and not compiled.breakpoints else ()
+        cum, covered = compiled.cum_tokens, warm
         for index in compiled.breakpoints or implicit:
-            if index > hit and compiled.cum_tokens[index] >= self.descriptor.min_cacheable_tokens:
-                last_write = index
-        written = (compiled.cum_tokens[last_write] if last_write >= 0 else 0) - warm
+            reach = self.covered_tokens(ctx, index, cum) if index in compiled.breakpoints else cum[index]
+            if index > hit and reach >= self.descriptor.min_cacheable_tokens:
+                covered = max(covered, reach)
+        written = covered - warm
         cold = compiled.total_tokens - warm
         return Warmth(hit + 1, warm, cold, written, cold - written,
                       "simulated" if simulated else "unknown", now)
