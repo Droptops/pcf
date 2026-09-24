@@ -30,6 +30,9 @@ Fixes from coding reviews. Portable segment hashes and PCF document wire format 
 - OpenAI write estimates stop at the history marker: `ContextCompiler.covered_tokens()` reports how much of the
   prefix a marker caches, and the OpenAI adapter excludes assistant turns after a history segment's last user/tool
   item, so `warmth()` and router cost no longer count them as written.
+- `scripts/live_memory_placement.py --provider anthropic` sends the Anthropic adapter's Messages request unchanged to
+  OpenRouter's Anthropic-compatible `/api/v1/messages`, pinned to Anthropic upstream (no fallbacks); prompt caching
+  was checked live through it (6,012 tokens written, then read).
 - `MemoryPlacer.for_candidate(candidate)` prices placement from a router `Candidate` (its tokenizer, write and
   cache-read prices). README documents memory placement with the measured live results.
 - `MemoryPlacer(write_multiplier=, read_multiplier=)`: the tail rule weighs cache prices,
