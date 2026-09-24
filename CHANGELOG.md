@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-Fixes from a coding-discipline review. Hashes and wire format of valid 0.2 documents are unchanged.
+Fixes from coding reviews. Portable segment hashes and PCF document wire format remain unchanged; compiler cache keys, simulated billing counts, candidate fingerprints and calibration record identities change as described below.
+
+- Jev's HTTPS transport rejects all redirects so bearer credentials cannot follow a different origin or an HTTP downgrade. Redirects trigger confidence fallback.
+- Held-out validation rejects repeated context hashes and requires enough selected tail examples even when no tail score reaches the threshold. All sample minimums are included in validation record identity. Existing scorers with only below-threshold tail evidence now fall back.
+- Token accounting uses cumulative canonical native input, matching cache identity. Splitting or combining history segments cannot change billing for the same native prefix. The accounting version in compiler cache keys invalidates older metadata and candidate validations. The character-chunk tokenizer's identity now includes its validated configuration.
+- Added regression coverage for redirects, evidence minimums, duplicate samples, regrouped history, and tokenizer identity; CI covers Python 3.11–3.14, lint, offline smoke checks, wheel installation, and session-link prevention in tracked text and new commits.
 
 - OpenAI: assistant history is sent as plain text (Responses rejects `input_text` on assistant turns) and carries
   no cache marker; explicit mode is sent only when a marker was placed (explicit with none disables caching);

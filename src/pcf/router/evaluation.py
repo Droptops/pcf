@@ -38,6 +38,9 @@ class CalibrationRecord:
     tail_selected_quality: float | None
     max_ece: float
     quality_floor: float
+    min_samples: int
+    min_tail_samples: int
+    min_selected_samples: int
     passed: bool
     failures: tuple[str, ...]
     sample_digest: str
@@ -69,7 +72,10 @@ def validate_source(source, samples, *, dataset_id, threshold=.8, max_ece=.10,
     candidate = samples[0].candidate
     if not source.can_validate(candidate):
         raise ValueError("source must be fitted/versioned for this candidate before validation")
-    if any(s.context.prefix_chain()[-1] in getattr(source, "training_contexts", set()) for s in samples):
+    context_ids = [s.context.prefix_chain()[-1] for s in samples]
+    if len(set(context_ids)) != len(context_ids):
+        raise ValueError("validation requires unique contexts; repeated rows are not independent evidence")
+    if any(context_id in getattr(source, "training_contexts", set()) for context_id in context_ids):
         raise ValueError("validation contexts overlap calibration fitting data")
     probs = [number(source.p_sufficient(s.context, s.candidate), "p_sufficient", maximum=1) for s in samples]
     labels = [s.label for s in samples]
@@ -92,12 +98,14 @@ def validate_source(source, samples, *, dataset_id, threshold=.8, max_ece=.10,
     if not selected:  # otherwise any future p >= threshold would route on unmeasured quality
         failures.append("no validation sample reaches the threshold; selected quality unmeasured")
     for name, rows, value in [("selected", selected, quality), ("tail-selected", tail_selected, tail_quality)]:
-        if rows and (len(rows) < min_selected_samples or value < quality_floor):
+        if len(rows) < min_selected_samples or value is None or value < quality_floor:
             failures.append(f"{name} quality or sample count below requirement")
     record = CalibrationRecord(source.fingerprint, candidate.fingerprint, dataset_id, source.rubric_id,
                                threshold, len(samples), len(tail), len(selected), len(tail_selected),
                                ece, tail_ece, brier_score(probs, labels), quality, tail_quality,
-                               max_ece, quality_floor, not failures, tuple(failures),
-                               hash_object("pcf:validation-samples:0.2", [[s.context.prefix_chain()[-1], s.label, s.is_tail] for s in samples]))
+                               max_ece, quality_floor, min_samples, min_tail_samples, min_selected_samples,
+                               not failures, tuple(failures),
+                               hash_object("pcf:validation-samples:0.2", [[key, s.label, s.is_tail]
+                                                                         for key, s in zip(context_ids, samples)]))
     source._records[(candidate.fingerprint, threshold)] = record
     return record
