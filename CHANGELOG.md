@@ -6,6 +6,8 @@ Fixes from a coding-discipline review. Hashes and wire format of valid 0.2 docum
 
 - Breakpoints: memory segments sharing a `provenance` form a module with its own anchor, so editing a later
   module keeps earlier ones warm. Memory without provenance keeps the shared anchor; hashes are unchanged.
+- Ordering: `memory` may follow history when only `user` segments come after it (tail memory), so editing
+  volatile memory re-bills only the tail instead of the whole conversation.
 - OpenAI: assistant history is sent as plain text (Responses rejects `input_text` on assistant turns) and carries
   no cache marker; explicit mode is sent only when a marker was placed (explicit with none disables caching);
   parallel `function_call` items normalize into one assistant turn; unsupported boundaries no longer consume the
