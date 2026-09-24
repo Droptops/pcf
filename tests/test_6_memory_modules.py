@@ -175,3 +175,16 @@ def test_cache_prices_shift_the_placement_threshold():
     assert tail_after_one_change(write_multiplier=1.25, read_multiplier=0.1)  # 0.5 * 1.15 * 190 > 0.9 * 100
     with pytest.raises(ValueError):
         MemoryPlacer(XTokenizer(), write_multiplier=0.1, read_multiplier=0.1)
+
+
+def test_placer_takes_prices_from_a_router_candidate():
+    from pcf.cache import PrefixCache
+    from pcf.families.openai_adapter import OpenAICompiler
+    from pcf.placement import MemoryPlacer
+    from pcf.router import Candidate
+    compiler = OpenAICompiler("gpt-5.6")
+    placer = MemoryPlacer.for_candidate(Candidate(compiler, PrefixCache(1800), 2.0, 0.2, is_fallback=True))
+    assert placer.tokenizer is compiler.tokenizer
+    assert (placer.write_multiplier, placer.read_multiplier) == (1.25, 0.1)
+    with pytest.raises(ValueError):
+        MemoryPlacer.for_candidate(Candidate(compiler, PrefixCache(1800), 0.0, 0.0, is_fallback=True))

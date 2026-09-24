@@ -23,6 +23,25 @@ External documents remain data, tool IDs/arguments are preserved, cache inspecti
 
 Cache identity and cumulative token counts use the same rendered input. Simulated billing counts canonical native JSON; provider billing remains an estimate until usage is returned. The revised accounting changes compiler cache keys and candidate fingerprints: old cache metadata and validation records must not be reused.
 
+## Memory placement
+
+Memory that changes between turns should follow history (tail memory), not precede it: a change to front memory re-bills every history token after it. `MemoryPlacer` decides per module: stable modules stay in front (cached), a module moves to the tail once p·(w−r)·(m+H) > (1−r)·m, with prices from `MemoryPlacer.for_candidate(candidate)`.
+
+Measured live with `scripts/live_memory_placement.py --run` (four modules changing never / every 6th / every 3rd /
+every turn; input cost in uncached-token units, cache write 1.25×, read assumed 0.1×; each cell is one scripted
+session, repeats differed by a few tokens):
+
+| Arrangement | gpt-5.6, 20 turns | gpt-5.6, 60 turns | claude-sonnet-5 via OpenRouter, 20 turns |
+|---|---|---|---|
+| All memory in front, most volatile last | 80.2k | 640.2k | 115.9k |
+| All memory after history | 30.7k | 121.3k | 38.7k |
+| `MemoryPlacer` | 28.6k | 111.6k | 36.3k |
+
+Every arm answered every question correctly, including turns where history held a stale value (33/33, 37/37,
+11/11). Most of the saving comes from putting volatile memory after history, and it grows with session length;
+adaptive placement adds roughly (1−r)·m per turn for each stable module kept in front (6–9% here). Simple lookup
+questions: a cost measurement, not a quality evaluation.
+
 The Jev transport requires a direct HTTPS endpoint and rejects redirects. CI runs offline tests, lint, examples, a wheel installation check, and a private-session-link check on tracked text and new commit messages. The metadata check does not remove links from existing Git history or GitHub PR descriptions.
 
 See `spec/SPEC.md` and `spec/REMEDIATION.md`.

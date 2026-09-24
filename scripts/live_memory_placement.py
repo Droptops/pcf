@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Live A/B/C of memory placement on the OpenAI Responses API. Offline by default; paid calls need --run.
+"""Live A/B/C of memory placement. Offline by default; paid calls need --run.
+
+--provider openai uses the OpenAI Responses API. --provider anthropic sends the Anthropic adapter's Messages
+request unchanged to OpenRouter's Anthropic-compatible endpoint, pinned to Anthropic as the upstream provider
+(no fallbacks) so prompt caching is Anthropic's own.
 
 One scripted support session is run per arm, each in its own cache namespace, --repeats times:
   front  - all memory before history, most volatile module last (the best hand ordering)
@@ -21,6 +25,7 @@ import uuid
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from pcf import Context, Segment  # noqa: E402
+from pcf.families.anthropic_adapter import AnthropicCompiler  # noqa: E402
 from pcf.families.openai_adapter import OpenAICompiler  # noqa: E402
 from pcf.placement import MemoryPlacer  # noqa: E402
 
@@ -78,11 +83,26 @@ def history_turn(turn: int, text: str, answer: str) -> Segment:
     return Segment(f"h{turn}", "history", [{"role": "user", "content": text}, {"role": "assistant", "content": reply}])
 
 
-def session(arm: str, turns: int, model: str, nonce: str, client=None) -> list[dict]:
-    compiler = OpenAICompiler(model)
+def make_compiler(provider: str, model: str):
+    return OpenAICompiler(model) if provider == "openai" else AnthropicCompiler(model, max_tokens=512)
+
+
+def call(provider: str, client, request: dict) -> tuple[object, str]:
+    """(response, answer text) for one compiled request."""
+    if provider == "openai":
+        # Low effort and room to answer: at 64 tokens reasoning models can return nothing visible.
+        response = client.responses.create(**request, max_output_tokens=512, reasoning={"effort": "low"})
+        return response, getattr(response, "output_text", "") or ""
+    response = client.messages.create(**{**request, "model": "anthropic/" + request["model"]},
+                                      extra_body={"provider": {"order": ["Anthropic"], "allow_fallbacks": False}})
+    return response, "".join(getattr(block, "text", "") for block in response.content)
+
+
+def session(arm: str, turns: int, provider: str, model: str, nonce: str, client=None) -> list[dict]:
+    compiler = make_compiler(provider, model)
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=READ_MULTIPLIER)
-    system = Segment("s", "system", f"Session {nonce}.\n" + "\n".join(POLICIES))
+    system = Segment("s", "system", f"Session {nonce}-{arm}.\n" + "\n".join(POLICIES))
     history, rows, said = [], [], {}
     for turn in range(turns):
         mem = memory(turn)
@@ -95,14 +115,12 @@ def session(arm: str, turns: int, model: str, nonce: str, client=None) -> list[d
         text, expected = question(turn)
         ctx = Context([system, *front, *history, *tail, Segment("u", "user", text, stable=False)],
                       cache_namespace=f"{arm}-{nonce}")
-        # Low effort and room to answer: at 64 tokens reasoning models can return nothing visible.
-        request = {**compiler.compile(ctx).request, "max_output_tokens": 512, "reasoning": {"effort": "low"}}
+        request = compiler.compile(ctx).request
         stale = said.get(text)
         row = {"turn": turn, "tail": [s.id for s in tail], "stale_trap": stale is not None and stale != expected}
         if client is not None:
-            response = client.responses.create(**request)
-            usage = compiler.usage_from_response(response)
-            answer = (getattr(response, "output_text", "") or "").strip()
+            response, answer = call(provider, client, request)
+            usage, answer = compiler.usage_from_response(response), answer.strip()
             row.update(cached=usage.cache_read_input_tokens, written=usage.cache_creation_input_tokens,
                        uncached=usage.input_tokens, answer=answer, correct=expected.lower() in answer.lower())
         rows.append(row)
@@ -141,26 +159,33 @@ READ_MULTIPLIER = 0.1
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run", action="store_true", help="make paid OpenAI calls (needs OPENAI_API_KEY; any "
-                        "value works when a proxy injects the real key)")
+    parser.add_argument("--run", action="store_true", help="make paid calls (needs OPENAI_API_KEY or "
+                        "OPENROUTER_API_KEY; any value works when a proxy injects the real key)")
+    parser.add_argument("--provider", choices=("openai", "anthropic"), default="openai")
     parser.add_argument("--turns", type=int, default=20)
     parser.add_argument("--repeats", type=int, default=1)
-    parser.add_argument("--model", default="gpt-5.6")
+    parser.add_argument("--model", help="default: gpt-5.6 (openai) or claude-sonnet-5 (anthropic)")
     parser.add_argument("--read-multiplier", type=float, default=READ_MULTIPLIER,
                         help="assumed price of a cached input token relative to uncached (check current pricing)")
     args = parser.parse_args()
     READ_MULTIPLIER = args.read_multiplier
+    model = args.model or ("gpt-5.6" if args.provider == "openai" else "claude-sonnet-5")
     client = None
     if args.run:
-        if not os.environ.get("OPENAI_API_KEY"):
-            raise SystemExit("--run requires OPENAI_API_KEY")
-        import openai
-        client = openai.OpenAI()
-    writes = OpenAICompiler(args.model).descriptor.cache_write_multiplier
+        key = "OPENAI_API_KEY" if args.provider == "openai" else "OPENROUTER_API_KEY"
+        if not os.environ.get(key):
+            raise SystemExit(f"--run --provider {args.provider} requires {key}")
+        if args.provider == "openai":
+            import openai
+            client = openai.OpenAI()
+        else:
+            import anthropic
+            client = anthropic.Anthropic(api_key=os.environ[key], base_url="https://openrouter.ai/api")
+    writes = make_compiler(args.provider, model).descriptor.cache_write_multiplier
     runs = []
     for _ in range(args.repeats if client else 1):
         nonce = uuid.uuid4().hex[:12] if client else "offline"  # fresh prefix: every arm starts cold
-        run = {arm: session(arm, args.turns, args.model, nonce, client) for arm in ARMS}
+        run = {arm: session(arm, args.turns, args.provider, model, nonce, client) for arm in ARMS}
         run["summary"] = {arm: summarize(run[arm], writes) for arm in ARMS}
         runs.append(run)
     print(json.dumps({"runs": runs, "aggregate": aggregate(runs)}, indent=2))
