@@ -6,12 +6,14 @@ import math
 
 import pytest
 
-from pcf import Context, Segment, canonical_bytes
+from pcf import Context, Segment, Usage, canonical_bytes
 from pcf.cache import PrefixCache
+from pcf.compiler import UnsupportedRequest
 from pcf.families.anthropic_adapter import AnthropicCompiler, history_from_response as anthropic_history
+from pcf.families.capabilities import OpenAICapabilities
 from pcf.families.openai_adapter import OpenAICompiler, history_from_response as openai_history
 from pcf.families.sim import family_a, family_b
-from pcf.router import Candidate, JevConfidenceSource, Router
+from pcf.router import Candidate, ConfidenceUnavailable, JevConfidenceSource, Router, UncalibratedSource, http_transport
 from pcf.router.calibration import fit_platt
 
 
@@ -148,3 +150,122 @@ def test_malformed_confidence_responses_fall_back():
                       lambda body: {"answers": {"sufficient": {"type": "noul", "noul": 10 ** 400}}}):
         d = Router(cands, JevConfidenceSource(transport)).route(ctx, now=0)
         assert d.escalate and d.chosen == "sim-a-large" and all(c.confidence_error for c in d.candidates)
+
+
+def test_anthropic_rejects_request_shapes_the_api_rejects():
+    sys, hist = Segment("s", "system", "sys"), [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}]
+    prefill = Context([sys, Segment("h", "history", hist)])
+    with pytest.raises(ValueError, match="prefill"):
+        AnthropicCompiler("claude-sonnet-5").compile(prefill)
+    assert AnthropicCompiler("claude-haiku-4-5").compile(prefill).request["messages"][-1]["role"] == "assistant"
+    with pytest.raises(ValueError, match="at least one message"):
+        AnthropicCompiler("claude-sonnet-5").compile(Context([sys]))
+
+
+def test_cache_clock_rejects_out_of_order_events():
+    c, k, p1, p2 = PrefixCache(10), "sha256:" + "1" * 64, "sha256:" + "2" * 64, "sha256:" + "3" * 64
+    c.write(k, p1, 1, 10)
+    c.write(k, p2, 1, 100)  # prunes p1, whose own history no longer guards it
+    for late in (lambda: c.write(k, p1, 1, 50), lambda: c.touch(k, p2, 50), lambda: c.prune(50)):
+        with pytest.raises(ValueError, match="backwards"):
+            late()
+    with pytest.raises(ValueError, match="predates"):
+        c.peek(k, [p2], 50)
+    engine = family_a(min_cacheable=1)
+    ctx = Context([Segment("s", "system", "stable"), Segment("u", "user", "hi", stable=False)])
+    engine.run(ctx, 100)
+    with pytest.raises(ValueError, match="predates"):  # no warm estimate for a time before the entry existed
+        engine.compiler.warmth(ctx, engine.cache, 50)
+
+
+def test_peek_is_read_only_and_execution_refreshes_ttl():
+    c, k, p = PrefixCache(10), "sha256:" + "1" * 64, "sha256:" + "2" * 64
+    c.write(k, p, 1, 0)
+    assert c.peek(k, [p], 9) == 0 and c.peek(k, [p], 10) == -1  # the peek at 9 did not extend [0, 10)
+    assert c.touch(k, p, 9) and c.peek(k, [p], 18) == 0 and c.peek(k, [p], 19) == -1
+    engine = family_a(min_cacheable=1, ttl_seconds=10)
+    ctx = Context([Segment("s", "system", "stable"), Segment("u", "user", "hi", stable=False)])
+    engine.run(ctx, 0)
+    assert engine.run(ctx, 9)[0].cache_read_input_tokens > 0  # this read refreshes the entry...
+    assert engine.run(ctx, 18)[0].cache_read_input_tokens > 0  # ...so it is still live at 18
+
+
+def test_prefix_cache_evicts_the_least_recently_observed_entry():
+    c, k = PrefixCache(100, max_entries=2), "sha256:" + "1" * 64
+    p = ["sha256:" + str(i) * 64 for i in range(3)]
+    c.write(k, p[0], 1, 0)
+    c.write(k, p[1], 1, 1, ttl_seconds=1000)  # outlives p[0], but was observed less recently
+    c.touch(k, p[0], 2)
+    c.peek(k, [p[1]], 2.5)  # read-only: must not count as an observation
+    c.write(k, p[2], 1, 3)
+    assert len(c) == 2 and c.peek(k, [p[1]], 3) == -1 and c.peek(k, [p[0]], 3) == 0 and c.peek(k, [p[2]], 3) == 0
+
+
+def test_cache_namespace_isolates_tenants():
+    engine = family_a(min_cacheable=1)
+    ctx = Context([Segment("s", "system", "stable"), Segment("u", "user", "hi", stable=False)], cache_namespace="t1")
+    other = Context(ctx.segments, ctx.session_id, "t2")
+    engine.run(ctx, 0)
+    assert engine.compiler.warmth(ctx, engine.cache, 1).warm_tokens > 0
+    assert engine.compiler.warmth(other, engine.cache, 1).warm_tokens == 0
+    keys = {OpenAICompiler("gpt-5.6").compile(c).request["prompt_cache_key"] for c in (ctx, other)}
+    assert len(keys) == 2
+
+
+def test_provider_usage_parsing():
+    details = {"cached_tokens": 1500, "cache_write_tokens": 300}
+    assert OpenAICompiler.usage_from_response({"usage": {"input_tokens": 2000, "input_tokens_details": details}}) == \
+        Usage(1500, 300, 200)
+    with pytest.raises(ValueError, match="exceeds"):
+        OpenAICompiler.usage_from_response({"usage": {"input_tokens": 10, "input_tokens_details": {"cached_tokens": 11}}})
+    usage = {"input_tokens": 50, "cache_read_input_tokens": 1000, "cache_creation_input_tokens": 200}
+    assert AnthropicCompiler.usage_from_response({"usage": usage}) == Usage(1000, 200, 50)
+
+
+def test_openai_implicit_mode_estimates_the_write_premium():
+    big = [{"name": "f", "description": "x" * 8000, "parameters": {}}]  # ~2000 estimated tokens
+    ctx = Context([Segment("t", "tools", big), Segment("u", "user", "hi", stable=False)])
+    oa = OpenAICompiler("gpt-5.6")
+    assert oa.compile(ctx).request["prompt_cache_options"]["mode"] == "implicit"
+    w = oa.warmth(ctx, PrefixCache(30), 0)
+    assert w.cache_creation_tokens == w.cold_tokens > 0 and w.uncached_tokens == 0
+    router = Router([Candidate(oa, PrefixCache(30), 1.0, 0.1, is_fallback=True)], UncalibratedSource(lambda c, k: .5))
+    assert router.route(ctx, 0).candidates[0].est_input_cost_usd == pytest.approx(1.25 * w.cold_tokens / 1e6)
+    small = Context([Segment("u", "user", "hi", stable=False)])
+    assert oa.warmth(small, PrefixCache(30), 0).cache_creation_tokens == 0  # below the minimum nothing is written
+    marked = Context([Segment("s", "system", "x" * 8000), Segment("u", "user", "hi", stable=False)])
+    assert oa.compile(marked).request["prompt_cache_options"]["mode"] == "explicit"
+    w = oa.warmth(marked, PrefixCache(30), 0)  # explicit markers: no implicit whole-prompt write
+    assert w.cache_creation_tokens == oa.compile(marked).cum_tokens[0] and w.uncached_tokens > 0
+    custom = OpenAICompiler("gpt-4o", capabilities=OpenAICapabilities(False, "in_memory", 600, max_breakpoints=0))
+    assert custom.descriptor.cache_write_multiplier == 1  # implicit-only profiles default to free writes
+
+
+def test_router_skips_candidates_whose_api_rejects_the_request():
+    hist = [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}]
+    prefill = Context([Segment("s", "system", "sys"), Segment("h", "history", hist)])
+    haiku, opus = AnthropicCompiler("claude-haiku-4-5"), AnthropicCompiler("claude-opus-5-5")
+    source = UncalibratedSource(lambda c, k: .5)
+    cands = [Candidate(haiku, PrefixCache(30), 1.0, 0.1, is_fallback=True), Candidate(opus, PrefixCache(30), 0.5, 0.05)]
+    d = Router(cands, source).route(prefill, 0)
+    assert d.chosen == "claude-haiku-4-5" and [c.model_id for c in d.candidates] == ["claude-haiku-4-5"]
+    with pytest.raises(UnsupportedRequest, match="prefill"):  # the fallback itself cannot serve it
+        Router([Candidate(opus, PrefixCache(30), 1.0, 0.1, is_fallback=True)], source).route(prefill, 0)
+
+
+def test_jev_pin_and_endpoint_guards():
+    ctx = Context([Segment("s", "system", "sys"), Segment("u", "user", "hi", stable=False)])
+    B = family_b()
+    cand = Candidate(B.compiler, B.cache, 0.2, 0.02)
+
+    def reply(model):
+        return lambda body: {"model": model, "answers": {"sufficient": {"type": "noul", "noul": 0.9}}}
+    with pytest.raises(ConfidenceUnavailable, match="pinned"):
+        JevConfidenceSource(reply("jev-1.14.0"), model="jev-1.13.0").p_sufficient(ctx, cand)
+    pinned = JevConfidenceSource(reply("jev-1.13.0"), model="jev-1.13.0")
+    assert pinned.p_sufficient(ctx, cand) == 0.9 and pinned.can_validate(cand)
+    assert not JevConfidenceSource(reply("jev-latest")).can_validate(cand)
+    for url in ("http://api.typesafe.ai/v1/systemone", "https://u@api.typesafe.ai/v1/systemone",
+                "https://:p@api.typesafe.ai/v1/systemone"):
+        with pytest.raises(ValueError, match="HTTPS"):
+            http_transport("key", endpoint=url)

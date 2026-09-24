@@ -13,7 +13,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$(?!\\n)"
           },
           "kind": {
             "enum": [
@@ -37,11 +37,12 @@
           },
           "provenance": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "$ref": "#/$defs/nonblank"
           },
           "hash": {
             "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
+            "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
           }
         },
         "required": [
@@ -68,7 +69,8 @@
                     "properties": {
                       "name": {
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "$ref": "#/$defs/nonblank"
                       },
                       "description": {
                         "type": "string"
@@ -115,7 +117,20 @@
                             "type": [
                               "string",
                               "object"
-                            ]
+                            ],
+                            "minLength": 1,
+                            "minProperties": 1,
+                            "not": {
+                              "type": "object",
+                              "required": [
+                                "type"
+                              ],
+                              "properties": {
+                                "type": {
+                                  "const": "tool_use"
+                                }
+                              }
+                            }
                           }
                         },
                         "required": [
@@ -134,7 +149,18 @@
                             "type": [
                               "string",
                               "object"
-                            ]
+                            ],
+                            "not": {
+                              "type": "object",
+                              "required": [
+                                "type"
+                              ],
+                              "properties": {
+                                "type": {
+                                  "const": "tool_use"
+                                }
+                              }
+                            }
                           },
                           "tool_calls": {
                             "type": "array",
@@ -143,11 +169,13 @@
                               "properties": {
                                 "id": {
                                   "type": "string",
-                                  "minLength": 1
+                                  "minLength": 1,
+                                  "$ref": "#/$defs/nonblank"
                                 },
                                 "name": {
                                   "type": "string",
-                                  "minLength": 1
+                                  "minLength": 1,
+                                  "$ref": "#/$defs/nonblank"
                                 },
                                 "arguments": {
                                   "type": "object"
@@ -167,7 +195,22 @@
                           "role",
                           "content"
                         ],
-                        "additionalProperties": false
+                        "additionalProperties": false,
+                        "anyOf": [
+                          {
+                            "required": [
+                              "tool_calls"
+                            ]
+                          },
+                          {
+                            "properties": {
+                              "content": {
+                                "minLength": 1,
+                                "minProperties": 1
+                              }
+                            }
+                          }
+                        ]
                       },
                       {
                         "type": "object",
@@ -177,7 +220,8 @@
                           },
                           "call_id": {
                             "type": "string",
-                            "minLength": 1
+                            "minLength": 1,
+                            "$ref": "#/$defs/nonblank"
                           },
                           "content": {},
                           "is_error": {
@@ -221,7 +265,8 @@
                   "type": [
                     "string",
                     "object"
-                  ]
+                  ],
+                  "minLength": 1
                 }
               }
             }
@@ -264,11 +309,13 @@
     },
     "session_id": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "$ref": "#/$defs/nonblank"
     },
     "cache_namespace": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "$ref": "#/$defs/nonblank"
     }
   },
   "required": [
@@ -276,5 +323,11 @@
     "segments"
   ],
   "additionalProperties": false,
-  "description": "Immutable PCF 0.2 context. Runtime also checks ordering, unique identifiers, call/result linkage, canonical JSON and declared hashes. Namespace must identify the intended trusted sharing group."
+  "description": "Immutable PCF 0.2 context. Runtime also checks ordering, unique identifiers, call/result linkage, canonical JSON and declared hashes. Namespace must identify the intended trusted sharing group.",
+  "$defs": {
+    "nonblank": {
+      "$comment": "At least one character that Python's str.strip() keeps (the runtime nonempty() check). Spelled out because \\S differs between Python re and ECMA-262.",
+      "pattern": "[^\\t\\n\\x0b\\x0c\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]"
+    }
+  }
 }

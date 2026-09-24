@@ -1,4 +1,8 @@
-"""Bounded prefix metadata store. Inspection is read-only; execution touches TTL."""
+"""Bounded prefix metadata store. Inspection is read-only; execution touches TTL.
+
+Events (write, touch, prune) advance one store-wide clock and must not move it backwards. A peek older than
+that clock is rejected: a later event may already have refreshed or pruned the state it asks about.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
@@ -21,10 +25,16 @@ class PrefixCache:
     max_entries: int = 4096
     _entries: dict[tuple[str, str, str], Entry] = field(default_factory=dict, init=False, repr=False)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False, compare=False)
+    _clock: float = field(default=float("-inf"), init=False, repr=False, compare=False)
 
     def __post_init__(self):
         number(self.ttl_seconds, "ttl_seconds", minimum=1e-12)
         integer(self.max_entries, "max_entries", minimum=1)
+
+    def _advance(self, now):
+        if now < self._clock:
+            raise ValueError("cache event time moved backwards")
+        self._clock = now
 
     @staticmethod
     def _key(compat_key, prefix_hash, namespace):
@@ -37,10 +47,7 @@ class PrefixCache:
         number(now, "now")
         ttl = self.ttl_seconds if ttl_seconds is None else number(ttl_seconds, "ttl_seconds", minimum=1e-12)
         with self._lock:
-            self.prune(now)
-            previous = self._entries.get(key)
-            if previous is not None and now < previous.observed_at:
-                raise ValueError("cache event time moved backwards")
+            self.prune(now)  # advances the clock
             if key not in self._entries and len(self._entries) >= self.max_entries:
                 del self._entries[min(self._entries, key=lambda k: self._entries[k].observed_at)]
             self._entries[key] = Entry(cum_tokens, now + ttl, ttl, now)
@@ -53,6 +60,8 @@ class PrefixCache:
         nonempty(namespace, "namespace")
         indices = range(len(chain) - 1, -1, -1) if eligible_indices is None else sorted(set(eligible_indices), reverse=True)
         with self._lock:
+            if now < self._clock:
+                raise ValueError("cache lookup predates the latest cache event")
             for i in indices:
                 if i < 0 or i >= len(chain):
                     raise ValueError("cache lookup index outside prefix chain")
@@ -69,11 +78,10 @@ class PrefixCache:
         number(now, "now")
         key = self._key(compat_key, prefix_hash, namespace)
         with self._lock:
+            self._advance(now)
             entry = self._entries.get(key)
             if entry is None or now >= entry.expires_at:
                 return False
-            if now < entry.observed_at:
-                raise ValueError("cache event time moved backwards")
             self._entries[key] = replace(entry, expires_at=now + entry.ttl_seconds, observed_at=now)
             return True
 
@@ -88,6 +96,7 @@ class PrefixCache:
     def prune(self, now: float) -> int:
         number(now, "now")
         with self._lock:
+            self._advance(now)
             stale = [k for k, e in self._entries.items() if now >= e.expires_at]
             for key in stale:
                 del self._entries[key]

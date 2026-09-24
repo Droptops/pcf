@@ -37,6 +37,10 @@ class Usage:
         return self.cache_read_input_tokens + self.cold_tokens
 
 
+class UnsupportedRequest(ValueError):
+    """The target API rejects this request shape; another candidate may still serve the context."""
+
+
 @dataclass(frozen=True)
 class Warmth:
     warm_prefix_segments: int
@@ -121,6 +125,7 @@ class ContextCompiler(ABC):
     tokenizer: Tokenizer
     compiler_id = "pcf.base:0.2"
     cache_mode = "simulated"
+    implicit_breakpoint = False  # the provider places its own breakpoint when a request carries none
 
     @abstractmethod
     def render(self, ctx: Context, breakpoints: list[int]) -> dict[str, Any]: ...
@@ -179,7 +184,9 @@ class ContextCompiler(ABC):
                          eligible_indices=compiled.lookup_indices) if simulated else -1
         warm = compiled.cum_tokens[hit] if hit >= 0 else 0
         last_write = hit
-        for index in compiled.breakpoints:
+        # An implicit breakpoint's position is unknown; assume the most it could write (the whole prompt).
+        implicit = (len(ctx.segments) - 1,) if self.implicit_breakpoint and not compiled.breakpoints else ()
+        for index in compiled.breakpoints or implicit:
             if index > hit and compiled.cum_tokens[index] >= self.descriptor.min_cacheable_tokens:
                 last_write = index
         written = (compiled.cum_tokens[last_write] if last_write >= 0 else 0) - warm

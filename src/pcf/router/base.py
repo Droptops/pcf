@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 
 from ..cache import PrefixCache
-from ..compiler import ContextCompiler
+from ..compiler import ContextCompiler, UnsupportedRequest
 from ..descriptor import hash_object
 from ..segments import Context
 from ..validation import nonempty, number
@@ -146,7 +146,12 @@ class Router:
             nonempty(request_id, "request_id")
         reports = []
         for cand in self.candidates:
-            w = cand.compiler.warmth(ctx, cand.cache, now)
+            try:
+                w = cand.compiler.warmth(ctx, cand.cache, now)
+            except UnsupportedRequest:
+                if cand.is_fallback:
+                    raise
+                continue  # this target cannot serve the context; the others still can
             cost = (w.uncached_tokens * cand.input_price_per_mtok + w.cache_creation_tokens * cand.write_price
                     + w.warm_tokens * cand.cache_read_price_per_mtok) / 1e6
             record = self.confidence.validation_for(cand, self.threshold)

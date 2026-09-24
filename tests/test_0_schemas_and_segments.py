@@ -1,8 +1,10 @@
 """Schema conformance for every artifact the library emits, plus the hashing/ordering rules of SPEC.md "Document"."""
 from __future__ import annotations
 
+import copy
 import json
 import pathlib
+import re
 
 import jsonschema
 import pytest
@@ -11,6 +13,7 @@ from conftest import turn
 from pcf import Context, Segment, canonical_bytes
 from pcf.families.sim import family_a, family_b
 from pcf.router import Candidate, PlattScaledSource, Router
+from pcf.schemas import validate
 
 SCHEMAS = pathlib.Path(__file__).parent.parent / "spec" / "schemas"
 
@@ -41,6 +44,13 @@ def test_route_decision_validates(base_ctx):
     ], PlattScaledSource(lambda ctx, c: 0.9), threshold=0.8)
     doc = router.route(turn(base_ctx, 1, "hi", None), now=0.0, request_id="r1").to_json()
     jsonschema.validate(doc, _schema("route-decision.schema.json"))
+    cand = doc["candidates"][0]
+    for bad in ({**doc, "chosen": " "}, {**doc, "request_id": "\x85"},
+                {**doc, "source_fingerprint": doc["source_fingerprint"] + "\n"},
+                {**doc, "candidates": [{**cand, "family": " "}]}, {**doc, "candidates": [{**cand, "model_id": "\t"}]},
+                {**doc, "candidates": [{**cand, "compat_key": cand["compat_key"] + "\n"}]}):
+        with pytest.raises(ValueError, match="validation failed"):
+            validate("route-decision", bad)
 
 
 def test_ordering_rule_is_enforced():
@@ -117,3 +127,65 @@ def test_spec_schemas_mirror_packaged_schemas():
     for n in ("pcf", "cache-descriptor", "route-decision"):
         packaged = files("pcf.schemas").joinpath(f"{n}.schema.json").read_bytes()
         assert (SCHEMAS / f"{n}.schema.json").read_bytes() == packaged
+
+
+def _set(path, value):
+    def mutate(doc):
+        *parents, last = path
+        node = doc
+        for key in parents:
+            node = node[key]
+        node[last] = value
+    return mutate
+
+
+def test_schema_rejects_what_the_runtime_rejects():
+    """Every probe breaks exactly one runtime rule; the published schema must reject it too."""
+    call = {"id": "c", "name": "t", "arguments": {}}
+    turns = [{"role": "user", "content": "q"}, {"role": "assistant", "content": "", "tool_calls": [call]},
+             {"role": "tool", "call_id": "c", "content": "r"}]
+    doc = Context([Segment("t", "tools", [{"name": "t", "parameters": {}}]), Segment("s", "system", "sys"),
+                   Segment("h", "history", turns), Segment("u", "user", "hi", stable=False)], "s1", "ns").to_json()
+    for seg in doc["segments"]:
+        del seg["hash"]  # probes change content; hashes are checked separately
+    tool_use = {"type": "tool_use", "id": "x", "name": "t", "input": {}}
+    H = ("segments", 2, "content")
+    probes = [_set(("segments", 1, "content"), ""), _set(("segments", 3, "content"), ""),
+              _set((*H, 0, "content"), ""), _set((*H, 0, "content"), {}), _set((*H, 0, "content"), tool_use),
+              _set(H, [turns[0], {"role": "assistant", "content": ""}]),
+              _set(("segments", 1, "provenance"), " "), _set(("session_id",), " "), _set(("cache_namespace",), "\x1c"),
+              _set(("segments", 0, "content", 0, "name"), " "), _set((*H, 1, "tool_calls", 0, "name"), " "),
+              _set((*H, 1, "tool_calls", 0, "id"), " "), _set((*H, 2, "call_id"), " "),
+              _set(("segments", 1, "id"), "s\n")]
+    Context.from_json(doc)  # control: the unmodified document is valid
+    for probe in probes:
+        bad = copy.deepcopy(doc)
+        probe(bad)
+        with pytest.raises(ValueError):  # runtime, bypassing the schema
+            Context(tuple(Segment(r["id"], r["kind"], r["content"], r.get("stable"), authority=r.get("authority"),
+                                  provenance=r.get("provenance")) for r in bad["segments"]),
+                    bad.get("session_id"), bad.get("cache_namespace", "default"))
+        with pytest.raises(ValueError, match="validation failed"):
+            validate("pcf", bad)
+    hashed = Context([Segment("s", "system", "sys")]).to_json()
+    hashed["segments"][0]["hash"] += "\n"
+    with pytest.raises(ValueError, match="validation failed"):
+        validate("pcf", hashed)
+    # Constructors still migrate the 0.1 assistant tool_use form, but serialized documents must use the 0.2 form.
+    legacy = [turns[0], {"role": "assistant", "content": tool_use},
+              {"role": "tool", "call_id": "x", "content": "r", "is_error": False}]
+    Segment("h", "history", legacy)
+    bad = copy.deepcopy(doc)
+    _set(H, legacy)(bad)
+    with pytest.raises(ValueError, match="validation failed"):
+        validate("pcf", bad)
+
+
+def test_nonblank_pattern_matches_the_runtime_whitespace_rule():
+    """Python re and ECMA-262 disagree on \\s, so the schemas spell out str.strip()'s whitespace set."""
+    for name in ("pcf", "cache-descriptor", "route-decision"):
+        pattern = _schema(f"{name}.schema.json")["$defs"]["nonblank"]["pattern"]
+        assert "\\s" not in pattern.lower()
+        wrong = [hex(c) for c in [*range(0x3001), 0xFEFF]
+                 if (re.fullmatch(pattern, chr(c)) is None) != chr(c).isspace()]
+        assert not wrong, f"{name}: {wrong}"

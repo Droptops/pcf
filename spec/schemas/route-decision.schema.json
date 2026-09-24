@@ -13,15 +13,17 @@
         "properties": {
           "family": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "$ref": "#/$defs/nonblank"
           },
           "model_id": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "$ref": "#/$defs/nonblank"
           },
           "compat_key": {
             "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
+            "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
           },
           "warm_prefix_segments": {
             "type": "integer",
@@ -83,7 +85,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^sha256:[0-9a-f]{64}$"
+                "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
               },
               {
                 "type": "null"
@@ -122,7 +124,8 @@
     },
     "chosen": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "$ref": "#/$defs/nonblank"
     },
     "confidence": {
       "type": [
@@ -146,7 +149,7 @@
     },
     "source_fingerprint": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
     },
     "reason": {
       "type": "string",
@@ -154,7 +157,8 @@
     },
     "request_id": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "$ref": "#/$defs/nonblank"
     }
   },
   "required": [
@@ -169,5 +173,11 @@
     "reason"
   ],
   "additionalProperties": false,
-  "description": "Candidate scores are diagnostic. p_sufficient and chosen confidence are null without an applicable passed validation record. Prices and native cache states remain estimates; a fallback is a policy decision, not a quality guarantee."
+  "description": "Candidate scores are diagnostic. p_sufficient and chosen confidence are null without an applicable passed validation record. Prices and native cache states remain estimates; a fallback is a policy decision, not a quality guarantee.",
+  "$defs": {
+    "nonblank": {
+      "$comment": "At least one character that Python's str.strip() keeps (the runtime nonempty() check). Spelled out because \\S differs between Python re and ECMA-262.",
+      "pattern": "[^\\t\\n\\x0b\\x0c\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]"
+    }
+  }
 }

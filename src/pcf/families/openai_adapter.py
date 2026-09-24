@@ -65,6 +65,7 @@ def openai_descriptor(model_id, *, capabilities=None):
 
 class OpenAICompiler(ContextCompiler):
     compiler_id = "pcf.openai.responses:0.2"
+    implicit_breakpoint = True  # unmarked requests use implicit mode, where OpenAI picks the breakpoint
 
     def __init__(self, model_id: str, *, tokenizer=None, capabilities: OpenAICapabilities | None = None):
         self.profile = openai_profile(model_id, capabilities)

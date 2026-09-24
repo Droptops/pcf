@@ -8,19 +8,21 @@
     },
     "family": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "$ref": "#/$defs/nonblank"
     },
     "model_id": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "$ref": "#/$defs/nonblank"
     },
     "weights_hash": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
     },
     "tokenizer_hash": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
     },
     "layout": {
       "type": "object",
@@ -68,7 +70,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^sha256:[0-9a-f]{64}$"
+              "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
             },
             {
               "type": "null"
@@ -79,7 +81,9 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "minLength": 1,
+          "$ref": "#/$defs/nonblank"
         },
         "tensor_shape": {
           "anyOf": [
@@ -102,9 +106,11 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "$ref": "#/$defs/nonblank"
               },
-              "minItems": 1
+              "minItems": 1,
+              "uniqueItems": true
             },
             {
               "type": "null"
@@ -115,7 +121,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^sha256:[0-9a-f]{64}$"
+              "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
             },
             {
               "type": "null"
@@ -126,7 +132,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^sha256:[0-9a-f]{64}$"
+              "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
             },
             {
               "type": "null"
@@ -168,11 +174,13 @@
           "properties": {
             "name": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "$ref": "#/$defs/nonblank"
             },
             "version": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "$ref": "#/$defs/nonblank"
             }
           },
           "required": [
@@ -197,7 +205,7 @@
       "anyOf": [
         {
           "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+          "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
         },
         {
           "type": "null"
@@ -210,13 +218,13 @@
     },
     "compat_key": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
     },
     "byte_compat_key": {
       "anyOf": [
         {
           "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+          "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
         },
         {
           "type": "null"
@@ -242,5 +250,84 @@
     "byte_compat_key"
   ],
   "additionalProperties": false,
-  "description": "compat_key groups declared computation identity only. Opaque and simulated descriptors never authorize KV-byte exchange. A non-null byte_compat_key additionally requires a complete, independently verified manifest and sharing authorization; no transfer is implemented."
+  "description": "compat_key groups declared computation identity only. Opaque and simulated descriptors never authorize KV-byte exchange. A non-null byte_compat_key additionally requires a complete, independently verified manifest and sharing authorization; no transfer is implemented. Runtime also checks that tensor_shape and axis_order have equal rank.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "identity_kind": {
+            "const": "manifest"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "execution_config_hash": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "byte_compat_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "byte_compat_key"
+        ]
+      },
+      "then": {
+        "properties": {
+          "identity_kind": {
+            "const": "manifest"
+          },
+          "layout": {
+            "properties": {
+              "format_id": {
+                "type": "string"
+              },
+              "tensor_shape": {
+                "type": "array"
+              },
+              "axis_order": {
+                "type": "array"
+              },
+              "block_tokens": {
+                "type": "integer"
+              },
+              "shard_spec_hash": {
+                "type": "string"
+              },
+              "positional_config_hash": {
+                "type": "string"
+              }
+            },
+            "if": {
+              "properties": {
+                "kv_quant": {
+                  "type": "string"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "quantization_config_hash": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nonblank": {
+      "$comment": "At least one character that Python's str.strip() keeps (the runtime nonempty() check). Spelled out because \\S differs between Python re and ECMA-262.",
+      "pattern": "[^\\t\\n\\x0b\\x0c\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]"
+    }
+  }
 }
