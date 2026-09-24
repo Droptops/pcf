@@ -51,7 +51,8 @@ def session(arm: str, turns: int, model: str, nonce: str, client=None) -> list[d
         text, expected = question(turn)
         ctx = Context([system, *front, *history, *tail, Segment("u", "user", text, stable=False)],
                       cache_namespace=f"{arm}-{nonce}")
-        request = {**compiler.compile(ctx).request, "max_output_tokens": 64}
+        # Low effort and room to answer: at 64 tokens reasoning models can return nothing visible.
+        request = {**compiler.compile(ctx).request, "max_output_tokens": 512, "reasoning": {"effort": "low"}}
         row = {"turn": turn, "tail": [s.id for s in tail], "input_items": len(request["input"])}
         if client is not None:
             response = client.responses.create(**request)
@@ -64,9 +65,12 @@ def session(arm: str, turns: int, model: str, nonce: str, client=None) -> list[d
     return rows
 
 
-def summarize(rows: list[dict]) -> dict:
+def summarize(rows: list[dict], write_multiplier: float, read_multiplier: float) -> dict:
     keys = ("cached", "written", "uncached")
     out = {k: sum(r[k] for r in rows) for k in keys if all(k in r for r in rows)}
+    if len(out) == 3:  # input cost in uncached-token units, under the stated multipliers
+        out["billed_input_units"] = round(out["uncached"] + write_multiplier * out["written"]
+                                          + read_multiplier * out["cached"])
     if "correct" in rows[0]:
         out["correct"] = f"{sum(r['correct'] for r in rows)}/{len(rows)}"
     return out
@@ -77,6 +81,8 @@ if __name__ == "__main__":
     parser.add_argument("--run", action="store_true", help="make paid OpenAI calls (needs OPENAI_API_KEY)")
     parser.add_argument("--turns", type=int, default=8)
     parser.add_argument("--model", default="gpt-5.6")
+    parser.add_argument("--read-multiplier", type=float, default=0.1,
+                        help="assumed price of a cached input token relative to uncached (check current pricing)")
     args = parser.parse_args()
     client, nonce = None, "offline"
     if args.run:
@@ -85,5 +91,6 @@ if __name__ == "__main__":
         import openai
         client, nonce = openai.OpenAI(), uuid.uuid4().hex[:12]  # fresh prefix: both arms start cold
     result = {arm: session(arm, args.turns, args.model, nonce, client) for arm in ("front", "placed")}
-    result["summary"] = {arm: summarize(rows) for arm, rows in result.items()}
+    writes = OpenAICompiler(args.model).descriptor.cache_write_multiplier
+    result["summary"] = {arm: summarize(rows, writes, args.read_multiplier) for arm, rows in result.items()}
     print(json.dumps(result, indent=2))

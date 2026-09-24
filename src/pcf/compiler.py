@@ -121,7 +121,11 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> li
     anchor = anchors[-1] if anchors else candidates[0]
     if max_breakpoints == 1:
         return [candidates[-1]]
-    return sorted({anchor, *[i for i in candidates if i != anchor][-(max_breakpoints - 1):]})
+    # Stability is only a hint: with budget to spare, also keep the first anchor so one mislabelled
+    # volatile module cannot take the whole prefix (system, tools) out of cache. Two history endpoints
+    # remain, enough for an append-only request to name the endpoint the previous request wrote.
+    keep = {anchor, anchors[0]} if max_breakpoints >= 4 and anchors else {anchor}
+    return sorted({*keep, *[i for i in candidates if i not in keep][-(max_breakpoints - len(keep)):]})
 
 
 class ContextCompiler(ABC):

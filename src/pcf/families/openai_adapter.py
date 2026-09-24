@@ -79,8 +79,9 @@ class OpenAICompiler(ContextCompiler):
         if seg.kind == "tools" or not seg.content:
             return False  # definitions are covered by a later native message boundary
         if seg.kind == "history":
-            last = seg.content[-1]  # assistant text and call items cannot carry a marker
-            return last["role"] in {"tool", "user"}
+            # Assistant text and call items cannot carry a marker (the API accepts one on assistant
+            # output_text but writes nothing), so the marker goes on the segment's last user/tool item.
+            return any(t["role"] == "tool" or (t["role"] == "user" and t["content"]) for t in seg.content)
         return True
 
     def render(self, ctx: Context, breakpoints: list[int]) -> dict:
@@ -104,11 +105,9 @@ class OpenAICompiler(ContextCompiler):
                             inputs.append({"role": "user", "content": [last]})
                         elif turn["content"]:  # assistant input rejects input_text; plain text has no marker
                             inputs.append({"role": "assistant", "content": text_content(turn["content"])})
-                            last = None
                         for call in turn.get("tool_calls", []):
                             inputs.append({"type": "function_call", "call_id": call["id"], "name": call["name"],
                                            "arguments": text_content(call["arguments"])})
-                            last = None  # a call item is not a supported content-block endpoint
             else:
                 last = {"type": "input_text", "text": data_text(seg) if seg.kind in {"memory", "document"} and seg.authority == "data" else text_content(seg.content)}
                 inputs.append({"role": "developer" if seg.authority == "instruction" else "user", "content": [last]})
