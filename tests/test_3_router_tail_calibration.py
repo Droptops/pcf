@@ -94,6 +94,30 @@ def _fit_and_eval(scorer_factory, seed=7, fit_on="all"):
     return src, cands, test, probs, head, tail
 
 
+def _fit_with_selected_tail_evidence():
+    """Separate population with measured above-threshold quality on both slices.
+
+    The original hard-tail population need not produce ANY selected tail samples;
+    its good ECE alone must no longer qualify a candidate for unrestricted routing.
+    """
+    cands = _candidates()
+    def population(tag):
+        rows = []
+        for i in range(300):
+            high = i < 150
+            ctx = Context([Segment("u", "user", {"case": f"{tag}-{i}", "p": .9 if high else .1})])
+            label = int(i % 10 != 9) if high else int(i % 10 == 9)
+            rows.append((ctx, (i // 10) % 2 == 0, label))
+        return rows
+    train, validation, test = (population(tag) for tag in ("fit", "validate", "test"))
+    src = PlattScaledSource(lambda ctx, cand: ctx.segments[-1].content["p"], scorer_version="selected-tail:1")
+    src.fit([(ctx, cands[1], y) for ctx, _, y in train])
+    record = src.validate([ValidationSample(ctx, cands[1], y, tail) for ctx, tail, y in validation],
+                          dataset_id="selected-tail-evidence")
+    assert record.passed and record.n_tail_selected >= 20
+    return src, cands, train, test
+
+
 def test_good_scorer_is_calibrated_on_head_and_tail():
     _, _, _, _, head, tail = _fit_and_eval(good_scorer, fit_on="all")
     head_ece = expected_calibration_error([p for p, _ in head], [y for _, y in head])
@@ -118,10 +142,10 @@ def test_calibration_set_must_include_tail_samples():
 
 
 def test_routing_on_calibrated_confidence_holds_the_quality_floor():
-    src, cands, test, probs, _, _ = _fit_and_eval(good_scorer)
+    src, cands, _, test = _fit_with_selected_tail_evidence()
     router = Router(cands, src, threshold=THRESHOLD)
     routed_cheap_labels, escalations = [], 0
-    for (ctx, is_tail, y), _ in zip(test, probs):
+    for ctx, is_tail, y in test:
         d = router.route(ctx, now=0.0)
         if d.chosen == "sim-b-small":
             routed_cheap_labels.append(y)
@@ -193,10 +217,10 @@ def test_router_picks_the_cheapest_validated_candidate():
 
 
 def test_validation_is_revoked_by_refit_parameters_and_rejects_training_overlap():
-    src, cands, _, _, _, _ = _fit_and_eval(good_scorer)
+    src, cands, train, _ = _fit_with_selected_tail_evidence()
     cheap = cands[1]
     assert src.validation_for(cheap, THRESHOLD) is not None
-    rows = make_population(299, 99) + make_population(1, 7)  # one reused training row (seed 7, row 0)
+    rows = make_population(299, 99) + train[:1]  # one reused fitting context
     with pytest.raises(ValueError, match="overlap"):
         src.validate([ValidationSample(c, cheap, y, t) for c, t, y in rows], dataset_id="reuse")
     src.a += 1

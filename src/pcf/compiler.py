@@ -152,13 +152,24 @@ class ContextCompiler(ABC):
     def native_positions(self, request: dict) -> int:
         return len(request.get("messages", request.get("input", [])))
 
+    def native_token_count(self, native: dict) -> int:
+        """Count the same rendered input whose digest names the cached prefix.
+
+        Empty containers carry no input. Provider counts remain estimates; the
+        simulator defines its billing units as tokens of this canonical JSON.
+        A supplied counter must be deterministic and monotonic on native prefixes.
+        """
+        payload = {key: value for key, value in native.items() if value not in (None, [], {}, "")}
+        return integer(self.tokenizer.count(canonical_bytes(payload).decode("utf-8")), "token count") if payload else 0
+
     @property
     def cache_key(self):
         return self.cache_key_for(self.descriptor)
 
     def cache_key_for(self, descriptor):
         return hash_object("pcf:cache:0.2", {"execution": descriptor.compat_key,
-                           "compiler": self.compiler_id, "counter": self.tokenizer.tokenizer_hash})
+                           "compiler": self.compiler_id, "counter": self.tokenizer.tokenizer_hash,
+                           "accounting": "native-input:1"})
 
     @property
     def candidate_fingerprint(self):
@@ -167,16 +178,20 @@ class ContextCompiler(ABC):
     def compile(self, ctx: Context) -> CompiledPrompt:
         ctx.validate_tool_history(require_resolved=True)
         breakpoints = choose_breakpoints(ctx, self.descriptor.max_breakpoints, lambda i: self.supports_boundary(ctx, i))
-        native, positions = [], []
+        native, positions, counts = [], [], []
+        previous_count = 0
         for end in range(1, len(ctx.segments) + 1):
             prefix = Context(ctx.segments[:end], ctx.session_id, ctx.cache_namespace)
             rendered = self.render(prefix, [])
-            native.append(hash_object("pcf:native:0.2", self.native_input(rendered)))
+            native_input = self.native_input(rendered)
+            native.append(hash_object("pcf:native:0.2", native_input))
             positions.append(self.native_positions(rendered))
-        # Empty tools/history segments render nothing, so they bill nothing.
-        counts = tuple(0 if s.content == [] else integer(self.tokenizer.count(segment_text(s)), "token count")
-                       for s in ctx.segments)
-        return CompiledPrompt(self.descriptor, canonical_bytes(self.render(ctx, breakpoints)), counts,
+            cumulative = self.native_token_count(native_input)
+            if cumulative < previous_count:
+                raise ValueError("token counter must be monotonic on native input prefixes")
+            counts.append(cumulative - previous_count)
+            previous_count = cumulative
+        return CompiledPrompt(self.descriptor, canonical_bytes(self.render(ctx, breakpoints)), tuple(counts),
                               tuple(breakpoints), tuple(ctx.prefix_chain()), tuple(native), self.cache_key,
                               ctx.cache_namespace, tuple(self.lookup_boundaries(breakpoints, positions)),
                               self.tokenizer.is_estimate or self.descriptor.identity_kind != "simulated")
