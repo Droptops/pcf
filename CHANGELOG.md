@@ -10,6 +10,8 @@ Fixes from a coding-discipline review. Hashes and wire format of valid 0.2 docum
   volatile memory re-bills only the tail instead of the whole conversation.
 - `pcf.placement.MemoryPlacer`: each memory module picks front or tail placement from its own observed change
   rate (tail when p·(m+H) > m); modules are stable until a change is seen. Optional; the compiler does not use it.
+  The tail is sticky while the cache is warm (moving back re-bills m+H); with `split(..., cold=True)` modules are
+  re-placed from a decayed change rate (`decay=0.7`), so a module that went quiet returns to the front.
 - OpenAI: assistant history is sent as plain text (Responses rejects `input_text` on assistant turns) and carries
   no cache marker; explicit mode is sent only when a marker was placed (explicit with none disables caching);
   parallel `function_call` items normalize into one assistant turn; unsupported boundaries no longer consume the
