@@ -7,7 +7,8 @@ Request/response shape per https://docs.typesafe.ai/api (fetched 2026-09-24):
   resp: {"model": ..., "answers": {<key>: {"type": "noul", "noul": 0.95}}, "usage": {"input_tokens", "output_tokens"}}
 
 OpenRouter serves the same body and answer shape at POST https://openrouter.ai/api/alpha/decisions with
-model "typesafe/jev-1.13" and a Bearer OpenRouter key (per @openrouter/sdk 1.3.26, alphaDecisionsCreate).
+a Bearer OpenRouter key (per @openrouter/sdk 1.3.26, alphaDecisionsCreate). Replies name the dated snapshot
+(e.g. "typesafe/jev-1.13-20260917", observed 2026-09-24), so pin that ID: the alias fails the pin check.
 
 Network is injected via `transport` so nothing here dials out unless a caller passes a real one.
 Limits per docs: Choice <= 255 options, Score 2-10 levels. State size limits are not restated here;
@@ -84,7 +85,7 @@ def http_transport(api_key: str | None = None, endpoint: str = JEV_ENDPOINT, tim
 
 
 def openrouter_transport(api_key: str | None = None, timeout: float = 10.0) -> Transport:
-    """Jev through OpenRouter's Decisions API; pair with model="typesafe/jev-1.13"."""
+    """Jev through OpenRouter's Decisions API; pin a dated model such as "typesafe/jev-1.13-20260917"."""
     key = api_key or os.environ.get("OPENROUTER_API_KEY")
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not set")

@@ -13,7 +13,8 @@ Fixes from a coding-discipline review. Hashes and wire format of valid 0.2 docum
   The tail is sticky while the cache is warm (moving back re-bills m+H); with `split(..., cold=True)` modules are
   re-placed from a decayed change rate (`decay=0.7`), so a module that went quiet returns to the front.
 - Jev via OpenRouter: `openrouter_transport()` posts the unchanged Jev body to OpenRouter's Decisions API
-  (`/api/alpha/decisions`) with `OPENROUTER_API_KEY`; use `model="typesafe/jev-1.13"`.
+  (`/api/alpha/decisions`) with `OPENROUTER_API_KEY`. Pin the dated snapshot (`model="typesafe/jev-1.13-20260917"`): replies
+  name it, so the `typesafe/jev-1.13` alias fails the pin check and the router falls back.
 - OpenAI: assistant history is sent as plain text (Responses rejects `input_text` on assistant turns) and carries
   no cache marker; explicit mode is sent only when a marker was placed (explicit with none disables caching);
   parallel `function_call` items normalize into one assistant turn; unsupported boundaries no longer consume the
