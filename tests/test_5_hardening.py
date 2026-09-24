@@ -269,3 +269,26 @@ def test_jev_pin_and_endpoint_guards():
                 "https://:p@api.typesafe.ai/v1/systemone"):
         with pytest.raises(ValueError, match="HTTPS"):
             http_transport("key", endpoint=url)
+
+
+def test_openrouter_transport_posts_jev_body_with_bearer_key(monkeypatch):
+    import io
+    import json as _json
+    import urllib.request
+    from pcf.router import openrouter_transport
+    sent = {}
+
+    def fake_urlopen(req, timeout):
+        sent.update(url=req.full_url, auth=req.get_header("Authorization"), body=_json.loads(req.data))
+        return io.BytesIO(b'{"model": "typesafe/jev-1.13", "answers": {"sufficient": {"type": "noul", "noul": 0.9}}}')
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+        openrouter_transport()
+    ctx = Context([Segment("s", "system", "x"), Segment("u", "user", "hi", stable=False)])
+    source = JevConfidenceSource(openrouter_transport("k"), model="typesafe/jev-1.13")
+    B = family_b()
+    assert source.p_sufficient(ctx, Candidate(B.compiler, B.cache, 0.2, 0.02)) == 0.9
+    assert sent["url"] == "https://openrouter.ai/api/alpha/decisions" and sent["auth"] == "Bearer k"
+    assert sent["body"]["model"] == "typesafe/jev-1.13" and sent["body"]["questions"]["sufficient"]["type"] == "noul"

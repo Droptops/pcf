@@ -6,6 +6,9 @@ Request/response shape per https://docs.typesafe.ai/api (fetched 2026-09-24):
   body: {"model": ..., "state": str|object|array, "questions": {<key>: {"type": "noul"|"choice"|"score", ...}}}
   resp: {"model": ..., "answers": {<key>: {"type": "noul", "noul": 0.95}}, "usage": {"input_tokens", "output_tokens"}}
 
+OpenRouter serves the same body and answer shape at POST https://openrouter.ai/api/alpha/decisions with
+model "typesafe/jev-1.13" and a Bearer OpenRouter key (per @openrouter/sdk 1.3.26, alphaDecisionsCreate).
+
 Network is injected via `transport` so nothing here dials out unless a caller passes a real one.
 Limits per docs: Choice <= 255 options, Score 2-10 levels. State size limits are not restated here;
 TypeSafe publishes them and the API returns an error when exceeded.
@@ -26,6 +29,7 @@ from ..validation import number
 from urllib.parse import urlparse
 
 JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
+OPENROUTER_DECISIONS_ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
 DEFAULT_MODEL = "jev-latest"  # pin a versioned id (e.g. jev-1.13.0) once thresholds are tuned
 
 Transport = Callable[[dict[str, Any]], dict[str, Any]]
@@ -77,6 +81,14 @@ def http_transport(api_key: str | None = None, endpoint: str = JEV_ENDPOINT, tim
             return json.loads(r.read().decode("utf-8"))
 
     return send
+
+
+def openrouter_transport(api_key: str | None = None, timeout: float = 10.0) -> Transport:
+    """Jev through OpenRouter's Decisions API; pair with model="typesafe/jev-1.13"."""
+    key = api_key or os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        raise RuntimeError("OPENROUTER_API_KEY not set")
+    return http_transport(key, OPENROUTER_DECISIONS_ENDPOINT, timeout)
 
 
 class JevConfidenceSource(ConfidenceSource):
