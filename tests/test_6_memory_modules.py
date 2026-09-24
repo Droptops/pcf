@@ -154,3 +154,24 @@ def test_tail_is_sticky_while_the_cache_is_warm():
     assert tails[1] and all(tails[1:])
     assert placer.split([Segment("mc", "memory", _module("c", 1))], history, cold=True) == (
         [Segment("mc", "memory", _module("c", 1))], [])
+
+
+def test_cache_prices_shift_the_placement_threshold():
+    from pcf.placement import MemoryPlacer
+
+    class XTokenizer:  # one token per "x", so memory and history sizes are exact
+        tokenizer_hash, is_estimate = "sha256:" + "0" * 64, True
+
+        def count(self, text):
+            return text.count("x")
+
+    history = [Segment("h", "history", [{"role": "user", "content": "x" * 90}])]
+
+    def tail_after_one_change(**prices):  # p = 1/2 after two looks; m = 100, H = 90
+        placer = MemoryPlacer(XTokenizer(), **prices)
+        return [placer.split([Segment("m", "memory", "x" * 100 + v)], history)[1] != [] for v in "ab"][-1]
+
+    assert not tail_after_one_change()  # 0.5 * 190 = 95 < 100: plain token rule keeps it in front
+    assert tail_after_one_change(write_multiplier=1.25, read_multiplier=0.1)  # 0.5 * 1.15 * 190 > 0.9 * 100
+    with pytest.raises(ValueError):
+        MemoryPlacer(XTokenizer(), write_multiplier=0.1, read_multiplier=0.1)

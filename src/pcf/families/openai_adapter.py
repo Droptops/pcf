@@ -84,6 +84,21 @@ class OpenAICompiler(ContextCompiler):
             return any(t["role"] == "tool" or (t["role"] == "user" and t["content"]) for t in seg.content)
         return True
 
+    def covered_tokens(self, ctx, index, cum_tokens):
+        """A history marker sits on the last user/tool item, so trailing assistant turns are not written yet."""
+        seg = ctx.segments[index]
+        if seg.kind != "history":
+            return cum_tokens[index]
+        tail = []
+        for turn in reversed(seg.content):
+            if turn["role"] == "tool" or (turn["role"] == "user" and turn["content"]):
+                break
+            tail.append(turn)
+        if not tail:
+            return cum_tokens[index]
+        own = cum_tokens[index] - (cum_tokens[index - 1] if index else 0)
+        return cum_tokens[index] - min(own, self.tokenizer.count(text_content(tail[::-1])))
+
     def render(self, ctx: Context, breakpoints: list[int]) -> dict:
         marks, tools, inputs, marked = set(breakpoints), [], [], False
         for i, seg in enumerate(ctx.segments):

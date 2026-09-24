@@ -2,7 +2,10 @@
 
 A front module is re-billed with all history after it when it changes: expected p * (m + H) per turn.
 A tail module is re-billed every turn: m. A module goes to the tail when p * (m + H) > m, where p is its
-observed change rate. Modules are assumed stable until a change is seen, so stable memory never moves.
+observed change rate. With cache prices (write w, read r, relative to uncached input) the comparison is
+p * (w - r) * (m + H) > (1 - r) * m: a changed front prefix is written instead of read, while a tail module is
+paid uncached instead of read. The defaults w=1, r=0 reduce to the plain token rule.
+Modules are assumed stable until a change is seen, so stable memory never moves.
 
 Moving back to the front re-bills m + H at once, so while the cache is warm the tail is sticky. When the
 caller reports a cold cache (everything is re-billed anyway), modules are re-placed from a decayed change
@@ -17,12 +20,19 @@ from .validation import number
 
 
 class MemoryPlacer:
-    def __init__(self, tokenizer: Tokenizer, *, decay: float = 0.7) -> None:
+    def __init__(self, tokenizer: Tokenizer, *, decay: float = 0.7, write_multiplier: float = 1.0,
+                 read_multiplier: float = 0.0) -> None:
         number(decay, "decay")
         if not 0 <= decay < 1:
             raise ValueError("decay must be in [0, 1)")
+        number(read_multiplier, "read_multiplier")
+        number(write_multiplier, "write_multiplier")
+        if not 0 <= read_multiplier < 1 or write_multiplier <= read_multiplier:
+            raise ValueError("need 0 <= read_multiplier < 1 and write_multiplier > read_multiplier")
         self.tokenizer = tokenizer
         self.decay = decay
+        self.write_multiplier = write_multiplier
+        self.read_multiplier = read_multiplier
         # id -> (observations, changes, decayed rate, last hash, in tail)
         self._seen: dict[str, tuple[int, int, float, str, bool]] = {}
 
@@ -43,14 +53,18 @@ class MemoryPlacer:
             rate = self.decay * rate + (1 - self.decay) * changed
             m = self.tokenizer.count(segment_text(seg))
             if cold:
-                in_tail = rate * (m + history_tokens) > m
+                in_tail = self._tail_pays(rate, m, history_tokens)
                 if not in_tail:
                     obs, changes = 0, 0  # back in front: evidence restarts
             elif not in_tail:
-                in_tail = changes / (obs + 1) * (m + history_tokens) > m
+                in_tail = self._tail_pays(changes / (obs + 1), m, history_tokens)
             self._seen[seg.id] = (obs, changes, rate, seg.hash, in_tail)
             if in_tail:
                 tail.append(Segment(seg.id, "memory", seg.content, False, provenance=seg.provenance))
             else:
                 front.append(seg)
         return front, tail
+
+    def _tail_pays(self, p: float, m: int, history_tokens: int) -> bool:
+        w, r = self.write_multiplier, self.read_multiplier
+        return p * (w - r) * (m + history_tokens) > (1 - r) * m
