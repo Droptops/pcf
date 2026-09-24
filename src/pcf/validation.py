@@ -10,7 +10,11 @@ ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 
 
 def number(value, name: str, *, minimum: float = 0, maximum: float | None = None) -> float:
-    if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
+    try:
+        finite = not isinstance(value, bool) and isinstance(value, Real) and math.isfinite(value)
+    except OverflowError:  # int too large for float
+        finite = False
+    if not finite:
         raise ValueError(f"{name} must be a finite number")
     if value < minimum or (maximum is not None and value > maximum):
         raise ValueError(f"{name} is outside its allowed range")

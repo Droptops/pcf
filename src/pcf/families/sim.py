@@ -58,8 +58,8 @@ def sim_descriptor(family: str, model_id: str, tokenizer_hash: str, *, min_cache
 
 
 class SimCompiler(ContextCompiler):
-    compiler_id = "pcf.sim:0.2"
     """Renders a PCF into a neutral request. Every segment lands somewhere; nothing is dropped."""
+    compiler_id = "pcf.sim:0.2"
 
     def __init__(self, descriptor: CacheDescriptor, tokenizer: Any) -> None:
         self.descriptor = descriptor

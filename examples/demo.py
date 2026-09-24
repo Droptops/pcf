@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""A six-turn session across two model families, with the router deciding each turn on measured cache
-warmth plus a calibrated confidence. Every number printed is computed by the simulated engines, not typed in.
+"""A six-turn session scored against two model families. The Platt coefficients below are hand-set, never fitted
+or held-out validated, so the router takes its policy fallback on every turn (conf '-'); validated routing is
+exercised in tests/test_3_router_tail_calibration.py. warm/cold come from the simulated engine; cost$ is the
+router's estimate from the illustrative prices below.
 
 Run:  python examples/demo.py
 """
@@ -20,7 +22,8 @@ SYSTEM = ("You are a support agent for a telecom carrier. Be brief and cite the 
 TOOLS = [{"name": "lookup_order", "description": "Find an order by id",
           "parameters": {"type": "object", "properties": {"order_id": {"type": "string"}}}}]
 
-# Prices: frontier at $1.00/MTok input and $0.10/MTok cache read; cheap at $0.20 / $0.02 (illustrative).
+# Prices (illustrative): frontier $1.00/MTok input and $0.10/MTok cache read; cheap $0.20 / $0.02.
+# Cache writes bill 1.25x input (CacheDescriptor.cache_write_multiplier default).
 frontier, cheap = family_a(min_cacheable=32), family_b(min_cacheable=32)
 engines = {frontier.descriptor.model_id: frontier, cheap.descriptor.model_id: cheap}
 
@@ -66,4 +69,4 @@ for n, q in enumerate(turns, start=1):
     prev_assistant = f"Order {1000 + n} update sent."
 
 print("\nLast decision as JSON (validates against spec/schemas/route-decision.schema.json):")
-print(json.dumps(decision.to_json(), indent=1)[:900] + "\n...")
+print("\n".join(json.dumps(decision.to_json(), indent=1).splitlines()[:40]) + "\n...")

@@ -20,7 +20,8 @@ def history_from_response(response: Any) -> list[dict]:
         typ = item.get("type")
         if typ == "message":
             blocks = item.get("content", [])
-            unsupported = [b.get("type") for b in blocks if b.get("type") not in {"output_text", "text"}]
+            unsupported = [b.get("type") for b in blocks
+                           if b.get("type") not in {"output_text", "text"} or b.get("annotations")]
             if unsupported:
                 raise ValueError(f"unsupported Responses content blocks: {unsupported}")
             text = "".join(b.get("text", "") for b in blocks)
@@ -34,12 +35,18 @@ def history_from_response(response: Any) -> list[dict]:
                 raise ValueError("invalid Responses function_call arguments") from exc
             if not isinstance(args, dict):
                 raise ValueError("function_call arguments must be an object")
-            turns.append({"role": "assistant", "content": "", "tool_calls":
-                          [{"id": item["call_id"], "name": item["name"], "arguments": args}]})
+            call = {"id": item["call_id"], "name": item["name"], "arguments": args}
+            if turns and turns[-1]["role"] == "assistant":  # parallel calls form one assistant turn
+                turns[-1].setdefault("tool_calls", []).append(call)
+            else:
+                turns.append({"role": "assistant", "content": "", "tool_calls": [call]})
         elif typ == "function_call_output":
             output = item.get("output", "")
             if isinstance(output, list):
-                output = "".join(x.get("text", "") for x in output if x.get("type") == "input_text")
+                unsupported = [x.get("type") for x in output if x.get("type") != "input_text"]
+                if unsupported:
+                    raise ValueError(f"unsupported function_call_output content parts: {unsupported}")
+                output = "".join(x.get("text", "") for x in output)
             if not isinstance(output, (str, dict)):
                 raise ValueError("function_call_output output must be text or JSON")
             turns.append({"role": "tool", "call_id": item["call_id"], "content": output, "is_error": False})
@@ -71,12 +78,12 @@ class OpenAICompiler(ContextCompiler):
         if seg.kind == "tools" or not seg.content:
             return False  # definitions are covered by a later native message boundary
         if seg.kind == "history":
-            last = seg.content[-1]
-            return last["role"] == "tool" or not last.get("tool_calls")
+            last = seg.content[-1]  # assistant text and call items cannot carry a marker
+            return last["role"] in {"tool", "user"}
         return True
 
     def render(self, ctx: Context, breakpoints: list[int]) -> dict:
-        marks, tools, inputs = set(breakpoints), [], []
+        marks, tools, inputs, marked = set(breakpoints), [], [], False
         for i, seg in enumerate(ctx.segments):
             last = None
             if seg.kind == "tools":
@@ -91,9 +98,12 @@ class OpenAICompiler(ContextCompiler):
                         last = {"type": "input_text", "text": text_content(output)}
                         inputs.append({"type": "function_call_output", "call_id": turn["call_id"], "output": [last]})
                     else:
-                        if turn["content"]:
+                        if turn["content"] and turn["role"] == "user":
                             last = {"type": "input_text", "text": text_content(turn["content"])}
-                            inputs.append({"role": turn["role"], "content": [last]})
+                            inputs.append({"role": "user", "content": [last]})
+                        elif turn["content"]:  # assistant input rejects input_text; plain text has no marker
+                            inputs.append({"role": "assistant", "content": text_content(turn["content"])})
+                            last = None
                         for call in turn.get("tool_calls", []):
                             inputs.append({"type": "function_call", "call_id": call["id"], "name": call["name"],
                                            "arguments": text_content(call["arguments"])})
@@ -102,13 +112,14 @@ class OpenAICompiler(ContextCompiler):
                 last = {"type": "input_text", "text": data_text(seg) if seg.kind in {"memory", "document"} and seg.authority == "data" else text_content(seg.content)}
                 inputs.append({"role": "developer" if seg.authority == "instruction" else "user", "content": [last]})
             if i in marks and last is not None:
-                last["prompt_cache_breakpoint"] = {"mode": "explicit"}
+                last["prompt_cache_breakpoint"], marked = {"mode": "explicit"}, True
         result = {"model": self.descriptor.model_id, "input": inputs,
                   "prompt_cache_key": "pcf-" + hash_object("pcf:partition:0.2", {"namespace": ctx.cache_namespace})[7:39]}
         if tools:
             result["tools"] = tools
-        if self.explicit:
-            result["prompt_cache_options"] = {"mode": "explicit", "ttl": self.profile.retention}
+        if self.explicit:  # explicit mode with no marker disables caching, so fall back to implicit
+            result["prompt_cache_options"] = {"mode": "explicit" if marked else "implicit",
+                                              "ttl": self.profile.retention}
         else:
             result["prompt_cache_retention"] = self.profile.retention
         return result
