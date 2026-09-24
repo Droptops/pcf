@@ -89,6 +89,8 @@ def validate_source(source, samples, *, dataset_id, threshold=.8, max_ece=.10,
         failures.append("insufficient tail samples")
     if ece > max_ece or tail_ece > max_ece:
         failures.append("calibration error exceeds bound")
+    if not selected:  # otherwise any future p >= threshold would route on unmeasured quality
+        failures.append("no validation sample reaches the threshold; selected quality unmeasured")
     for name, rows, value in [("selected", selected, quality), ("tail-selected", tail_selected, tail_quality)]:
         if rows and (len(rows) < min_selected_samples or value < quality_floor):
             failures.append(f"{name} quality or sample count below requirement")

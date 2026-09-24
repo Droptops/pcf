@@ -1,4 +1,4 @@
-"""Jev (TypeSafe System One) as the router's confidence source (SPEC.md §3.4).
+"""Jev (TypeSafe System One) as the router's confidence source (SPEC.md "Cache and routing").
 
 Request/response shape per https://docs.typesafe.ai/api (fetched 2026-09-24):
   POST https://api.typesafe.ai/v1/systemone
@@ -16,6 +16,7 @@ import json
 import os
 import urllib.request
 from collections.abc import Callable
+from http.client import HTTPException
 from typing import Any
 
 from ..segments import Context
@@ -23,7 +24,6 @@ from .base import Candidate, ConfidenceSource, ConfidenceUnavailable
 from ..descriptor import sha256_tag, hash_object
 from ..validation import number
 from urllib.parse import urlparse
-from urllib.error import URLError
 
 JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 DEFAULT_MODEL = "jev-latest"  # pin a versioned id (e.g. jev-1.13.0) once thresholds are tuned
@@ -57,10 +57,7 @@ def parse_noul(resp: dict[str, Any], key: str = "sufficient") -> float:
     ans = resp["answers"][key]
     if ans.get("type") != "noul":
         raise ValueError(f"expected noul answer for {key!r}, got {ans.get('type')!r}")
-    p = number(ans["noul"], "noul", maximum=1)
-    if not 0.0 <= p <= 1.0:
-        raise ValueError(f"noul out of range: {p}")
-    return p
+    return number(ans["noul"], "noul", maximum=1)
 
 
 def http_transport(api_key: str | None = None, endpoint: str = JEV_ENDPOINT, timeout: float = 10.0) -> Transport:
@@ -103,9 +100,12 @@ class JevConfidenceSource(ConfidenceSource):
         body = build_request(ctx, candidate.model_id, model=self.model, rubric=self.rubric)
         try:
             response = self.transport(body)
-        except (TimeoutError, URLError, OSError) as exc:
+        except (OSError, ValueError, HTTPException) as exc:  # URLError/timeouts are OSError; bad JSON is ValueError
             raise ConfidenceUnavailable("confidence transport unavailable") from exc
         self.last_response = response
-        if "latest" not in self.model and response.get("model") != self.model:
-            raise ConfidenceUnavailable("confidence model revision differs from the pinned version")
-        return parse_noul(response)
+        try:
+            if "latest" not in self.model and response.get("model") != self.model:
+                raise ConfidenceUnavailable("confidence model revision differs from the pinned version")
+            return parse_noul(response)
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+            raise ConfidenceUnavailable("malformed confidence response") from exc

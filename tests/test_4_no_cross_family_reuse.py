@@ -1,6 +1,7 @@
-"""Falsification 4 (SPEC.md §1.2, §4.4): a cache hit across two different compat_keys is a keying bug,
-never a discovery. The prefix chain is content-addressed and therefore IDENTICAL across families; the
-compat_key is the only thing separating them, so this is the assertion that has to hold.
+"""Falsification 4 (SPEC.md "Cache and routing"): a cache hit across two different compat_keys is a keying bug,
+never a discovery. The prefix chain is content-addressed and therefore IDENTICAL across families; the compiler
+cache_key (compat_key plus compiler_id and tokenizer_hash) is what separates them, so this is the assertion
+that has to hold.
 """
 from __future__ import annotations
 
@@ -22,7 +23,8 @@ def test_same_pcf_same_chain_different_keys_no_hit(base_ctx):
     assert first_divergence(ca.chain, cb.chain) == len(ca.chain)
     assert A.descriptor.compat_key != B.descriptor.compat_key
     # B's lookup against A's populated store must miss even though the chain is identical.
-    assert A.cache.lookup(B.descriptor.compat_key, cb.chain, now=1.0) == -1
+    assert A.cache.lookup(B.compiler.cache_key, cb.native_chain, now=1.0) == -1 < A.cache.lookup(
+        A.compiler.cache_key, ca.native_chain, now=1.0)
     assert B.compiler.warmth(ctx, A.cache, now=1.0).warm_tokens == 0
 
 

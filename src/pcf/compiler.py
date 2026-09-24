@@ -87,17 +87,18 @@ def data_text(seg: Segment) -> str:
     return canonical_bytes({"kind": seg.kind, "source": seg.provenance, "data": seg.content}).decode()
 
 
-def choose_breakpoints(ctx: Context, max_breakpoints: int) -> list[int]:
+def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> list[int]:
     """Keep stable group anchors and recent history endpoints, up to the explicit budget.
 
     History endpoints are retained individually so an append-only explicit-mode
-    request can still name a previously written endpoint. Empty segments have no
-    native marker location. Stability is a hint, not a cache guarantee.
+    request can still name a previously written endpoint. Empty segments, and
+    indices rejected by ``supported``, have no native marker location and do not
+    consume budget. Stability is a hint, not a cache guarantee.
     """
     integer(max_breakpoints, "max_breakpoints")
     groups, history = {}, []
     for i, seg in enumerate(ctx.segments):
-        if not seg.stable or not seg.content:
+        if not seg.stable or not seg.content or (supported is not None and not supported(i)):
             continue
         if seg.kind == "history":
             history.append(i)
@@ -152,15 +153,16 @@ class ContextCompiler(ABC):
 
     def compile(self, ctx: Context) -> CompiledPrompt:
         ctx.validate_tool_history(require_resolved=True)
-        breakpoints = [i for i in choose_breakpoints(ctx, self.descriptor.max_breakpoints)
-                       if self.supports_boundary(ctx, i)]
+        breakpoints = choose_breakpoints(ctx, self.descriptor.max_breakpoints, lambda i: self.supports_boundary(ctx, i))
         native, positions = [], []
         for end in range(1, len(ctx.segments) + 1):
             prefix = Context(ctx.segments[:end], ctx.session_id, ctx.cache_namespace)
             rendered = self.render(prefix, [])
             native.append(hash_object("pcf:native:0.2", self.native_input(rendered)))
             positions.append(self.native_positions(rendered))
-        counts = tuple(integer(self.tokenizer.count(segment_text(s)), "token count") for s in ctx.segments)
+        # Empty tools/history segments render nothing, so they bill nothing.
+        counts = tuple(0 if s.content == [] else integer(self.tokenizer.count(segment_text(s)), "token count")
+                       for s in ctx.segments)
         return CompiledPrompt(self.descriptor, canonical_bytes(self.render(ctx, breakpoints)), counts,
                               tuple(breakpoints), tuple(ctx.prefix_chain()), tuple(native), self.cache_key,
                               ctx.cache_namespace, tuple(self.lookup_boundaries(breakpoints, positions)),

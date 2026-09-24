@@ -1,4 +1,4 @@
-"""Schema conformance for every artifact the library emits, plus the hashing/ordering rules of SPEC.md §2."""
+"""Schema conformance for every artifact the library emits, plus the hashing/ordering rules of SPEC.md "Document"."""
 from __future__ import annotations
 
 import json
@@ -20,11 +20,11 @@ def _schema(name: str):
 
 
 def test_pcf_document_validates_and_roundtrips(base_ctx):
-    ctx = turn(base_ctx, 1, "hi", None)
+    ctx = Context(turn(base_ctx, 1, "hi", None).segments, "s", "tenant-a")
     doc = ctx.to_json()
     jsonschema.validate(doc, _schema("pcf.schema.json"))
     back = Context.from_json(json.loads(json.dumps(doc)))
-    assert back.prefix_chain() == ctx.prefix_chain()
+    assert back == ctx and back.prefix_chain() == ctx.prefix_chain()
 
 
 def test_descriptor_validates():
@@ -78,4 +78,42 @@ def test_prefix_chain_diverges_at_the_changed_segment(base_ctx):
     ctx1 = turn(base_ctx, 1, "hi", None)
     ctx2 = ctx1.with_replaced("mem", Segment("mem", "memory", {"customer_tier": "silver"}))
     chain1, chain2 = ctx1.prefix_chain(), ctx2.prefix_chain()
-    assert chain1[:2] == chain2[:2] and chain1[2:] != chain2[2:]
+    assert chain1[:2] == chain2[:2] and all(a != b for a, b in zip(chain1[2:], chain2[2:]))
+
+
+def test_core_invariants_are_enforced():
+    call = {"role": "assistant", "content": "", "tool_calls": [{"id": "c", "name": "t", "arguments": {}}]}
+    res = {"role": "tool", "call_id": "c", "content": "r"}
+    for bad, why in [([Segment("m", "memory", "x"), Segment("d", "document", "y", authority="instruction")],
+                      "precede data"),
+                     ([Segment("h", "history", [res])], "orphan"),
+                     ([Segment("h", "history", [call, res, call, res])], "call ids must be unique"),
+                     ([Segment("h", "history", [call]), Segment("u", "user", "x")], "resolve tool calls"),
+                     ([Segment("h", "history", [call, {"role": "user", "content": "x"}, res])], "must follow"),
+                     ([Segment("t", "tools", [{"name": "t", "parameters": {}}] * 2)], "tool names must be unique")]:
+        with pytest.raises(ValueError, match=why):
+            Context(bad)
+    with pytest.raises(ValueError, match="promoted"):
+        Segment("h", "history", [], authority="instruction")
+    s = Segment("m", "memory", {"a": [1]})
+    s.content["a"].append(2)
+    assert s.content == {"a": [1]}
+    variants = ({}, {"authority": "instruction"}, {"provenance": "p"})
+    assert len({Segment("d", "document", "x", **kw).hash for kw in variants}) == 3
+    assert Segment("x", "memory", '{"a":1}').hash != Segment("x", "memory", {"a": 1}).hash
+    legacy = {"role": "tool", "content": {"tool_use_id": "c", "content": "r", "is_error": True}}
+    assert Segment("h", "history", [call, legacy]).content[1] == {**res, "is_error": True}
+    mixed = {"role": "tool", "is_error": True, "content": {"tool_use_id": "c", "content": "r"}}
+    with pytest.raises(ValueError):  # mixed 0.1/0.2 form must not silently flip an outer is_error
+        Segment("h", "history", [call, mixed])
+    doc = Context([Segment("h", "history", [call, res])]).to_json()
+    del doc["segments"][0]["content"][1]["is_error"]  # the hash covers is_error, so the schema must require it
+    with pytest.raises(ValueError, match="validation failed"):
+        Context.from_json(doc)
+
+
+def test_spec_schemas_mirror_packaged_schemas():
+    from importlib.resources import files
+    for n in ("pcf", "cache-descriptor", "route-decision"):
+        packaged = files("pcf.schemas").joinpath(f"{n}.schema.json").read_bytes()
+        assert (SCHEMAS / f"{n}.schema.json").read_bytes() == packaged
