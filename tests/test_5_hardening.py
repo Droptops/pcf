@@ -283,7 +283,10 @@ def test_openrouter_transport_posts_jev_body_with_bearer_key(monkeypatch):
         sent.update(url=req.full_url, auth=req.get_header("Authorization"), body=_json.loads(req.data))
         return io.BytesIO(b'{"model": "typesafe/jev-1.13", "answers": {"sufficient": {"type": "noul", "noul": 0.9}}}')
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    class FakeOpener:  # the transport opens through build_opener (no redirects), not urlopen
+        open = staticmethod(fake_urlopen)
+
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *handlers: FakeOpener())
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
         openrouter_transport()
