@@ -84,3 +84,39 @@ def test_tail_memory_renders_as_one_user_message_with_the_turn():
     assert [b["text"] for b in messages[-1]["content"]][-1] == "hi"
     inputs = OpenAICompiler("gpt-5.6").compile(_tail_ctx(0)).request["input"]
     assert '"source":null' in inputs[-2]["content"][0]["text"] and inputs[-1]["content"][0]["text"] == "hi"
+
+
+def _placed_session(edits: list[int], place: bool) -> tuple[int, list[str]]:
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import MemoryPlacer
+    engine, placer, history, total, tail = family_a(), MemoryPlacer(WordTokenizer()), [], 0, []
+    for n, version in enumerate(edits):
+        memory = [Segment("ma", "memory", _module("a")), Segment("mc", "memory", _module("c", version))]
+        front, tail = placer.split(memory, history) if place else (memory, [])
+        ctx = Context([Segment("s", "system", SYSTEM), *front, *history, *tail, Segment("u", "user", "hi", stable=False)])
+        total += engine.run(ctx, n * 10)[0].cold_tokens
+        history.append(_history(n))
+    return total, [s.id for s in tail]
+
+
+def test_placer_moves_only_the_changing_module_and_saves_tokens():
+    busy = list(range(10))
+    cost, tail = _placed_session(busy, place=True)
+    assert tail == ["mc"]
+    assert cost < _placed_session(busy, place=False)[0]
+
+
+def test_placer_keeps_stable_memory_in_front_at_no_extra_cost():
+    quiet = [0] * 10
+    assert _placed_session(quiet, place=True) == (_placed_session(quiet, place=False)[0], [])
+
+
+def test_placer_keeps_changing_memory_in_front_without_history_and_rejects_other_kinds():
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import MemoryPlacer
+    placer = MemoryPlacer(WordTokenizer())
+    for version in range(3):
+        front, tail = placer.split([Segment("mc", "memory", _module("c", version))], [])
+        assert tail == []  # with no history after it, the front never costs more than the tail
+    with pytest.raises(ValueError, match="memory"):
+        placer.split([Segment("d", "document", "x")], [])
