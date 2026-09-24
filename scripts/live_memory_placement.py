@@ -102,7 +102,7 @@ def session(arm: str, turns: int, provider: str, model: str, nonce: str, client=
     compiler = make_compiler(provider, model)
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=READ_MULTIPLIER)
-    system = Segment("s", "system", f"Session {nonce}.\n" + "\n".join(POLICIES))
+    system = Segment("s", "system", f"Session {nonce}-{arm}.\n" + "\n".join(POLICIES))
     history, rows, said = [], [], {}
     for turn in range(turns):
         mem = memory(turn)
