@@ -30,6 +30,8 @@ Fixes from coding reviews. Portable segment hashes and PCF document wire format 
 - OpenAI write estimates stop at the history marker: `ContextCompiler.covered_tokens()` reports how much of the
   prefix a marker caches, and the OpenAI adapter excludes assistant turns after a history segment's last user/tool
   item, so `warmth()` and router cost no longer count them as written.
+- `MemoryPlacer.for_candidate(candidate)` prices placement from a router `Candidate` (its tokenizer, write and
+  cache-read prices). README documents memory placement with the measured live results.
 - `MemoryPlacer(write_multiplier=, read_multiplier=)`: the tail rule weighs cache prices,
   p·(w−r)·(m+H) > (1−r)·m. Defaults (w=1, r=0) keep the plain token rule.
 - `scripts/live_memory_placement.py` compares three arms (front, tail, placed) over four modules with different

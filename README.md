@@ -23,6 +23,20 @@ External documents remain data, tool IDs/arguments are preserved, cache inspecti
 
 Cache identity and cumulative token counts use the same rendered input. Simulated billing counts canonical native JSON; provider billing remains an estimate until usage is returned. The revised accounting changes compiler cache keys and candidate fingerprints: old cache metadata and validation records must not be reused.
 
+## Memory placement
+
+Memory that changes between turns should follow history (tail memory), not precede it: a change to front memory re-bills every history token after it. `MemoryPlacer` decides per module: stable modules stay in front (cached), a module moves to the tail once p·(w−r)·(m+H) > (1−r)·m, with prices from `MemoryPlacer.for_candidate(candidate)`.
+
+Measured with `scripts/live_memory_placement.py --run --repeats 3` (gpt-5.6, 20 turns, four modules changing never / every 6th / every 3rd / every turn; input cost in uncached-token units, cache write 1.25×, read assumed 0.1×):
+
+| Arrangement | Input cost | Correct (stale-history traps) |
+|---|---|---|
+| All memory in front, most volatile last | 80.2k | 60/60 (33/33) |
+| All memory after history | 30.7k | 60/60 (33/33) |
+| `MemoryPlacer` | 28.6k | 60/60 (33/33) |
+
+Most of the saving comes from putting volatile memory after history; adaptive placement adds roughly (1−r)·m per turn for each stable module kept in front. One scripted session with simple lookup questions: a cost measurement, not a quality evaluation.
+
 The Jev transport requires a direct HTTPS endpoint and rejects redirects. CI runs offline tests, lint, examples, a wheel installation check, and a private-session-link check on tracked text and new commit messages. The metadata check does not remove links from existing Git history or GitHub PR descriptions.
 
 See `spec/SPEC.md` and `spec/REMEDIATION.md`.

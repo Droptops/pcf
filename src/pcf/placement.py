@@ -36,6 +36,13 @@ class MemoryPlacer:
         # id -> (observations, changes, decayed rate, last hash, in tail)
         self._seen: dict[str, tuple[int, int, float, str, bool]] = {}
 
+    @classmethod
+    def for_candidate(cls, candidate, *, decay: float = 0.7) -> "MemoryPlacer":
+        """A placer priced from a router ``Candidate``: its tokenizer, write price and cache-read price."""
+        base = number(candidate.input_price_per_mtok, "input_price_per_mtok", minimum=1e-12)
+        return cls(candidate.compiler.tokenizer, decay=decay, write_multiplier=candidate.write_price / base,
+                   read_multiplier=candidate.cache_read_price_per_mtok / base)
+
     def split(self, memory: list[Segment], history: list[Segment], *,
               cold: bool = False) -> tuple[list[Segment], list[Segment]]:
         """Return (front, tail); call once per turn. Pass cold=True when the provider cache has expired.
