@@ -97,7 +97,9 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> li
     History endpoints are retained individually so an append-only explicit-mode
     request can still name a previously written endpoint. Empty segments, and
     indices rejected by ``supported``, have no native marker location and do not
-    consume budget. Stability is a hint, not a cache guarantee.
+    consume budget. Memory segments sharing a ``provenance`` form one module with its
+    own anchor, so a change to a later module keeps earlier modules warm; memory without
+    provenance shares the document anchor. Stability is a hint, not a cache guarantee.
     """
     integer(max_breakpoints, "max_breakpoints")
     groups, history = {}, []
@@ -106,6 +108,8 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> li
             continue
         if seg.kind == "history":
             history.append(i)
+        elif seg.kind == "memory" and seg.provenance is not None:
+            groups[("memory", seg.provenance)] = i
         else:
             groups["context" if seg.kind in {"memory", "document"} else seg.kind] = i
     candidates = sorted([*groups.values(), *history])
@@ -117,7 +121,11 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> li
     anchor = anchors[-1] if anchors else candidates[0]
     if max_breakpoints == 1:
         return [candidates[-1]]
-    return sorted({anchor, *[i for i in candidates if i != anchor][-(max_breakpoints - 1):]})
+    # Stability is only a hint: with budget to spare, also keep the first anchor so one mislabelled
+    # volatile module cannot take the whole prefix (system, tools) out of cache. Two history endpoints
+    # remain, enough for an append-only request to name the endpoint the previous request wrote.
+    keep = {anchor, anchors[0]} if max_breakpoints >= 4 and anchors else {anchor}
+    return sorted({*keep, *[i for i in candidates if i not in keep][-(max_breakpoints - len(keep)):]})
 
 
 class ContextCompiler(ABC):

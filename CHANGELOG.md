@@ -9,10 +9,28 @@ Fixes from coding reviews. Portable segment hashes and PCF document wire format 
 - Token accounting uses cumulative canonical native input, matching cache identity. Splitting or combining history segments cannot change billing for the same native prefix. The accounting version in compiler cache keys invalidates older metadata and candidate validations. The character-chunk tokenizer's identity now includes its validated configuration.
 - Added regression coverage for redirects, evidence minimums, duplicate samples, regrouped history, and tokenizer identity; CI covers Python 3.11–3.14, lint, offline smoke checks, wheel installation, and session-link prevention in tracked text and new commits.
 
+- Breakpoints: memory segments sharing a `provenance` form a module with its own anchor, so editing a later
+  module keeps earlier ones warm. Memory without provenance keeps the shared anchor; hashes are unchanged.
+- Ordering: `memory` may follow history when only `user` segments come after it (tail memory), so editing
+  volatile memory re-bills only the tail instead of the whole conversation.
+- `pcf.placement.MemoryPlacer`: each memory module picks front or tail placement from its own observed change
+  rate (tail when p·(m+H) > m); modules are stable until a change is seen. Optional; the compiler does not use it.
+  The tail is sticky while the cache is warm (moving back re-bills m+H); with `split(..., cold=True)` modules are
+  re-placed from a decayed change rate (`decay=0.7`), so a module that went quiet returns to the front.
+- Jev via OpenRouter: `openrouter_transport()` posts the unchanged Jev body to OpenRouter's Decisions API
+  (`/api/alpha/decisions`) with `OPENROUTER_API_KEY`. Pin the dated snapshot (`model="typesafe/jev-1.13-20260917"`): replies
+  name it, so the `typesafe/jev-1.13` alias fails the pin check and the router falls back.
 - OpenAI: assistant history is sent as plain text (Responses rejects `input_text` on assistant turns) and carries
   no cache marker; explicit mode is sent only when a marker was placed (explicit with none disables caching);
   parallel `function_call` items normalize into one assistant turn; unsupported boundaries no longer consume the
   breakpoint budget.
+- OpenAI history caching (checked live on gpt-5.6, explicit mode): a history segment ending in assistant text is
+  marked on its last user/tool item, since a marker on assistant `output_text` is accepted but writes nothing.
+  Reads only hit markers present in the request, so earlier history endpoints stay marked.
+- Breakpoints over budget keep the first stable anchor as well as the last (budget ≥ 4), so one volatile module
+  left `stable` no longer takes the system prompt out of cache.
+- `scripts/live_memory_placement.py`: low reasoning effort and 512 output tokens (64 returned empty answers), and a
+  `billed_input_units` summary under the write multiplier and an assumed `--read-multiplier`.
 - Response normalization rejects what it cannot represent instead of dropping it: Anthropic text after `tool_use`
   or with citations, OpenAI `output_text` annotations and non-text `function_call_output` parts.
 - Held-out validation fails when no sample reaches the threshold; `fit_platt` stops on the Newton decrement instead

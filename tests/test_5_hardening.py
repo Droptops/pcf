@@ -8,7 +8,7 @@ import pytest
 
 from pcf import Context, Segment, Usage, canonical_bytes
 from pcf.cache import PrefixCache
-from pcf.compiler import UnsupportedRequest
+from pcf.compiler import UnsupportedRequest, choose_breakpoints
 from pcf.families.anthropic_adapter import AnthropicCompiler, history_from_response as anthropic_history
 from pcf.families.capabilities import OpenAICapabilities
 from pcf.families.openai_adapter import OpenAICompiler, history_from_response as openai_history
@@ -97,12 +97,13 @@ def test_provider_cache_markers_land_on_stable_boundaries():
     marked = [a["tools"][-1], a["system"][-1], a["messages"][0]["content"][0]]
     assert [b["cache_control"] for b in marked] == [mark] * 3
     assert "cache_control" not in a["messages"][-1]["content"][-1]
-    # OpenAI: assistant input must not use input_text, and cannot carry a marker.
+    # OpenAI: assistant input must not use input_text and cannot carry a marker; a history segment
+    # ending in assistant text is marked on its last user item instead.
     hist = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
     ctx = Context([Segment("s", "system", "sys"), Segment("h", "history", hist),
                    Segment("u", "user", "next", stable=False)])
     o = OpenAICompiler("gpt-5.6").compile(ctx).request
-    assert o["input"][2] == {"role": "assistant", "content": "hello"} and _markers(o) == [o["input"][0]["content"][0]]
+    assert o["input"][2] == {"role": "assistant", "content": "hello"} and _markers(o) == [o["input"][0]["content"][0], o["input"][1]["content"][0]]
     assert o["prompt_cache_options"]["mode"] == "explicit"
     # Explicit mode with no marker would disable caching, so an unmarked request stays implicit.
     volatile = Context([Segment("t", "tools", [{"name": "f", "parameters": {}}]),
@@ -269,3 +270,50 @@ def test_jev_pin_and_endpoint_guards():
                 "https://:p@api.typesafe.ai/v1/systemone"):
         with pytest.raises(ValueError, match="HTTPS"):
             http_transport("key", endpoint=url)
+
+
+def test_openrouter_transport_posts_jev_body_with_bearer_key(monkeypatch):
+    import io
+    import json as _json
+    import urllib.request
+    from pcf.router import openrouter_transport
+    sent = {}
+
+    def fake_urlopen(req, timeout):
+        sent.update(url=req.full_url, auth=req.get_header("Authorization"), body=_json.loads(req.data))
+        return io.BytesIO(b'{"model": "typesafe/jev-1.13", "answers": {"sufficient": {"type": "noul", "noul": 0.9}}}')
+
+    class FakeOpener:  # the transport opens through build_opener (no redirects), not urlopen
+        open = staticmethod(fake_urlopen)
+
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *handlers: FakeOpener())
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+        openrouter_transport()
+    ctx = Context([Segment("s", "system", "x"), Segment("u", "user", "hi", stable=False)])
+    source = JevConfidenceSource(openrouter_transport("k"), model="typesafe/jev-1.13")
+    B = family_b()
+    assert source.p_sufficient(ctx, Candidate(B.compiler, B.cache, 0.2, 0.02)) == 0.9
+    assert sent["url"] == "https://openrouter.ai/api/alpha/decisions" and sent["auth"] == "Bearer k"
+    assert sent["body"]["model"] == "typesafe/jev-1.13" and sent["body"]["questions"]["sufficient"]["type"] == "noul"
+
+
+def test_openai_history_turns_ending_in_assistant_keep_prior_markers():
+    # Observed live (gpt-5.6, explicit mode): reads only hit markers present in the current request,
+    # so each append-only history turn must stay marked for the next request to reuse it.
+    turns = [Segment(f"h{i}", "history", [{"role": "user", "content": f"q{i}"},
+                                          {"role": "assistant", "content": f"a{i}"}]) for i in range(3)]
+    ctx = Context([Segment("s", "system", "sys"), *turns, Segment("u", "user", "next", stable=False)])
+    o = OpenAICompiler("gpt-5.6").compile(ctx).request
+    assert [m["text"] for m in _markers(o)] == ["sys", "q0", "q1", "q2"]
+    assert all("prompt_cache_breakpoint" not in item for item in o["input"] if item.get("role") == "assistant")
+
+
+def test_over_budget_selection_keeps_first_anchor_as_well_as_last():
+    # A volatile module wrongly left stable must not drop the system prompt out of cache.
+    hist = [Segment(f"h{i}", "history", [{"role": "user", "content": f"q{i}"},
+                                         {"role": "assistant", "content": f"a{i}"}]) for i in range(4)]
+    ctx = Context([Segment("s", "system", "sys"), Segment("m", "memory", "changes every turn"), *hist,
+                   Segment("u", "user", "next", stable=False)])
+    assert choose_breakpoints(ctx, 4) == [0, 1, 4, 5]
+    assert choose_breakpoints(ctx, 3) == [1, 4, 5]

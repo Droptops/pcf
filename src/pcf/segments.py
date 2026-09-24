@@ -180,7 +180,11 @@ class Context:
         self.validate_tool_history()
 
     def validate_order(self) -> None:
-        ranks = [KIND_RANK[s.kind] for s in self.segments]
+        # Memory may also follow history (tail memory), so volatile state does not invalidate cached history.
+        ranks, seen_history = [], False
+        for s in self.segments:
+            seen_history = seen_history or s.kind == "history"
+            ranks.append(3.5 if s.kind == "memory" and seen_history else KIND_RANK[s.kind])
         if any(b < a for a, b in zip(ranks, ranks[1:])):
             raise ValueError('invalid segment order; see SPEC.md "Document"')
         seen_data = False
