@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import math
 import random
+from types import SimpleNamespace
 
 import pytest
+from conftest import turn
 
 from pcf import Context, Segment
 from pcf.families.sim import family_a, family_b
-from pcf.router import (Candidate, PlattScaledSource, Router, UncalibratedSource, ValidationSample,
+from pcf.router import (Candidate, ConfidenceSource, PlattScaledSource, Router, UncalibratedSource, ValidationSample,
                         expected_calibration_error, fit_platt)
 
 TAIL_ECE_BOUND = 0.10
@@ -156,6 +158,49 @@ def test_platt_fit_converges_on_ordinary_data():
     rows, raw, cheap = make_population(3000, 2), good_scorer(random.Random(2)), _candidates()[1]
     a, b = fit_platt([raw(ctx, cheap) for ctx, t, _ in rows if not t], [y for _, t, y in rows if not t])
     assert math.isfinite(a) and math.isfinite(b)
+
+
+def test_route_cost_prices_reads_writes_and_uncached_input(base_ctx):
+    A = family_a(min_cacheable=32)
+    ctx = turn(base_ctx, 1, "Where is order 1?", None)
+    A.run(ctx, 0)
+    ctx = turn(ctx, 2, "And order 2?", "Order 1 ships Tuesday.")
+    router = Router([Candidate(A.compiler, A.cache, 1.0, 0.1, is_fallback=True)], UncalibratedSource(lambda c, k: .5))
+    r = router.route(ctx, now=1).candidates[0]
+    assert r.warm_tokens and r.cache_creation_tokens and r.uncached_tokens
+    expected = (r.uncached_tokens * 1.0 + r.cache_creation_tokens * 1.25 + r.warm_tokens * 0.1) / 1e6
+    assert r.est_input_cost_usd == pytest.approx(expected)
+
+
+class _Validated(ConfidenceSource):
+    name = "test-validated"
+
+    def p_sufficient(self, ctx, candidate):
+        return 0.9
+
+    def validation_for(self, candidate, threshold):
+        return SimpleNamespace(validation_id=None)
+
+
+def test_router_picks_the_cheapest_validated_candidate():
+    ctx = make_population(1, 0)[0][0]
+    d = Router(_candidates(), _Validated(), threshold=THRESHOLD).route(ctx, now=0)
+    assert d.chosen == "sim-b-small" and not d.escalate and d.confidence == 0.9
+    assert d.candidates[1].est_input_cost_usd < d.candidates[0].est_input_cost_usd
+    A, B = family_a(), family_b()  # same answer when the cheap model is listed first and is the fallback
+    flipped = [Candidate(B.compiler, B.cache, 0.2, 0.02, is_fallback=True), Candidate(A.compiler, A.cache, 1.0, 0.1)]
+    assert Router(flipped, _Validated(), threshold=THRESHOLD).route(ctx, now=0).chosen == "sim-b-small"
+
+
+def test_validation_is_revoked_by_refit_parameters_and_rejects_training_overlap():
+    src, cands, _, _, _, _ = _fit_and_eval(good_scorer)
+    cheap = cands[1]
+    assert src.validation_for(cheap, THRESHOLD) is not None
+    rows = make_population(299, 99) + make_population(1, 7)  # one reused training row (seed 7, row 0)
+    with pytest.raises(ValueError, match="overlap"):
+        src.validate([ValidationSample(c, cheap, y, t) for c, t, y in rows], dataset_id="reuse")
+    src.a += 1
+    assert src.validation_for(cheap, THRESHOLD) is None
 
 
 # ---------------------------------------------------------------- mutation guard
