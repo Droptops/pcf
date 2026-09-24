@@ -16,6 +16,20 @@ Fixes from a coding-discipline review. Hashes and wire format of valid 0.2 docum
 - Empty `tools`/`history` segments bill zero tokens; mixed 0.1/0.2 tool results that would flip `is_error` are rejected.
 - Schema: tool results require `is_error` (the hash covers it). SPEC now states the exact hash, prefix-chain, cache
   liveness and validation rules; dangling `SPEC.md §N` citations and the demo's calibrated-routing claim are corrected.
+- Anthropic compilation rejects an empty message list and, on the Claude 4.6+ model IDs it lists, a final assistant
+  turn (prefill). These raise `UnsupportedRequest`; the router leaves such a candidate out, and raises only when it is
+  the fallback.
+- `PrefixCache` keeps one store-wide event clock: `write`/`touch`/`prune` reject earlier times and `peek` rejects a
+  time before the latest event, so warmth can no longer report a hit before the entry existed.
+- OpenAI requests in implicit mode now estimate the provider's own breakpoint as a write of the whole prompt, so
+  route costs include the cache-write premium. Caller-supplied implicit-only profiles default to free writes (1x),
+  like the built-in pre-5.6 profiles; explicit profiles keep 1.25x.
+- Schemas now reject what the runtime rejects: empty or whitespace-only strings (whitespace as Python's `str.strip()`
+  defines it, spelled out so ECMA-262 validators agree), empty history turns, duplicate axes, and `byte_compat_key`
+  without a complete manifest; `$` anchors no longer accept a trailing newline under Python's `re`. Serialized
+  documents may no longer carry the 0.1 assistant `tool_use` history form (constructors still migrate it).
+- Added tests for route cost math, TTL refresh, cheapest-validated routing, eviction, namespace isolation, usage
+  parsing, Jev guards, validation revocation and `byte_compat_key` gating.
 
 ## 0.2.0
 
