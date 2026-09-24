@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pcf.dev/schemas/route-decision/0.2",
+  "type": "object",
+  "properties": {
+    "decision_version": {
+      "const": "0.2"
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "family": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "compat_key": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "warm_prefix_segments": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "warm_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cold_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_creation_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uncached_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "est_input_cost_usd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p_sufficient": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "score": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "token_count_is_estimate": {
+            "type": "boolean"
+          },
+          "cache_state": {
+            "enum": [
+              "simulated",
+              "unknown"
+            ]
+          },
+          "observed_at": {
+            "type": "number",
+            "minimum": 0
+          },
+          "calibration_valid": {
+            "type": "boolean"
+          },
+          "validation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "family",
+          "model_id",
+          "compat_key",
+          "warm_prefix_segments",
+          "warm_tokens",
+          "cold_tokens",
+          "cache_creation_tokens",
+          "uncached_tokens",
+          "est_input_cost_usd",
+          "p_sufficient",
+          "score",
+          "token_count_is_estimate",
+          "cache_state",
+          "observed_at",
+          "calibration_valid",
+          "validation_id",
+          "confidence_error"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "chosen": {
+      "type": "string",
+      "minLength": 1
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "escalate": {
+      "type": "boolean"
+    },
+    "escalation_threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "confidence_source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "decision_version",
+    "candidates",
+    "chosen",
+    "confidence",
+    "escalate",
+    "escalation_threshold",
+    "confidence_source",
+    "source_fingerprint",
+    "reason"
+  ],
+  "additionalProperties": false,
+  "description": "Candidate scores are diagnostic. p_sufficient and chosen confidence are null without an applicable passed validation record. Prices and native cache states remain estimates; a fallback is a policy decision, not a quality guarantee."
+}
