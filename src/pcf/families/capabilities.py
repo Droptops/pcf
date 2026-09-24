@@ -1,6 +1,10 @@
 """Explicit API profiles. Unknown model IDs require a caller-supplied profile.
 
-These profiles record documented behavior as of 2026-09-24, not live API validation.
+These profiles record documented behavior as of 2026-09-24, not live API validation. Sources: openai-python
+3.19.2 docstrings (PromptCacheOptions, prompt_cache_retention) and the guide they cite,
+https://developers.openai.com/api/docs/guides/prompt-caching (write premium and minimum length: checked via
+secondary summaries, not fetched directly). in_memory 600s and 24h 86400s are nominal: the guide states a range
+and a maximum, not fixed TTLs.
 Old-model minimums vary with request settings; no exact old-model boundary is asserted.
 """
 from dataclasses import dataclass

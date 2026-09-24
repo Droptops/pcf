@@ -51,6 +51,7 @@ def normalize_history(turns: Any) -> list[dict]:
             call_id = turn.get("call_id")
             # Lossless migration of the 0.1 embedded tool-result representation.
             if call_id is None and isinstance(content, dict) and "tool_use_id" in content:
+                _fields(turn, {"role", "content"}, {"role", "content"})  # 0.1 kept is_error inside content
                 _fields(content, {"tool_use_id", "content", "is_error"}, {"tool_use_id", "content"})
                 call_id = content["tool_use_id"]
                 turn = {**turn, "is_error": content.get("is_error", False)}
@@ -181,7 +182,7 @@ class Context:
     def validate_order(self) -> None:
         ranks = [KIND_RANK[s.kind] for s in self.segments]
         if any(b < a for a, b in zip(ranks, ranks[1:])):
-            raise ValueError("invalid segment order; see SPEC.md §2")
+            raise ValueError('invalid segment order; see SPEC.md "Document"')
         seen_data = False
         for seg in self.segments:
             if seg.authority == "data":

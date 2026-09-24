@@ -10,6 +10,7 @@ from ..descriptor import CacheDescriptor, Layout, sha256_tag
 from ..segments import Context, text_content
 from ..validation import integer
 
+# Minimum cacheable prefix per platform.claude.com/docs/en/build-with-claude/prompt-caching, checked 2026-09-24.
 MIN_CACHEABLE = {"claude-fable-5-1": 512, "claude-opus-5-5": 512, "claude-opus-5": 512,
                  "claude-sonnet-5": 1024, "claude-haiku-4-5": 4096,
                  "claude-sonnet-4-6": 1024, "claude-opus-4-8": 1024,
@@ -24,6 +25,8 @@ def history_from_response(response: Any) -> list[dict]:
         block = block if isinstance(block, dict) else block.model_dump()
         typ = block.get("type")
         if typ == "text":
+            if (calls and block.get("text")) or block.get("citations"):  # would reorder text or drop citations
+                raise ValueError("Anthropic text after tool_use or with citations is not representable")
             text.append(block.get("text", ""))
         elif typ == "tool_use":
             calls.append({"id": block["id"], "name": block["name"], "arguments": block["input"]})

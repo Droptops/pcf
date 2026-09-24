@@ -84,6 +84,8 @@ def fit_platt(raw_probs, labels, iters=100, *, l2=1e-6):
         if det <= 1e-18 or not math.isfinite(det):
             raise ValueError("ill-conditioned calibration fit")
         da, db = (hbb * ga - hab * gb) / det, (haa * gb - hab * ga) / det
+        if ga * da + gb * db < 1e-14:  # Newton decrement below float resolution of the loss
+            return a - da, b - db
         old = loss(a, b)
         step = 1.0
         for _ in range(60):
