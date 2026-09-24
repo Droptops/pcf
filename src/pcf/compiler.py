@@ -97,7 +97,9 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> li
     History endpoints are retained individually so an append-only explicit-mode
     request can still name a previously written endpoint. Empty segments, and
     indices rejected by ``supported``, have no native marker location and do not
-    consume budget. Stability is a hint, not a cache guarantee.
+    consume budget. Memory segments sharing a ``provenance`` form one module with its
+    own anchor, so a change to a later module keeps earlier modules warm; memory without
+    provenance shares the document anchor. Stability is a hint, not a cache guarantee.
     """
     integer(max_breakpoints, "max_breakpoints")
     groups, history = {}, []
@@ -106,6 +108,8 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> li
             continue
         if seg.kind == "history":
             history.append(i)
+        elif seg.kind == "memory" and seg.provenance is not None:
+            groups[("memory", seg.provenance)] = i
         else:
             groups["context" if seg.kind in {"memory", "document"} else seg.kind] = i
     candidates = sorted([*groups.values(), *history])
