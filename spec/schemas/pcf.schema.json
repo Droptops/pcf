@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pcf.dev/schemas/pcf/0.2",
+  "type": "object",
+  "properties": {
+    "pcf_version": {
+      "const": "0.2"
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+          },
+          "kind": {
+            "enum": [
+              "tools",
+              "system",
+              "memory",
+              "document",
+              "history",
+              "user"
+            ]
+          },
+          "content": {},
+          "stable": {
+            "type": "boolean"
+          },
+          "authority": {
+            "enum": [
+              "instruction",
+              "data"
+            ]
+          },
+          "provenance": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "content"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "tools"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "content": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "parameters": {
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "parameters"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 0
+                },
+                "authority": {
+                  "const": "instruction"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "history"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "content": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "const": "user"
+                          },
+                          "content": {
+                            "type": [
+                              "string",
+                              "object"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "role",
+                          "content"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "const": "assistant"
+                          },
+                          "content": {
+                            "type": [
+                              "string",
+                              "object"
+                            ]
+                          },
+                          "tool_calls": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "arguments": {
+                                  "type": "object"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "arguments"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "minItems": 1
+                          }
+                        },
+                        "required": [
+                          "role",
+                          "content"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "const": "tool"
+                          },
+                          "call_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "content": {},
+                          "is_error": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "role",
+                          "call_id",
+                          "content"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "minItems": 0
+                },
+                "authority": {
+                  "const": "data"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "system",
+                    "memory",
+                    "document",
+                    "user"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "content": {
+                  "type": [
+                    "string",
+                    "object"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "system"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "authority": {
+                  "const": "instruction"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "user"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "authority": {
+                  "const": "data"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cache_namespace": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "pcf_version",
+    "segments"
+  ],
+  "additionalProperties": false,
+  "description": "Immutable PCF 0.2 context. Runtime also checks ordering, unique identifiers, call/result linkage, canonical JSON and declared hashes. Namespace must identify the intended trusted sharing group."
+}

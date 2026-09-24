@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pcf.dev/schemas/cache-descriptor/0.2",
+  "type": "object",
+  "properties": {
+    "descriptor_version": {
+      "const": "0.2"
+    },
+    "family": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "weights_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "tokenizer_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "layout": {
+      "type": "object",
+      "properties": {
+        "positional": {
+          "enum": [
+            "rope",
+            "alibi",
+            "absolute",
+            "nope"
+          ]
+        },
+        "dtype": {
+          "enum": [
+            "fp32",
+            "bf16",
+            "fp16",
+            "fp8"
+          ]
+        },
+        "attention": {
+          "enum": [
+            "mha",
+            "gqa",
+            "mqa",
+            "mla"
+          ]
+        },
+        "kv_quant": {
+          "enum": [
+            null,
+            "int8",
+            "int4",
+            "fp8"
+          ]
+        },
+        "block_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "positional_config_hash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "format_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tensor_shape": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "minItems": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "axis_order": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "shard_spec_hash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quantization_config_hash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "positional",
+        "dtype",
+        "attention",
+        "kv_quant",
+        "block_tokens",
+        "positional_config_hash",
+        "format_id",
+        "tensor_shape",
+        "axis_order",
+        "shard_spec_hash",
+        "quantization_config_hash"
+      ],
+      "additionalProperties": false
+    },
+    "min_cacheable_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_breakpoints": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ttl_seconds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "engine": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "name",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "identity_kind": {
+      "enum": [
+        "opaque",
+        "simulated",
+        "manifest"
+      ]
+    },
+    "execution_config_hash": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cache_write_multiplier": {
+      "type": "number",
+      "minimum": 0
+    },
+    "compat_key": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "byte_compat_key": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "descriptor_version",
+    "family",
+    "model_id",
+    "weights_hash",
+    "tokenizer_hash",
+    "layout",
+    "min_cacheable_tokens",
+    "max_breakpoints",
+    "ttl_seconds",
+    "engine",
+    "identity_kind",
+    "execution_config_hash",
+    "cache_write_multiplier",
+    "compat_key",
+    "byte_compat_key"
+  ],
+  "additionalProperties": false,
+  "description": "compat_key groups declared computation identity only. Opaque and simulated descriptors never authorize KV-byte exchange. A non-null byte_compat_key additionally requires a complete, independently verified manifest and sharing authorization; no transfer is implemented."
+}
