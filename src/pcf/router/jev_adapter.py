@@ -17,6 +17,7 @@ import os
 import urllib.request
 from collections.abc import Callable
 from http.client import HTTPException
+from urllib.error import HTTPError
 from typing import Any
 
 from ..segments import Context
@@ -60,6 +61,13 @@ def parse_noul(resp: dict[str, Any], key: str = "sufficient") -> float:
     return number(ans["noul"], "noul", maximum=1)
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A confidence endpoint must answer directly; credentials never follow redirects."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise HTTPError(req.full_url, code, "confidence endpoint redirects are not permitted", headers, fp)
+
+
 def http_transport(api_key: str | None = None, endpoint: str = JEV_ENDPOINT, timeout: float = 10.0) -> Transport:
     parsed = urlparse(endpoint)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
@@ -67,13 +75,15 @@ def http_transport(api_key: str | None = None, endpoint: str = JEV_ENDPOINT, tim
     key = api_key or os.environ.get("TYPESAFE_API_KEY")
     if not key:
         raise RuntimeError("TYPESAFE_API_KEY not set")
+    timeout = number(timeout, "timeout", minimum=1e-12)
+    opener = urllib.request.build_opener(_NoRedirect())
 
     def send(body: dict[str, Any]) -> dict[str, Any]:
         req = urllib.request.Request(
             endpoint, data=json.dumps(body).encode("utf-8"), method="POST",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 - fixed https endpoint
+        with opener.open(req, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8"))
 
     return send

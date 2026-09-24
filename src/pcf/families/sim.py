@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..cache import PrefixCache
 from ..compiler import CompiledPrompt, ContextCompiler, Usage
-from ..descriptor import CacheDescriptor, Layout, sha256_tag
+from ..descriptor import CacheDescriptor, Layout, hash_object, sha256_tag
 from ..segments import Context
+from ..validation import number
 
 _WORDISH = re.compile(r"\w+|[^\w\s]", re.UNICODE)
 
@@ -35,8 +36,13 @@ class CharChunkTokenizer:
     """Family B: ceil(chars / chars_per_token). Deliberately different counts from A for the same text."""
 
     chars_per_token: float = 3.7
-    tokenizer_hash: str = sha256_tag("sim-tokenizer:charchunk-3.7-v1")
+    tokenizer_hash: str = field(init=False)
     is_estimate: bool = False
+
+    def __post_init__(self):
+        size = number(self.chars_per_token, "chars_per_token", minimum=1e-12)
+        object.__setattr__(self, "chars_per_token", size)
+        object.__setattr__(self, "tokenizer_hash", hash_object("sim-tokenizer:charchunk-v2", {"chars_per_token": size}))
 
     def count(self, text: str) -> int:
         return math.ceil(len(text) / self.chars_per_token) if text else 0
