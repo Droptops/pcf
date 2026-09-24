@@ -1,11 +1,11 @@
-"""Falsification 1 (SPEC.md §2.5, §4.1): the Layer 2 portability guarantee on an A/B/A session.
+"""Falsification 1 (SPEC.md "Cache and routing"): the Layer 2 portability guarantee on an A/B/A session.
 
 Three assertions, each catching a different bug class:
   (a) cold tokens billed == oracle on EVERY call     -> cross-family leakage, TTL bugs, accounting drift
   (b) each stable segment billed cold <= 1x per family within a TTL window -> bad breakpoint placement
   (c) both compiled requests carry every tool and every history turn -> state dropped in translation
 
-The oracle re-derives §2.5 with its own dict; it does not import PrefixCache. Mutation guards at the
+The oracle re-derives the SPEC cache rule with its own dict; it does not import PrefixCache. Mutation guards at the
 bottom inject one bug each and assert the corresponding assertion FAILS, so the test has teeth.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 from conftest import turn
 
-from pcf import Context, PrefixCache
+from pcf import Context, PrefixCache, Segment
 from pcf.compiler import choose_breakpoints
 from pcf.families.sim import SimEngine, family_a, family_b
 
@@ -21,7 +21,7 @@ TTL = 300
 
 
 class Oracle:
-    """SPEC.md §2.5, written independently: longest live cached prefix; writes at breakpoints >= min."""
+    """SPEC.md "Cache and routing", written independently: longest live cached prefix; writes at breakpoints >= min."""
 
     def __init__(self) -> None:
         self.entries: dict[tuple[str, str], tuple[int, float]] = {}  # (family, prefix) -> (cum, expires)
@@ -31,7 +31,7 @@ class Oracle:
         longest = -1
         for i in range(len(chain) - 1, -1, -1):
             e = self.entries.get((family, chain[i]))
-            if e is not None and e[1] >= now:
+            if e is not None and e[1] > now:  # live while now < expires_at
                 longest = i
                 self.entries[(family, chain[i])] = (e[0], now + ttl)  # read refreshes TTL
                 break
@@ -102,7 +102,7 @@ def test_each_stable_segment_billed_cold_at_most_once_per_family(base_ctx):
 
 
 def test_ttl_expiry_rebills_and_oracle_agrees(base_ctx):
-    schedule = [("A", 0.0), ("A", 10.0), ("A", 10.0 + TTL + 1)]  # third call is past TTL
+    schedule = [("A", 0.0), ("A", 10.0), ("A", 10.0 + TTL)]  # third call lands exactly on expiry
     recs = run_session(_engines(), base_ctx, schedule)
     assert recs[2][4].cache_read_input_tokens == 0, "expired entries must not be read"
     for _, _, _, _, usage, expected in recs:
@@ -119,9 +119,17 @@ def test_compiled_requests_preserve_tools_and_history(base_ctx):
         req = eng.compiler.compile(ctx).request
         assert {t["name"] for t in req["tools"]} == tool_names
         rendered = [m["content"] for m in req["messages"]]
-        for h in history_turns:
-            assert h in rendered, f"{eng.descriptor.family} dropped history turn {h!r}"
+        kept = [c for c in rendered if c in history_turns]
+        assert kept == history_turns, f"{eng.descriptor.family} dropped or reordered history"
         assert req == eng.compiler.compile(ctx).request, "compile must be deterministic"
+
+
+def test_empty_segments_bill_nothing(base_ctx):
+    ctx = turn(base_ctx, 1, "hi", None)
+    padded = Context((*ctx.segments[:3], Segment("h0", "history", []), ctx.segments[3]), session_id=ctx.session_id)
+    for eng in _engines().values():
+        a, b = eng.compiler.compile(ctx), eng.compiler.compile(padded)
+        assert b.segment_tokens[3] == 0 and b.total_tokens == a.total_tokens, "an empty segment renders nothing"
 
 
 # ---------------------------------------------------------------- mutation guards: the tests must be able to fail

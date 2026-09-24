@@ -1,4 +1,4 @@
-"""Falsification 2 (SPEC.md §1, §4.2): same weights on two engines sharing a store must bill exactly like
+"""Falsification 2 (SPEC.md "Cache and routing"): same weights on two engines sharing a store must bill exactly like
 one engine alone. Measured by tokens billed, never by an engine's own hit counter.
 
 Mutation guard: a descriptor that folds the engine name into compat_key makes the alternating session

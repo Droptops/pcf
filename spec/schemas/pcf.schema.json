@@ -187,7 +187,8 @@
                         "required": [
                           "role",
                           "call_id",
-                          "content"
+                          "content",
+                          "is_error"
                         ],
                         "additionalProperties": false
                       }
