@@ -12,3 +12,17 @@ Every number quoted in the top-level README comes from a file here. Re-grade any
 
 The 2026-09-24 runs predate output-token recording, and ran back to back with no idle time, so no cache entry
 expired between turns.
+
+2026-09-25 runs (on the fixed breakpoint rules; output tokens recorded):
+
+| File | Provider / model | Turns × repeats | Notes |
+|---|---|---|---|
+| `2026-09-25/e1-openai-template.json` | OpenAI gpt-5.6 | 20 × 5, arms front / tail / placed / placed-spacer | template history |
+| `2026-09-25/e1-openai-varied.json` | OpenAI gpt-5.6 | 20 × 5, same arms | varied history |
+| `2026-09-25/e1-anthropic-template.json` | claude-sonnet-5 via OpenRouter, pinned to Anthropic | 20 × 5, same arms | template history; thinking omitted (adaptive) |
+| `2026-09-25/e1-anthropic-varied.json` | claude-sonnet-5 via OpenRouter, pinned to Anthropic | 20 × 5, same arms | varied history; thinking omitted (adaptive) |
+| `2026-09-25/tool-loop-openai.json` | OpenAI gpt-5.6 | 8 tool rounds | `scripts/live_tool_loop.py` |
+| `2026-09-25/tool-loop-anthropic.json` | claude-sonnet-5 via OpenRouter | 8 tool rounds | thinking disabled |
+
+The E1 runs used a 512-token output limit (now 4096) and were re-graded with the answer-set grader; each file's
+`meta.note` records how many grades changed.

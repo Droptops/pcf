@@ -420,3 +420,18 @@ def test_a_stable_user_turn_after_history_is_still_a_candidate():
     ctx = Context([Segment("s", "system", "sys"), hist, Segment("m", "memory", "tail", False),
                    Segment("u", "user", "same question every time", stable=True)])
     assert [ctx.segments[i].id for i in choose_breakpoints(ctx, 4)] == ["s", "h", "u"]
+
+
+def test_scaled_tokenizer_is_deterministic_monotonic_and_has_its_own_identity():
+    from pcf.families.anthropic_adapter import HeuristicTokenizer, ScaledTokenizer
+    base = HeuristicTokenizer()
+    scaled = ScaledTokenizer(base, 1.3)
+    assert scaled.count("x" * 400) == 130 and scaled.count("") == 0
+    assert scaled.tokenizer_hash not in {base.tokenizer_hash, ScaledTokenizer(base, 1.4).tokenizer_hash}
+    ctx = Context([Segment("s", "system", "rule " * 800), Segment("u", "user", "hi", stable=False)])
+    plain, corrected = AnthropicCompiler("claude-sonnet-5"), AnthropicCompiler("claude-sonnet-5", tokenizer=scaled)
+    assert corrected.compile(ctx).total_tokens > plain.compile(ctx).total_tokens
+    assert corrected.cache_key != plain.cache_key
+    for bad in (0, -1, float("nan"), True):
+        with pytest.raises(ValueError):
+            ScaledTokenizer(base, bad)

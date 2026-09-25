@@ -66,6 +66,27 @@ class HeuristicTokenizer:
         return math.ceil(len(text) / 4)
 
 
+class ScaledTokenizer:
+    """A deterministic correction of another counter by a fixed factor, with its own identity.
+
+    Measured 2026-09-25 against billed input on the placement harness (results/2026-09-25/): chars/4 undercounts
+    claude-sonnet-5 by 1.22-1.40x and overcounts gpt-5.6 at 0.86-0.97x, depending on content. A fixed factor
+    narrows cross-family cost comparisons; it does not make counts exact.
+    """
+
+    is_estimate = True
+
+    def __init__(self, base, factor: float) -> None:
+        if not (isinstance(factor, (int, float)) and not isinstance(factor, bool) and math.isfinite(factor)
+                and factor > 0):
+            raise ValueError("factor must be a positive finite number")
+        self.base, self.factor = base, float(factor)
+        self.tokenizer_hash = sha256_tag(f"scaled:{factor!r}:{base.tokenizer_hash}")
+
+    def count(self, text: str) -> int:
+        return math.ceil(self.base.count(text) * self.factor)
+
+
 def anthropic_descriptor(model_id, *, ttl="5m", min_cacheable_tokens=None):
     if ttl not in {"5m", "1h"}:
         raise ValueError("ttl must be 5m or 1h")

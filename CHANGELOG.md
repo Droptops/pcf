@@ -62,6 +62,9 @@ Fixes from coding reviews. Portable segment hashes remain unchanged. Document ac
 - `scripts/live_tool_loop.py`: a scripted tool loop ([user, call] and [tool] segments, four tail memory modules)
   that checks each request reads back the previous request's cached prefix. Live on 2026-09-25 every request
   after the first read back 100% on gpt-5.6 and on claude-sonnet-5 via OpenRouter (`results/2026-09-25/`).
+- `ScaledTokenizer(base, factor)` (in `pcf.families.anthropic_adapter`): a deterministic fixed-factor correction of a
+  token counter with its own identity. Measured against billed input, chars/4 undercounts claude-sonnet-5 by
+  1.22-1.40x and overcounts gpt-5.6 at 0.86-0.97x depending on content; defaults are unchanged.
 - Provider reasoning state in history: assistant turns may carry `provider_blocks` (Anthropic thinking and
   redacted_thinking blocks, OpenAI reasoning items), which `history_from_response` now keeps instead of rejecting.
   The matching adapter replays them unchanged before the turn's text and calls (`AnthropicCompiler(thinking_blocks=)`,
