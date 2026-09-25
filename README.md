@@ -22,11 +22,15 @@ the naive one:
 | Placed memory against the tuned front layout | gpt-5.6 | claude-sonnet-5 |
 | --- | ---: | ---: |
 | Input cost, 24 turns (six scenarios) | 0.86 | 0.88 |
-| Input cost, 60 turns (six scenarios) | **0.49** | **0.53** |
+| Input cost, 60 turns (six scenarios) | **0.46** | **0.49** |
 | Input cost, 60 turns, prefix shared across users | **0.53** | **0.50** |
-| Correct at 60 turns, tuned front → placed | 703 → 720 of 720 | 652 → 719 of 720 |
-| Median latency at 60 turns, tuned front → placed | 1.98 s → 1.92 s | 5.90 s → 3.48 s |
+| Correct at 60 turns, tuned front → placed | 696 → 718 of 720 | 650 → 719 of 720 |
+| Median latency at 60 turns, tuned front → placed | 2.00 s → 1.91 s | 6.01 s → 3.73 s |
 
+- **The 60-turn rows are from the current library** (`domain-*-60turn-after-fixes.json`), after two cache-marker
+  fixes found by the fleet test and the cache audit; the run before them gave 0.49 and 0.53, with 703 and 652 correct
+  for tuned front and 720 and 719 for placed. Two of placed's three misses answered a negative balance as "a credit
+  of $145.47", which the grader counts wrong.
 - **The saving comes from long, warm sessions.** It grows with conversation length and disappears when turns arrive
   after the cache lifetime: in a Claude run with every turn past the 5-minute lifetime, no turn read the cache.
 - **Front layouts gave out-of-date values.** Most of their wrong answers repeated an older value instead of the

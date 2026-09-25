@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rerun the 60-turn domain comparison on the current library: placed input is 0.46 (gpt-5.6) and 0.49 (Claude) of
+  tuned front, from 0.49 and 0.53 before the marker fixes. The README headline uses the new runs.
 - Breakpoints: every request, not only the first, gives a memory or document anchor directly after the system run
   the system anchor's slot. Before, a second request marked the system prompt, where no entry had been written, and
   on OpenAI read nothing when a later module changed. Cache markers change for requests with short history.
