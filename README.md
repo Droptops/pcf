@@ -37,11 +37,18 @@ the naive one:
 | Input cost, 60 turns, prefix shared across users | **0.53** | **0.50** |
 | Correct at 60 turns, tuned front → placed | 696 → 718 of 720 | 650 → 719 of 720 |
 | Median latency at 60 turns, tuned front → placed | 2.00 s → 1.91 s | 6.01 s → 3.73 s |
+| **Echo-all** at 60 turns: input cost, correct | 0.47, 719 of 720 | 0.51, 719 of 720 |
 
 - **The 60-turn rows are from the current library** (`domain-*-60turn-after-fixes.json`), after two cache-marker
   fixes found by the fleet test and the cache audit; the run before them gave 0.49 and 0.53, with 703 and 652 correct
   for tuned front and 720 and 719 for placed. Two of placed's three misses answered a negative balance as "a credit
   of $145.47", which the grader counts wrong.
+- **A simpler layout does as well.** *Echo-all* leaves the memory in front unchanged all session (the cached prefix
+  never changes) and repeats every module that changes just before the question. In the same 60-turn runs it matched
+  `MemoryPlacer` within noise on cost and accuracy (placed 0.46 and 0.49, 717 and 718 correct). The accuracy gain over
+  tuned front is recency: the current value next to the question. Echoing only the field the question needs costs
+  less (0.36 and 0.38) but needs to know that field, and on Claude the stale values left in front drew replies about
+  three times longer that flagged the inconsistency. See [the echo baseline](#the-echo-baseline).
 - **When it does not pay.** Turns that arrive after the cache lifetime (5 minutes on Claude's default) read nothing:
   in a Claude run with every turn past it, no turn read the cache, so casework with pauses between turns keeps
   little of the 60-turn figure. At 24 turns the input saving is 12-14%. Structured outputs or tool calls will not
@@ -60,6 +67,29 @@ Recommended starting point: keep large stable reference modules in front and let
 modules. All-tail worked well on the smaller support workload below, but was substantially more expensive on the
 domain workloads with large stable references, including Claude. Compare layouts on your workload. For small
 models, see the caveat under [Limits](#limits-of-the-evidence).
+
+## The echo baseline
+
+A reviewer asked for the arm the experiments lacked: leave the cached prefix alone and repeat the current values next
+to the question. `scripts/live_domain_sessions.py` has two such arms. `echo` keeps the memory as it was on turn 0 in
+front and repeats the current version of the module the question asks about, marked current; `echo-all` repeats
+every module that changes. Six scenarios, 60 turns, 2 repeats, both providers, in the same runs as tuned front and
+`MemoryPlacer` (`results/2026-09-25/domain-*-60turn-echo.json`):
+
+| Against tuned front, 60 turns | gpt-5.6 input | total | correct | claude-sonnet-5 input | total | correct |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tuned front | 1 | 1 | 703/720 | 1 | 1 | 652/720 |
+| `MemoryPlacer` | 0.456 | 0.484 | 717/720 | 0.486 | 0.405 | 718/720 |
+| echo (the asked module) | 0.356 | 0.399 | 720/720 | 0.383 | 0.568 | 715/720 |
+| echo-all (every changing module) | 0.465 | 0.498 | 719/720 | 0.508 | 0.439 | 719/720 |
+
+Paired turn by turn, neither echo arm differs from `MemoryPlacer` in accuracy (discordant pairs 3/0, 2/0, 2/5 and
+2/1; exact McNemar p ≥ 0.25). Both beat tuned front (p < 0.001). The conclusion: put the current values next to the
+question. Moving them there and repeating them there cost about the same; repeating only what is asked costs less
+when the application knows it. Leaving stale copies in front has a cost of its own on Claude: with only the asked
+module current, Claude often noticed the contradiction ("I need to stop here and flag an issue with this session"),
+answered at about three times the length (277 against 96 output tokens), and 4 of its 5 wrong answers quoted the
+frozen record. Echo-all, with every changing value current, showed none of this.
 
 ## How it works
 

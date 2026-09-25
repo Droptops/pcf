@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the echo baseline (`echo`, `echo-all` arms in `live_domain_sessions.py`) and live 60-turn runs: repeating every
+  changing module before the question, with the front left unchanged, matches `MemoryPlacer` on cost and accuracy.
 - `MemoryPlacer` defaults to the common cache prices (write 1.25, read 0.1) instead of the plain token rule (1, 0);
   pass `write_multiplier=1.0, read_multiplier=0.0` for the old behaviour. `MemoryPlacer.for_compiler` takes the write
   price and minimum cacheable length from a compiler.
