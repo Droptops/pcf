@@ -20,6 +20,7 @@ def history_from_response(response: Any) -> list[dict]:
     raw = response.get("output", []) if isinstance(response, dict) else getattr(response, "output", [])
     turns: list[dict] = []
     pending: list[dict] = []  # reasoning items waiting for the assistant turn they precede
+    open_calls: set[str] = set()  # calls whose output has not arrived; no new turn may start before it does
 
     def take_pending(turn: dict) -> dict:
         if pending:
@@ -39,6 +40,10 @@ def history_from_response(response: Any) -> list[dict]:
             if unsupported:
                 raise ValueError(f"unsupported Responses content blocks: {unsupported}")
             text = "".join(b.get("text", "") for b in blocks)
+            if text and open_calls:
+                # a text turn between a call and its result is invalid history; moving the text first would
+                # reorder the model's output
+                raise ValueError("text after a function call, before its output, is not representable")
             if text:
                 turns.append(take_pending({"role": "assistant", "content": text}))
         elif typ == "function_call":
@@ -57,7 +62,10 @@ def history_from_response(response: Any) -> list[dict]:
             if last is not None and not pending:  # parallel calls (or calls after text) form one turn
                 last.setdefault("tool_calls", []).append(call)
             else:  # reasoning after the turn's text opens the next turn, in output order
+                if open_calls:
+                    raise ValueError("a new call turn before earlier calls' outputs is not representable")
                 turns.append(take_pending({"role": "assistant", "content": "", "tool_calls": [call]}))
+            open_calls.add(call["id"])
         elif typ == "function_call_output":
             if pending:
                 raise ValueError("reasoning before a tool output is not representable")
@@ -70,6 +78,7 @@ def history_from_response(response: Any) -> list[dict]:
             if not isinstance(output, (str, dict)):
                 raise ValueError("function_call_output output must be text or JSON")
             turns.append({"role": "tool", "call_id": item["call_id"], "content": output, "is_error": False})
+            open_calls.discard(item["call_id"])
         else:
             raise ValueError(f"unsupported Responses output item: {typ!r}")
     if pending:
@@ -119,25 +128,36 @@ class OpenAICompiler(ContextCompiler):
             return any(t["role"] == "tool" or (t["role"] == "user" and t["content"]) for t in seg.content)
         return True
 
-    def covered_tokens(self, ctx, index, cum_tokens):
+    def marker_prefix(self, ctx, index, native_hash, cum_tokens):
         """A history marker sits on the last user/tool item, so trailing assistant turns are not written yet.
 
-        The covered prefix is counted in the same native units as ``cum_tokens``: the request rendered with
-        segment ``index`` cut after that item.
+        The covered prefix is the request rendered with segment ``index`` cut after that item, hashed and counted
+        in the same native units as ``cum_tokens``.
         """
         seg = ctx.segments[index]
         if seg.kind != "history":
-            return cum_tokens[index]
+            return native_hash, cum_tokens[index]
         cut = max((k for k, t in enumerate(seg.content)
                    if t["role"] == "tool" or (t["role"] == "user" and t["content"])), default=None)
         if cut is None or cut == len(seg.content) - 1:
-            return cum_tokens[index]
+            return native_hash, cum_tokens[index]
         head = Segment(seg.id, "history", seg.content[:cut + 1], seg.stable, provenance=seg.provenance)
-        prefix = Context([*ctx.segments[:index], head], ctx.session_id, ctx.cache_namespace)
-        return min(cum_tokens[index], self.native_token_count(self.native_input(self.render(prefix, []))))
+        native = self.native_input(self.render(Context([*ctx.segments[:index], head], ctx.session_id,
+                                                       ctx.cache_namespace), []))
+        return hash_object("pcf:native:0.2", native), min(cum_tokens[index], self.native_token_count(native))
 
     def render(self, ctx: Context, breakpoints: list[int]) -> dict:
-        marks, tools, inputs, marked = set(breakpoints), [], [], False
+        result = self._result(self._partition(ctx), [], [], False)
+        for result in self._steps(ctx, breakpoints):
+            pass
+        return result
+
+    def render_prefixes(self, ctx):
+        return self._steps(ctx, [])
+
+    def _steps(self, ctx: Context, breakpoints: list[int]):
+        """The request after each segment; lists only grow, so earlier items never change."""
+        marks, tools, inputs, marked, partition = set(breakpoints), [], [], False, self._partition(ctx)
         for i, seg in enumerate(ctx.segments):
             last = None
             if seg.kind == "tools":
@@ -168,8 +188,14 @@ class OpenAICompiler(ContextCompiler):
                 inputs.append({"role": "developer" if seg.authority == "instruction" else "user", "content": [last]})
             if i in marks and last is not None:
                 last["prompt_cache_breakpoint"], marked = {"mode": "explicit"}, True
-        result = {"model": self.descriptor.model_id, "input": inputs,
-                  "prompt_cache_key": "pcf-" + hash_object("pcf:partition:0.2", {"namespace": ctx.cache_namespace})[7:39]}
+            yield self._result(partition, inputs, tools, marked)
+
+    @staticmethod
+    def _partition(ctx: Context) -> str:
+        return "pcf-" + hash_object("pcf:partition:0.2", {"namespace": ctx.cache_namespace})[7:39]
+
+    def _result(self, partition: str, inputs: list, tools: list, marked: bool) -> dict:
+        result = {"model": self.descriptor.model_id, "input": inputs, "prompt_cache_key": partition}
         if tools:
             result["tools"] = tools
         if self.explicit:  # explicit mode with no marker disables caching, so fall back to implicit

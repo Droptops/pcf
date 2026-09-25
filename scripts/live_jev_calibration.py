@@ -8,6 +8,12 @@ graded by value, which gives the label. Jev scores every context once; scores ar
 so validating at several thresholds re-uses them and the validated source keeps the fingerprint a live router
 uses. The tail slice is the stale-history traps whose answer sits in front memory, the hardest cases in these
 runs. A retest re-scores --retest contexts --retest-repeats times to measure score noise and decision flips.
+
+Jev is asked whether an answer is acceptable: correct, following the application instructions and satisfying the
+request. Each row therefore carries three labels: value_correct (the graded value), instruction_compliant (no
+copied history filler and at most 60 estimated tokens, since every question asks for a bare value) and label
+(both). --relabel FILE recomputes them for a saved question-bank run and re-validates from its recorded scores,
+offline.
 """
 from __future__ import annotations
 
@@ -16,6 +22,7 @@ import datetime
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import statistics
 import sys
@@ -26,6 +33,7 @@ from pcf.cache import PrefixCache  # noqa: E402
 from pcf.families.anthropic_adapter import AnthropicCompiler  # noqa: E402
 from pcf.router import (Candidate, ConfidenceUnavailable, JevConfidenceSource, ValidationSample,  # noqa: E402
                         openrouter_transport)
+from pcf.router.jev_adapter import build_request  # noqa: E402
 from pcf.segments import Context, Segment, canonical_bytes  # noqa: E402
 
 def _load(name: str, file: str):
@@ -39,6 +47,21 @@ placement = _load("placement", "live_memory_placement.py")
 bank = _load("question_bank", "live_question_bank.py")
 
 JEV_MODEL = "typesafe/jev-1.13-20260917"
+LABELING = "acceptance-v2"  # label = value_correct and instruction_compliant
+MAX_ANSWER_TOKENS = 60
+FILLERS = [placement.TEMPLATE_FILLER] + [f.split("{n}")[1].strip() for f in placement.VARIED_FILLER]
+
+
+def instruction_compliant(answer: str) -> bool:
+    """Every question asks for a bare value: copying the history's filler or running long breaks that."""
+    copied = any(f.lower() in answer.lower() for f in FILLERS)
+    return not copied and math.ceil(len(answer) / 4) <= MAX_ANSWER_TOKENS
+
+
+def labels(value_correct: bool, answer: str) -> dict:
+    compliant = instruction_compliant(answer)
+    return {"value_correct": int(value_correct), "instruction_compliant": int(compliant),
+            "label": int(value_correct and compliant), "labeling": LABELING}
 
 
 class Settings:  # the attributes placement.session() reads
@@ -99,6 +122,59 @@ def auc(scores, labels):
     return round(wins / (len(pos) * len(neg)), 3)
 
 
+def relabel(path: str) -> dict:
+    """Relabel a saved question-bank run and re-validate from its recorded Jev scores, without network calls.
+
+    Contexts are rebuilt from each row's item fields and checked against the recorded token estimate; scores are
+    replayed through JevConfidenceSource so validation identity matches a live source."""
+    saved = json.load(open(path))
+    meta = saved["meta"]
+    if meta.get("contexts") != "question-bank":
+        raise SystemExit("--relabel supports question-bank runs")
+    compiler = AnthropicCompiler(meta["candidate"], max_tokens=1024)
+    candidate = Candidate(compiler, PrefixCache(compiler.descriptor.ttl_seconds), 1.0, 0.1, is_fallback=True)
+    rows, replay, mismatched = [], {}, 0
+    for row in saved["rows"]:
+        ctx, _ = bank.build(row["type"], row["final_turn"], row["style"], row["arm"], compiler, "calibration")
+        mismatched += compiler.compile(ctx).total_tokens != row["est_tokens"]
+        row = {**row, **labels(bool(row.get("value_correct", row["label"])), row["answer"])}
+        rows.append((row, ctx))
+        if row["jev"] is not None:
+            body = build_request(ctx, candidate.model_id, model=meta["jev_model"])
+            replay[hashlib.sha256(canonical_bytes(body)).hexdigest()] = row["jev"]
+    if mismatched:
+        raise SystemExit(f"{mismatched} rebuilt contexts differ from the recorded run; cannot replay its scores")
+
+    def transport(body):
+        return {"model": meta["jev_model"], "answers": {"sufficient": {"type": "noul",
+                                           "noul": replay[hashlib.sha256(canonical_bytes(body)).hexdigest()]}}}
+
+    source = JevConfidenceSource(transport, model=meta["jev_model"])
+    scored = [(row, ctx) for row, ctx in rows if row["jev"] is not None]
+    samples = [ValidationSample(ctx, candidate, row["label"], row["tail"]) for row, ctx in scored]
+    records = {str(t): source.validate(samples, dataset_id=f"question-bank-{meta['candidate']}-{LABELING}",
+                                       threshold=t).to_json() for t in (0.7, 0.8, 0.9)}
+    scores, all_rows = [r["jev"] for r, _ in scored], [r for r, _ in rows]
+
+    def rate(key, subset):
+        return round(sum(r[key] for r in subset) / len(subset), 3) if subset else None
+
+    summary = {"labeling": LABELING, "contexts": len(all_rows), "scorable": len(scored),
+               "value_correct_rate": rate("value_correct", all_rows),
+               "instruction_compliant_rate": rate("instruction_compliant", all_rows),
+               "label_rate": rate("label", all_rows), "scorable_label_rate": rate("label", [r for r, _ in scored]),
+               "tail_label_rate": rate("label", [r for r in all_rows if r["tail"]]),
+               "auc_value_correct": auc(scores, [r["value_correct"] for r, _ in scored]),
+               "auc_label": auc(scores, [r["label"] for r, _ in scored]),
+               "score_min": min(scores), "score_max": max(scores),
+               "ece": {t: record["ece"] for t, record in records.items()},
+               "passed": {t: record["passed"] for t, record in records.items()}}
+    return {"meta": {**meta, "relabeled_from": path, "labeling": LABELING,
+                     "relabeled": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+                     "relabel_git_sha": placement.git_sha()},
+            "summary": summary, "validation": records, "rows": all_rows}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run", action="store_true")
@@ -110,7 +186,11 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--contexts", choices=("placement", "question-bank"), default="placement")
     parser.add_argument("--per-type", type=int, default=50, help="question-bank items per type")
+    parser.add_argument("--relabel", metavar="FILE", help="relabel a saved question-bank run offline and print it")
     args = parser.parse_args()
+    if args.relabel:
+        print(json.dumps(relabel(args.relabel), indent=1))
+        raise SystemExit
     if args.contexts == "placement":
         rows = list(contexts(args.repeats, args.turns))
     else:
@@ -136,9 +216,10 @@ if __name__ == "__main__":
                                           extra_body={"provider": {"order": ["Anthropic"], "allow_fallbacks": False}})
         text = "".join(getattr(b, "text", "") for b in response.content).strip()
         if meta.get("source") == "question-bank":
-            return {**meta, "answer": text, "label": int(bank.grade(meta["type"], meta["turn"], text, meta["expected"]))}
+            return {**meta, "answer": text,
+                    **labels(bank.grade(meta["type"], meta["turn"], text, meta["expected"]), text)}
         value = placement.answer_value(text, meta["turn"])
-        return {**meta, "answer": text, "value": value, "label": int(value == meta["expected"].lower())}
+        return {**meta, "answer": text, "value": value, **labels(value == meta["expected"].lower(), text)}
 
     source = JevConfidenceSource(memoized(openrouter_transport(key)), model=JEV_MODEL)
 

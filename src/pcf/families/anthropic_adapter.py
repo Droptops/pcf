@@ -136,6 +136,16 @@ class AnthropicCompiler(ContextCompiler):
         return {"type": "ephemeral", **({"ttl": "1h"} if self.ttl == "1h" else {})}
 
     def render(self, ctx: Context, breakpoints: list[int]) -> dict:
+        result = self._result([], [], [])
+        for result in self._steps(ctx, breakpoints):
+            pass
+        return result
+
+    def render_prefixes(self, ctx):
+        return self._steps(ctx, [])
+
+    def _steps(self, ctx: Context, breakpoints: list[int]):
+        """The request after each segment; lists only grow, and only the last message's content is extended."""
         marks, tools, system, messages = set(breakpoints), [], [], []
         def message(role, blocks):
             if messages and messages[-1]["role"] == role:
@@ -172,6 +182,9 @@ class AnthropicCompiler(ContextCompiler):
                 message("user", [last])
             if i in marks and last is not None:
                 last["cache_control"] = self._mark()
+            yield self._result(tools, system, messages)
+
+    def _result(self, tools: list, system: list, messages: list) -> dict:
         result = {"model": self.descriptor.model_id, "max_tokens": self.max_tokens, "messages": messages}
         if self.thinking is not None:
             result["thinking"] = dict(self.thinking)

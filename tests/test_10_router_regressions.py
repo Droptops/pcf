@@ -160,3 +160,17 @@ def test_chunk_tokenizer_configuration_changes_cache_identity():
 def test_chunk_tokenizer_rejects_invalid_configuration(size):
     with pytest.raises(ValueError):
         CharChunkTokenizer(chars_per_token=size)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 1.5, -0.1, "0.9", None])
+def test_invalid_confidence_from_a_validated_scorer_falls_back(bad):
+    class _Glitching(_KnownSource):
+        def p_sufficient(self, ctx, candidate):
+            return bad if ctx.segments[-1].content["question"] == "unseen" else super().p_sufficient(ctx, candidate)
+
+    candidates, source = _candidates(), _Glitching()
+    assert source.validate(_samples(candidates[1], 20), dataset_id="invalid-score").passed
+    decision = Router(candidates, source).route(_context("unseen"), now=0)
+    assert decision.escalate and decision.chosen == candidates[0].model_id
+    report = decision.candidates[1]
+    assert report.p_sufficient is None and report.confidence_error.startswith("invalid confidence score")

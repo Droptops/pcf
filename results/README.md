@@ -44,5 +44,15 @@ items.
 | File | Scorer / candidate | Contexts | Notes |
 |---|---|---|---|
 | `2026-09-25/jev-calibration-haiku-4-5-question-bank.json` | Jev `typesafe/jev-1.13-20260917` / claude-haiku-4-5 | 450 distinct (369 scorable) + 60 × 5 retest | conflict items as tail; per-row Jev errors recorded |
+| `2026-09-25/jev-calibration-haiku-4-5-question-bank-acceptance-v2.json` | same | same 450 | relabeled offline (`--relabel`): value_correct, instruction_compliant and label = both; re-validated from the recorded scores |
 | `2026-09-25/jev-calibration-haiku-4-5.json` | same | 240 placement contexts, 117 distinct | superseded: session tags made repeats look unique (see `meta.note`) |
 | `2026-09-25/jev-input-limit-probe.json` | Jev via OpenRouter | 10 probes | the input limit behind "about 32.8k tokens" |
+
+## Synthetic domain workloads (`live_domain_sessions.py`)
+
+| File | Provider / model | Sessions | Notes |
+|---|---|---|---|
+| `2026-09-25/domain-claude-sonnet-5.json` | claude-sonnet-5 via OpenRouter, pinned to Anthropic | 6 scenarios × 4 layouts × 3 repeats × 24 turns | re-graded offline with the leading-value grader (`meta.regrade_changes`) |
+| `2026-09-25/domain-gpt-5.6.json` | OpenAI gpt-5.6 | 6 scenarios × 4 layouts × 3 repeats × 24 turns | corrected scenarios; latency and compile time recorded |
+| `2026-09-25/domain-claude-sonnet-5-replication.json` | claude-sonnet-5 via OpenRouter | 5 scenarios (claims failed: credits) | replication with latency recorded |
+| `2026-09-25/domain-gpt-5.6-run1.json` | OpenAI gpt-5.6 | same | first run: costs valid, answers confounded by verification requests (see `meta.note`) |

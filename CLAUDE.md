@@ -2,7 +2,8 @@
 
 - The repository is public. Never put private session links (claude.ai/code/session_..., chat links) in tracked
   files, commit messages, or PR descriptions, and do not add a `Claude-Session:` trailer to commits. CI enforces
-  this for tracked text and new commit messages; run `PCF_BASE_SHA=$(git merge-base HEAD origin/main) python
+  this for tracked text, new commit messages and PR titles/descriptions (tooling may append a session footer to a
+  PR description: remove it); run `PCF_BASE_SHA=$(git merge-base HEAD origin/main) python
   scripts/check_public_metadata.py` before pushing.
 - Before pushing run the CI checks locally: `ruff check .`, `python -m pytest -q`, `python examples/demo.py`,
   `python scripts/live_smoke.py`.

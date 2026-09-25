@@ -195,3 +195,67 @@ def test_contexts_differing_only_in_provider_blocks_are_not_independent_jev_evid
     samples = [ValidationSample(ctx(f"sig-{k}"), cand, 1, k == 0) for k in range(3)]
     with pytest.raises(ValueError, match="unique contexts"):
         source.validate(samples, dataset_id="d")
+
+
+def _openai_items(pattern):
+    """Native Responses output for a pattern over R(easoning), M(essage), C(all), O(utput of the oldest open call)."""
+    items, open_calls = [], []
+    for k, kind in enumerate(pattern):
+        if kind == "R":
+            items.append({**REASONING, "id": f"rs_{k}"})
+        elif kind == "M":
+            items.append({"type": "message", "content": [{"type": "output_text", "text": f"text {k}"}]})
+        elif kind == "C":
+            open_calls.append(f"call_{k}")
+            items.append({"type": "function_call", "call_id": open_calls[-1], "name": "lookup", "arguments": "{}"})
+        elif not open_calls:
+            return None, []
+        else:
+            items.append({"type": "function_call_output", "call_id": open_calls.pop(0), "output": "ok"})
+    return items, open_calls
+
+
+def _usable(turns, open_calls):
+    results = [{"role": "tool", "call_id": c, "content": "found", "is_error": False} for c in open_calls]
+    Context([TOOLS, Segment("h", "history", [{"role": "user", "content": "find x"}, *turns, *results])])
+
+
+def test_every_accepted_openai_conversion_forms_valid_history():
+    import itertools
+    accepted = 0
+    for n in range(1, 6):
+        for pattern in itertools.product("RMCO", repeat=n):
+            items, open_calls = _openai_items(pattern)
+            if items is None:
+                continue
+            try:
+                turns = openai_history({"output": items})
+            except ValueError:
+                continue
+            _usable(turns, open_calls)  # raises if the converter returned history Context rejects
+            accepted += 1
+    assert accepted > 100
+
+
+def test_every_accepted_anthropic_conversion_forms_valid_history():
+    import itertools
+    blocks = {"T": THINKING, "X": {"type": "text", "text": "Checking."}}
+    accepted = 0
+    for n in range(1, 6):
+        for pattern in itertools.product("TXU", repeat=n):
+            content = [blocks[k] if k != "U" else {"type": "tool_use", "id": f"toolu_{i}", "name": "lookup",
+                                                   "input": {}} for i, k in enumerate(pattern)]
+            try:
+                turns = anthropic_history({"content": content})
+            except ValueError:
+                continue
+            _usable(turns, [f"toolu_{i}" for i, k in enumerate(pattern) if k == "U"])
+            accepted += 1
+    assert accepted > 20
+
+
+def test_openai_text_between_a_call_and_its_output_is_rejected():
+    items = [{"type": "function_call", "call_id": "c", "name": "lookup", "arguments": "{}"},
+             {"type": "message", "content": [{"type": "output_text", "text": "Checking your account."}]}]
+    with pytest.raises(ValueError, match="text after a function call"):
+        openai_history({"output": items})

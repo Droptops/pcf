@@ -131,16 +131,64 @@ question did not override the conversation.
 
 </details>
 
+## Synthetic domain workloads
+
+`scripts/live_domain_sessions.py` runs six synthetic assistant sessions closer to production prompts
+(`scripts/domain_scenarios.py`; every record is invented): an inpatient nurse copilot and health plan member services
+(healthcare), benefits casework and taxpayer assistance (government), and an IT service desk and sales CRM copilot
+(enterprise). Each prompt carries a policy, a large stable reference module (formulary, benefit grid, program rules,
+knowledge base) and four records changing never / every 6th turn / every 3rd / every turn: about 4-6k tokens before
+history, 24 turns per session, 3 repeats. Four layouts: memory in front with every module `stable` (naive), memory in
+front with the changing modules marked `stable=False` (tuned), all memory after history (tail), and `MemoryPlacer`.
+
+claude-sonnet-5 (`results/2026-09-25/domain-claude-sonnet-5.json`), totals over the six scenarios:
+
+| Layout | Input | Input + output | Correct | Stale-history checks |
+|---|---|---|---|---|
+| Front, naive | 882.5k | 1,097.8k | 409/432 | 215/234 |
+| Front, tuned | 250.7k | 463.2k | 408/432 | 213/234 |
+| Tail | 842.1k | 916.5k | 432/432 | 234/234 |
+| `MemoryPlacer` | 219.9k | 293.9k | 432/432 | 234/234 |
+
+gpt-5.6 (`results/2026-09-25/domain-gpt-5.6.json`), same sessions:
+
+| Layout | Input | Input + output | Correct | Stale-history checks | Latency p50 / p90 |
+|---|---|---|---|---|---|
+| Front, naive | 715.1k | 741.6k | 422/432 | 226/234 | 1.74 / 3.23 s |
+| Front, tuned | 186.6k | 213.8k | 424/432 | 229/234 | 1.85 / 3.13 s |
+| Tail | 592.8k | 620.1k | 432/432 | 234/234 | 1.62 / 2.98 s |
+| `MemoryPlacer` | 160.7k | 182.7k | 432/432 | 234/234 | 1.65 / 3.02 s |
+
+- **Cost.** `MemoryPlacer` was cheapest overall on both models: 3.7x (Claude) and 4.1x (gpt-5.6) below the naive
+  front layout and 1.6x and 1.2x below the tuned one, counting output. It was cheapest in every scenario on Claude and
+  in five of six on gpt-5.6 (clinical: 1% above tuned front).
+- **Accuracy.** It answered every question on both models. Paired by turn, it was right where tuned front memory was
+  wrong 24 times on Claude and 8 on gpt-5.6, never the reverse (exact McNemar p < 1e-6 and p = 0.008). Tuning cache
+  markers fixed front memory's cost, not its accuracy.
+- **All-tail is the wrong lesson.** It was as accurate but cost 3.1-3.4x more than `MemoryPlacer`: with a large
+  stable reference module, moving it after history bills it uncached every turn. Keep stable memory in front and
+  move only what changes.
+- **Latency.** On gpt-5.6 the layouts were within 0.2 s at the median. On Claude, a replication with latency
+  recording (`domain-claude-sonnet-5-replication.json`, five scenarios; the sixth stopped when OpenRouter credits
+  ran out) gave the same cost factors and 360/360 correct for `MemoryPlacer`, and a median of 3.3 s against 5.4 s for
+  either front layout, which produced about three times as many output tokens per turn.
+- `domain-gpt-5.6-run1.json` is an earlier gpt-5.6 run whose answers are confounded (a third asked for identity
+  verification before the scenarios recorded it); its input costs match this run's.
+
 ## Routing safety: the calibration gate
 
 PCF routes a request to a cheaper model only when an external confidence scorer, validated on held-out contexts,
 says the cheaper model will answer well. We tested the third-party scorer Jev (`typesafe/jev-1.13-20260917` via
 OpenRouter) with `scripts/live_jev_calibration.py`, and the gate correctly refused it.
 
-On 450 distinct question-bank contexts, claude-haiku-4-5 answered 439 (97.6%) correctly. Jev scored the 369
-contexts it could score 0.19-0.55 (mean 0.30), and scored the 11 failures 0.28-0.38, no lower than the successes
-(AUC 0.33). No context reaches 0.7 and calibration error is about 0.67, so validation fails at every threshold and a
-Jev-gated router falls back to the default model. Jev rejects requests above about 32.8k of its input tokens
+Jev is asked whether an answer is acceptable: correct, following the application instructions and satisfying the
+request. On 450 distinct question-bank contexts, claude-haiku-4-5 gave the right value 439 times (97.6%), but only
+253 answers (56.2%) were acceptable under that rubric: the rest also copied the history's filler or ran long when
+the question asked for a bare value. Against acceptance labels (`acceptance-v2`, from the saved answers and scores
+by `--relabel`), Jev scored the 369 contexts it could score 0.19-0.55 and scored rejected answers slightly higher
+than accepted ones (means 0.32 and 0.29, AUC 0.38). No context reaches 0.7 and calibration error is about 0.32, so
+validation fails at every threshold and a Jev-gated router falls back to the default model. (The first write-up
+scored Jev against value correctness alone: AUC 0.33, calibration error about 0.67.) Jev rejects requests above about 32.8k of its input tokens
 (`max_tokens_exceeded`; here, compiled prompts above about 18.7k estimated tokens, 81 of 450), which the router
 treats as confidence unavailable. Score noise is small (retest SD about 0.011, no decision flips at 0.8). The
 default model id `jev-latest` is never eligible for validation; pass a dated snapshot id. The Jev transport requires
@@ -180,6 +228,7 @@ to Anthropic upstream.
 | `scripts/` | Offline checks and opt-in paid live experiments |
 | `results/` | Raw JSON behind every published number |
 | `tests/` | Offline test suite |
+| `docs/PILOT.md` | Protocol for testing PCF in one production assistant |
 
 ## Using MemoryPlacer
 
@@ -204,6 +253,12 @@ a zero cache read: by the time usage shows a miss, that request has already rewr
   43/50 with `MemoryPlacer` and 49/50 with all-tail (`MemoryPlacer` against front: exact McNemar p = 0.016). Every
   miss gave the stale record's value. Where users change preferences in conversation, update the memory record, or
   keep that module in front, for small models.
+
+## Next step: a production pilot
+
+The evidence here is scripted or synthetic. [`docs/PILOT.md`](docs/PILOT.md) describes the next test: one real
+assistant, conversations assigned to a tuned baseline or to `MemoryPlacer`, measuring billed cost, latency and
+answer quality, with sample sizes and stop rules set in advance.
 
 ## Status and design limits
 
