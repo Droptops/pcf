@@ -34,3 +34,13 @@ def test_clean_or_absent_pull_request_passes(tmp_path):
     push = tmp_path / "push.json"
     push.write_text(json.dumps({"before": "0" * 40}))
     assert check.pull_request_findings(str(push)) == []
+
+
+def test_live_pull_request_copy_wins_over_the_frozen_event(tmp_path):
+    event = _event(tmp_path, "Fix", f"footer {PRIVATE}")
+    live = tmp_path / "pull-request.json"
+    live.write_text(json.dumps({"number": 7, "title": "Fix", "body": "footer removed"}))
+    assert check.pull_request_findings(event) != []
+    assert check.pull_request_findings(event, str(live)) == []
+    live.write_text(json.dumps({"number": 7, "title": "Fix", "body": f"still {PRIVATE}"}))
+    assert check.pull_request_findings(event, str(live)) == ["pull request #7 description:1: private session link"]
