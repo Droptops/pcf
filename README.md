@@ -168,10 +168,10 @@ gpt-5.6 (`results/2026-09-25/domain-gpt-5.6.json`), same sessions:
 - **All-tail is the wrong lesson.** It was as accurate but cost 3.1-3.4x more than `MemoryPlacer`: with a large
   stable reference module, moving it after history bills it uncached every turn. Keep stable memory in front and
   move only what changes.
-- **Latency.** On gpt-5.6 the layouts were within 0.2 s at the median. On Claude, a replication with latency
-  recording (`domain-claude-sonnet-5-replication.json`, five scenarios; the sixth stopped when OpenRouter credits
-  ran out) gave the same cost factors and 360/360 correct for `MemoryPlacer`, and a median of 3.3 s against 5.4 s for
-  either front layout, which produced about three times as many output tokens per turn.
+- **Latency.** On gpt-5.6 the layouts were within 0.2 s at the median. On Claude, a full replication with latency
+  recording (`domain-claude-sonnet-5-replication.json`) gave the same result: `MemoryPlacer` 294.2k and 432/432
+  (first run 293.9k), against 1,102.0k and 408/432 naive and 474.2k and 416/432 tuned, and a median response time of
+  3.2 s against 5.4-5.5 s for either front layout, which produced about three times as many output tokens per turn.
 - `domain-gpt-5.6-run1.json` is an earlier gpt-5.6 run whose answers are confounded (a third asked for identity
   verification before the scenarios recorded it); its input costs match this run's.
 
