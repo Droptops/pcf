@@ -10,15 +10,16 @@ from ..descriptor import CacheDescriptor, Layout, sha256_tag
 from ..segments import Context, text_content
 from ..validation import integer
 
-# Minimum cacheable prefix per platform.claude.com/docs/en/build-with-claude/prompt-caching, checked 2026-09-24.
-MIN_CACHEABLE = {"claude-fable-5-1": 512, "claude-opus-5-5": 512, "claude-opus-5": 512,
+# Minimum cacheable prefix per platform.claude.com/docs/en/build-with-claude/prompt-caching, checked 2026-09-25.
+MIN_CACHEABLE = {"claude-fable-5-1": 512, "claude-fable-5": 512, "claude-mythos-5-1": 512, "claude-mythos-5": 512,
+                 "claude-opus-5-5": 512, "claude-opus-5": 512, "claude-mythos-preview": 2048,
                  "claude-sonnet-5": 1024, "claude-haiku-4-5": 4096,
                  "claude-sonnet-4-6": 1024, "claude-opus-4-8": 1024,
                  "claude-opus-4-7": 2048, "claude-opus-4-6": 4096}
 # "Claude 4.6 and later models and Claude Mythos Preview" reject a final assistant turn (prefill) with a 400, per
 # platform.claude.com/docs/en/api/errors ("Prefill not supported"), checked 2026-09-24. IDs per Anthropic's models
 # overview; unlisted models are not checked.
-PREFILL_REJECTED = {"claude-fable-5-1", "claude-fable-5", "claude-mythos-5-1", "claude-mythos-preview",
+PREFILL_REJECTED = {"claude-fable-5-1", "claude-fable-5", "claude-mythos-5-1", "claude-mythos-5", "claude-mythos-preview",
                     "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5", "claude-sonnet-4-6",
                     "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6"}
 

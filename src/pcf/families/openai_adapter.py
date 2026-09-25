@@ -5,7 +5,7 @@ from typing import Any
 
 from ..compiler import ContextCompiler, Usage, data_text
 from ..descriptor import CacheDescriptor, Layout, hash_object, sha256_tag
-from ..segments import Context, text_content
+from ..segments import Context, Segment, text_content
 from ..validation import integer
 from .anthropic_adapter import HeuristicTokenizer
 from .capabilities import OpenAICapabilities, openai_profile
@@ -66,6 +66,9 @@ def openai_descriptor(model_id, *, capabilities=None):
 class OpenAICompiler(ContextCompiler):
     compiler_id = "pcf.openai.responses:0.2"
     implicit_breakpoint = True  # unmarked requests use implicit mode, where OpenAI picks the breakpoint
+    # Reads only hit markers present in the request, so a request that appends two markable segments
+    # (e.g. [user, call] then [tool]) must still name the endpoint the previous request wrote.
+    history_slots = 3
 
     def __init__(self, model_id: str, *, tokenizer=None, capabilities: OpenAICapabilities | None = None):
         self.profile = openai_profile(model_id, capabilities)
@@ -85,19 +88,21 @@ class OpenAICompiler(ContextCompiler):
         return True
 
     def covered_tokens(self, ctx, index, cum_tokens):
-        """A history marker sits on the last user/tool item, so trailing assistant turns are not written yet."""
+        """A history marker sits on the last user/tool item, so trailing assistant turns are not written yet.
+
+        The covered prefix is counted in the same native units as ``cum_tokens``: the request rendered with
+        segment ``index`` cut after that item.
+        """
         seg = ctx.segments[index]
         if seg.kind != "history":
             return cum_tokens[index]
-        tail = []
-        for turn in reversed(seg.content):
-            if turn["role"] == "tool" or (turn["role"] == "user" and turn["content"]):
-                break
-            tail.append(turn)
-        if not tail:
+        cut = max((k for k, t in enumerate(seg.content)
+                   if t["role"] == "tool" or (t["role"] == "user" and t["content"])), default=None)
+        if cut is None or cut == len(seg.content) - 1:
             return cum_tokens[index]
-        own = cum_tokens[index] - (cum_tokens[index - 1] if index else 0)
-        return cum_tokens[index] - min(own, self.tokenizer.count(text_content(tail[::-1])))
+        head = Segment(seg.id, "history", seg.content[:cut + 1], seg.stable, provenance=seg.provenance)
+        prefix = Context([*ctx.segments[:index], head], ctx.session_id, ctx.cache_namespace)
+        return min(cum_tokens[index], self.native_token_count(self.native_input(self.render(prefix, []))))
 
     def render(self, ctx: Context, breakpoints: list[int]) -> dict:
         marks, tools, inputs, marked = set(breakpoints), [], [], False

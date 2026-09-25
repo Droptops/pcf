@@ -39,8 +39,23 @@ Fixes from coding reviews. Portable segment hashes and PCF document wire format 
   p·(w−r)·(m+H) > (1−r)·m. Defaults (w=1, r=0) keep the plain token rule.
 - `scripts/live_memory_placement.py` compares three arms (front, tail, placed) over four modules with different
   change rates, repeats runs, and scores stale-history traps separately.
-- Breakpoints over budget keep the first stable anchor as well as the last (budget ≥ 4), so one volatile module
-  left `stable` no longer takes the system prompt out of cache.
+- Breakpoints over budget keep the last anchor, plus the last anchor of the leading tools/system run when the
+  compiler's `history_slots` endpoints still fit beside both (Anthropic and sim: 2 of 4). OpenAI needs 3 history
+  endpoints (reads only hit markers present in the request, and a tool round appends two markable segments), so
+  it keeps the last anchor and 3 endpoints and does not protect the system prompt from a volatile module left
+  `stable`; mark such modules `stable=False` or place them after history. This replaces an interim rule that kept
+  the first anchor, which on Anthropic protected `tools` instead of `system` and on OpenAI made per-message tool
+  loops re-bill all history every request.
+- Tail memory (memory after history) never takes a breakpoint, whatever its `stable` flag: an entry there would be
+  rewritten every turn and never read, and several tail modules could crowd history out of the budget.
+- `MemoryPlacer.split`: memory with instruction authority always stays in front, and tail copies keep their
+  authority. A change to a front module is priced against everything behind it (later front modules plus
+  history), not history alone; list modules stable-first.
+- OpenAI `covered_tokens()` counts the covered prefix in native units by rendering the history segment cut after its
+  last user/tool item (the chars/4 trim of neutral JSON was up to 38% high for escape-heavy tool calls).
+- Anthropic profiles: `claude-fable-5`, `claude-mythos-5`, `claude-mythos-5-1` (512) and `claude-mythos-preview`
+  (2048) gain minimum cacheable lengths; `claude-mythos-5` rejects prefill. Every prefill-rejecting model now has a
+  cache profile.
 - `scripts/live_memory_placement.py`: low reasoning effort and 512 output tokens (64 returned empty answers), and a
   `billed_input_units` summary under the write multiplier and an assumed `--read-multiplier`.
 - Response normalization rejects what it cannot represent instead of dropping it: Anthropic text after `tool_use`

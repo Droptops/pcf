@@ -188,3 +188,35 @@ def test_placer_takes_prices_from_a_router_candidate():
     assert (placer.write_multiplier, placer.read_multiplier) == (1.25, 0.1)
     with pytest.raises(ValueError):
         MemoryPlacer.for_candidate(Candidate(compiler, PrefixCache(1800), 0.0, 0.0, is_fallback=True))
+
+
+
+def test_placer_keeps_instruction_memory_in_front_and_tail_copies_keep_authority():
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import MemoryPlacer
+    placer, history = MemoryPlacer(WordTokenizer()), [_history(n) for n in range(5)]
+    for version in range(4):
+        rules = Segment("rules", "memory", _module("r", version), authority="instruction")
+        data = Segment("mc", "memory", _module("c", version))
+        front, tail = placer.split([rules, data], history)
+    assert [s.id for s in front] == ["rules"] and [s.id for s in tail] == ["mc"]
+    assert front[0].authority == "instruction" and tail[0].authority == "data" and not tail[0].stable
+    Context([Segment("s", "system", "sys"), *front, *history, *tail, Segment("u", "user", "hi", stable=False)])
+
+
+def test_placer_counts_later_front_modules_in_what_a_change_rebills():
+    from pcf.placement import MemoryPlacer
+
+    class XTokenizer:
+        tokenizer_hash, is_estimate = "sha256:" + "0" * 64, True
+
+        def count(self, text):
+            return text.count("x")
+
+    placer = MemoryPlacer(XTokenizer())
+    for v in "ab":  # cart changes once (p = 1/2); a large stable catalog follows it; no history yet
+        cart = Segment("cart", "memory", "x" * 300 + v)
+        catalog = Segment("catalog", "memory", "x" * 3000)
+        front, tail = placer.split([cart, catalog], [])
+    # 0.5 * (300 + 3000) > 300: moving the cart saves re-billing the catalog behind it.
+    assert [s.id for s in front] == ["catalog"] and [s.id for s in tail] == ["cart"]
