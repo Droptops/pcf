@@ -48,6 +48,9 @@ class MemoryPlacer:
               cold: bool = False) -> tuple[list[Segment], list[Segment]]:
         """Return (front, tail); call once per turn. Pass cold=True when the provider cache has expired.
 
+        Predict cold from time (``now - last_request >= descriptor.ttl_seconds``), not from a zero cache read in
+        usage: by then that request has already rewritten the cache in the old layout, so re-placing re-bills it.
+
         A change to a front module re-bills everything after it: history and the front modules that follow
         it, so H for each module counts both. List modules stable-first; order is kept. Modules with
         instruction authority never move (instructions precede data). Tail copies are unstable so they
