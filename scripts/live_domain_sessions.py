@@ -62,7 +62,8 @@ def grade(ask, answer: str, expected: str, stale: str | None, violation_tokens: 
             "violation": math.ceil(len(answer) / 4) > violation_tokens}
 
 
-def session(key: str, arm: str, nonce: str, cfg, client=None) -> list[dict]:
+def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None = None) -> list[dict]:
+    """One session; `sink`, when given, receives each compiled request."""
     scenario = SCENARIOS[key]
     compiler = placement.make_compiler(cfg.provider, cfg.model)
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
@@ -77,6 +78,8 @@ def session(key: str, arm: str, nonce: str, cfg, client=None) -> list[dict]:
         started = time.perf_counter()
         compiled = compiler.compile(ctx)
         compile_ms = round(1000 * (time.perf_counter() - started), 2)
+        if sink is not None:
+            sink.append(compiled.request)
         estimate = compiler.warmth(ctx, PrefixCache(compiler.descriptor.ttl_seconds), 0.0)
         stale = said.get(ask.text)
         row = {"turn": turn, "module": ask.module, "tail": [s.id for s in tail], "expected": expected,

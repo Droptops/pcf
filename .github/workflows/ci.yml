@@ -42,6 +42,24 @@ jobs:
           PCF_PR_JSON: ${{ github.event_name == 'pull_request' && format('{0}/pull-request.json', runner.temp) || '' }}
         run: python3 scripts/check_public_metadata.py
 
+  typescript:
+    name: TypeScript placer
+    if: github.event.action != 'edited'  # a description edit changes no code
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tests (the runner's Node; type stripping needs Node 22.18 or later)
+        working-directory: ts
+        run: |
+          node --version
+          node --test test/*.test.ts
+      - name: Typecheck
+        working-directory: ts
+        run: npx --yes --package=typescript@6.0.2 tsc -p .
+
   test:
     name: Python ${{ matrix.python-version }}
     if: github.event.action != 'edited'  # a description edit changes no code

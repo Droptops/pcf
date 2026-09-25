@@ -36,6 +36,7 @@ class MemoryPlacer:
         self.read_multiplier = read_multiplier
         # id -> (observations, changes, decayed rate, last hash, in tail)
         self._seen: dict[str, tuple[int, int, float, str, bool]] = {}
+        self._front: tuple[str, ...] | None = None  # front module ids of the previous call
 
     @classmethod
     def for_candidate(cls, candidate, *, decay: float = 0.7) -> "MemoryPlacer":
@@ -55,6 +56,11 @@ class MemoryPlacer:
         it, so H for each module counts both. List modules stable-first; order is kept. Modules with
         instruction authority never move (instructions precede data). Tail copies are unstable so they
         get no breakpoint.
+
+        On a warm turn where a module moves, the prefix after the first front module changes, and the only
+        earlier cache entry left to read ends at that module (written by the conversation's first request).
+        Providers that read only at markers present in the request need a marker there, so on that turn the
+        front modules after the first are returned unstable: the first module takes the anchor.
         """
         if any(seg.kind != "memory" for seg in memory):
             raise ValueError("only memory segments can be placed")
@@ -80,6 +86,11 @@ class MemoryPlacer:
             if not in_tail:
                 behind += m
         front = [seg for seg, in_tail in zip(memory, placed) if not in_tail]
+        ids = tuple(seg.id for seg in front)
+        moved, self._front = self._front is not None and ids != self._front and not cold, ids
+        if moved:
+            front = front[:1] + [Segment(seg.id, "memory", seg.content, False, authority=seg.authority,
+                                         provenance=seg.provenance) for seg in front[1:]]
         tail = [Segment(seg.id, "memory", seg.content, False, authority=seg.authority, provenance=seg.provenance)
                 for seg, in_tail in zip(memory, placed) if in_tail]
         return front, tail

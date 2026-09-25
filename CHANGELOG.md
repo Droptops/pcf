@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add `ts/`, a TypeScript port of `MemoryPlacer` with Anthropic and OpenAI chat layouts, tested for decision parity
+  against the Python placer (`scripts/export_placer_fixture.py` writes the fixture).
+- `MemoryPlacer`: on a warm turn where a module moves between front and tail, the front modules after the first are
+  returned unstable, so the first front module (typically the shared reference) carries the cache marker. OpenAI
+  reads only at markers present in the request and had rewritten the whole prefix on those turns. Cache markers
+  change on move turns only.
+- Add `scripts/cache_audit.py`, a prototype that attributes cache misses in provider request logs to the field
+  that changed, an unread prefix or an expired gap (`docs/CACHE_AUDIT.md`). The session harnesses accept a `sink`
+  that receives each compiled request.
+- The README headline now compares against the tuned front layout rather than the naive one.
 - Breakpoints: on a request with no history, a memory or document anchor directly after the system run takes the
   system anchor's place when the budget is exceeded. The first request of a conversation now writes the shared
   reference as its own cache entry, so other conversations read it; before, placed layouts with many stable

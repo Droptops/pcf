@@ -220,3 +220,25 @@ def test_placer_counts_later_front_modules_in_what_a_change_rebills():
         front, tail = placer.split([cart, catalog], [])
     # 0.5 * (300 + 3000) > 300: moving the cart saves re-billing the catalog behind it.
     assert [s.id for s in front] == ["catalog"] and [s.id for s in tail] == ["cart"]
+
+
+def test_placer_anchors_the_first_front_module_on_the_turn_a_module_moves():
+    from pcf.families.openai_adapter import OpenAICompiler
+    from pcf.placement import MemoryPlacer
+    compiler = OpenAICompiler("gpt-5.6")
+    placer = MemoryPlacer(compiler.tokenizer, write_multiplier=1.25, read_multiplier=.1)
+    history = [Segment("h", "history", [{"role": "user", "content": "q " * 3000},
+                                        {"role": "assistant", "content": "a"}])]
+
+    def memory(turn):
+        return [Segment("ref", "memory", "reference " * 800, provenance="ref"),
+                Segment("plan", "memory", "plan basic", provenance="plan"),
+                Segment("bal", "memory", f"balance {turn}", provenance="bal")]
+    turns = [placer.split(memory(turn), history) for turn in range(6)]
+    move = next(i for i, (_, tail) in enumerate(turns) if tail)
+    front, tail = turns[move]
+    assert [s.id for s in tail] == ["bal"]
+    assert [(s.id, s.stable) for s in front] == [("ref", True), ("plan", False)]
+    assert all(s.stable for front, _ in turns[:move] + turns[move + 1:] for s in front)
+    ctx = Context([Segment("s", "system", "policy"), *front, *history, *tail, Segment("u", "user", "q", stable=False)])
+    assert "ref" in [ctx.segments[i].id for i in compiler.compile(ctx).breakpoints]

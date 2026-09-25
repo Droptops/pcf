@@ -38,7 +38,7 @@ ARMS = ("tuned-private", "tuned-shared", "placed-shared", "placed-cold")
 WARM = ARMS[:3]
 
 
-def session(key: str, arm: str, tag: str, cfg, client=None, engine=None, clock=None) -> list[dict]:
+def session(key: str, arm: str, tag: str, cfg, client=None, engine=None, clock=None, sink=None) -> list[dict]:
     """One session. Paid when client is set; otherwise simulated on engine, advancing clock[0].
 
     The scripted sessions of a scenario are identical, so a per-session segment follows the system text and the
@@ -85,7 +85,9 @@ def session(key: str, arm: str, tag: str, cfg, client=None, engine=None, clock=N
                        uncached=usage.input_tokens, answer=answer, **out,
                        **grade(ask, answer, expected, stale, cfg.violation_tokens))
         else:
-            usage, _ = engine.run(ctx, clock[0])
+            usage, compiled = engine.run(ctx, clock[0])
+            if sink is not None:
+                sink.append(compiled.request)
             row.update(cached=usage.cache_read_input_tokens, written=usage.cache_creation_input_tokens,
                        uncached=usage.input_tokens, output_tokens=0)
         if turn == 0:
