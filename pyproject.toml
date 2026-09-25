@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pcf"
-version = "0.2.0"
+version = "0.3.0a1"
 description = "Portable Context Format: provider-neutral LLM context compiled into cache-aware OpenAI and Anthropic requests"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0a1 (2026-09-25)
 
 ### Compatibility
 
