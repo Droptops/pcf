@@ -78,7 +78,7 @@ class ScaledTokenizer:
     """A deterministic correction of another counter by a fixed factor, with its own identity.
 
     Measured 2026-09-25 against billed input on the placement harness (results/2026-09-25/): chars/4 undercounts
-    claude-sonnet-5 by 1.22-1.40x and overcounts gpt-5.6 at 0.86-0.97x, depending on content. A fixed factor
+    claude-sonnet-5 by 1.21-1.42x and overcounts gpt-5.6 at 0.86-0.98x (billed over estimated input per run). A fixed factor
     narrows cross-family cost comparisons; it does not make counts exact.
     """
 

@@ -32,7 +32,7 @@ from urllib.parse import urlparse
 
 JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 OPENROUTER_DECISIONS_ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
-DEFAULT_MODEL = "jev-latest"  # pin a versioned id (e.g. jev-1.13.0) once thresholds are tuned
+DEFAULT_MODEL = "jev-latest"  # never eligible for validation; pass a dated id such as "typesafe/jev-1.13-20260917"
 
 Transport = Callable[[dict[str, Any]], dict[str, Any]]
 

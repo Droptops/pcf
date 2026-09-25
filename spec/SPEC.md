@@ -2,7 +2,7 @@
 
 ## Document
 
-Documents contain ordered `tools`, `system`, `memory`/`document`, `history`, and `user` segments. Memory may also follow history (tail memory) when only `user` segments come after it, so volatile memory does not invalidate cached history. IDs are unique. Instructions precede data and are never silently reordered. `authority` is explicit: tools/system require `instruction`; history/user require `data`. `stable` is a breakpoint hint only.
+Documents contain ordered `tools`, `system`, `memory`/`document`, `history`, and `user` segments. Memory may also follow history (tail memory) when only `user` segments come after it, so volatile memory does not invalidate cached history. IDs are unique. Instructions precede data and are never silently reordered. `authority` defaults by kind (instruction for tools/system, data otherwise) and is always serialized; tools/system must be `instruction` and history/user must be `data`. `stable` is a breakpoint hint only.
 
 Segment hash = `"sha256:" + hex(SHA-256("pcf:segment:0.2" || 0x00 || RFC8785({"kind", "authority", "provenance", "content"})))`, using the resolved authority, `provenance` null when absent, and normalized content (tool results always carry `is_error`); IDs and stability are excluded. Prefix chain: `c_0 = SHA-256("pcf:0.2")`, `c_i = SHA-256(c_{i-1} || h_i)` over raw 32-byte digests; the seed `c_0` is not emitted. Caller-owned objects are snapshotted.
 
