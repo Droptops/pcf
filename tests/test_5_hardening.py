@@ -445,6 +445,26 @@ def test_openai_keeps_the_system_anchor_while_history_is_short():
     assert [ctx.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(ctx).breakpoints] == ["s", "m2", "m3", "h0"]
 
 
+
+@pytest.mark.parametrize("compiler", [OpenAICompiler("gpt-5.6"), AnthropicCompiler("claude-sonnet-5")])
+def test_first_request_keeps_the_shared_reference_anchor(compiler):
+    from pcf.families.sim import SimEngine
+    reference = Segment("ref", "memory", "shared reference " * 700, provenance="ref")
+    modules = [Segment(f"m{k}", "memory", f"module {k}", provenance=f"m{k}") for k in range(5)]
+
+    def first_request(session):
+        own = Segment("own", "memory", f"session {session}", provenance="own")
+        return Context([Segment("s", "system", "policy"), reference, own, *modules,
+                        Segment("u", "user", "q", stable=False)], cache_namespace="fleet")
+    ids = [first_request(1).segments[i].id for i in compiler.compile(first_request(1)).breakpoints]
+    assert ids[0] == "ref" and ids[-1] == "m4"
+    engine = SimEngine(compiler, PrefixCache(compiler.descriptor.ttl_seconds))
+    engine.run(first_request(1), 0)
+    usage, _ = engine.run(first_request(2), 1)
+    assert usage.cache_read_input_tokens >= compiler.compile(Context([Segment("s", "system", "policy"), reference,
+                                                                      Segment("u", "user", "q", stable=False)])
+                                                             ).total_tokens - 20
+
 def test_openai_parallel_tool_results_in_separate_segments_keep_cost_flat():
     from pcf.families.sim import SimEngine
     base = [Segment("s", "system", "policy " * 1500), Segment("p", "memory", "profile " * 600, provenance="p")]

@@ -97,3 +97,20 @@ def request(system, reference, records, history, question, cold=False):
 ```
 
 `scripts/live_domain_sessions.py` is a working example of this loop, including usage and latency recording.
+
+## Pilot kit
+
+`scripts/pilot_analysis.py` covers assignment and the analysis; the assistant only has to log usage.
+
+- **Assign** with `assign(conversation_id, treatment_share, salt)`, or `--assign ID` on the command line: a hash of
+  the conversation id, stable for the conversation's life. Use a new salt per pilot.
+- **Log** one JSON line per request: conversation id, arm, `cached`, `written` and `uncached` input tokens from
+  `usage_from_response`, `output_tokens`, `latency_s` (and `ttft_s` if streamed), and `correct` where the
+  automatic record check applies.
+- **Analyze** with `python scripts/pilot_analysis.py LOG.jsonl --write W --read R --output O`, passing the provider's
+  current price ratios. It reports cost per conversation, error rates and latency per arm, and treatment/baseline
+  ratios with 95% bootstrap intervals over conversations, never turns.
+
+Dry run on committed data: `--from-domain results/2026-09-25/domain-claude-sonnet-5-60turn.json` writes each
+60-turn session as one conversation; analyzed, the input-cost ratio is 0.53 (95% interval 0.47-0.62) on 12
+conversations per arm. A real pilot needs the sample sizes above, not 12.
