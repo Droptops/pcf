@@ -10,8 +10,11 @@ const fixture = JSON.parse(readFileSync(new URL("./fixtures/placer.json", import
 for (const session of fixture.sessions) {
   test(`matches Python on ${session.scenario}, cold every ${session.coldEvery}`, () => {
     const tokens = new Map<string, number>();
+    const options = session.options ?? {};
     const placer = new MemoryPlacer({ countTokens: (text) => tokens.get(text)!, writeMultiplier: fixture.writeMultiplier,
-                                      readMultiplier: fixture.readMultiplier, decay: fixture.decay });
+                                      readMultiplier: fixture.readMultiplier, decay: fixture.decay,
+                                      expectedTurns: options.expected_turns ?? undefined,
+                                      minCacheableTokens: options.min_cacheable_tokens ?? 0 });
     session.turns.forEach((turn: any, i: number) => {
       for (const m of turn.modules) tokens.set(m.content, m.tokens);
       const { front, tail } = placer.split(turn.modules, turn.historyTokens, { cold: turn.cold });

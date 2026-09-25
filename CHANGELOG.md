@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `MemoryPlacer` defaults to the common cache prices (write 1.25, read 0.1) instead of the plain token rule (1, 0);
+  pass `write_multiplier=1.0, read_multiplier=0.0` for the old behaviour. `MemoryPlacer.for_compiler` takes the write
+  price and minimum cacheable length from a compiler.
+- `MemoryPlacer` moves a tail module back while the cache is warm once it has gone quiet (unchanged for more than
+  twice its average gap between changes) and, at its decayed rate, the saving over the remaining turns repays the
+  rewrite. `expected_turns` sets the remaining turns; without it the placer assumes as many more as have passed.
+  Modules no longer move while they and what follows them are below `min_cacheable_tokens`. Same rules in `ts/`.
 - Rerun the 60-turn domain comparison on the current library: placed input is 0.46 (gpt-5.6) and 0.49 (Claude) of
   tuned front, from 0.49 and 0.53 before the marker fixes. The README headline uses the new runs.
 - Breakpoints: every request, not only the first, gives a memory or document anchor directly after the system run

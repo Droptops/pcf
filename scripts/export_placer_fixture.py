@@ -57,16 +57,19 @@ def fixture() -> dict:
         class Lookup:
             def count(self, text: str) -> int:
                 return counts[text]
-        placer = MemoryPlacer(Lookup(), write_multiplier=1.25, read_multiplier=0.1)
+        # from session 4 on: a known conversation length, modules that go quiet, and in the last a minimum size
+        options = {"expected_turns": 120, "min_cacheable_tokens": 20_000 if n == 7 else 0} if n >= 4 else {}
+        placer = MemoryPlacer(Lookup(), write_multiplier=1.25, read_multiplier=0.1, **options)
         spec = [(f"m{k}", rng.uniform(0.02, 0.7), rng.randint(20, 3000)) for k in range(rng.randint(2, 7))]
         # from session 4 on, modules after the first join partway through: appended at the end or inserted
         start = {name: 0 if n < 4 or k == 0 else rng.randint(0, 40) for k, (name, _, _) in enumerate(spec)}
+        stop = {name: 10_000 if n < 4 else rng.randint(20, 60) for name, _, _ in spec}
         version = {name: 0 for name, _, _ in spec}
         history, history_tokens, turns = [], 0, []
         for turn in range(80):
             mem = []
             for name, p, size in spec:
-                version[name] += rng.random() < p
+                version[name] += rng.random() < p and turn < stop[name]
                 if turn < start[name]:
                     continue
                 text = f"{name} v{version[name]}"
@@ -83,7 +86,7 @@ def fixture() -> dict:
             counts[segment_text(entry)] = step
             history.append(entry)
             history_tokens += step
-        sessions.append({"scenario": f"random-{n}", "coldEvery": "random", "turns": turns})
+        sessions.append({"scenario": f"random-{n}", "coldEvery": "random", "options": options, "turns": turns})
     return {"writeMultiplier": 1.25, "readMultiplier": 0.1, "decay": 0.7, "sessions": sessions}
 
 
