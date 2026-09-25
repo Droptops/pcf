@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Memory placement on synthetic domain workloads. Offline by default; paid calls need --run.
+
+Runs the six scenarios in scripts/domain_scenarios.py (healthcare, government, enterprise) under four layouts:
+  front       - reference and record modules before history, stable first, all left `stable` (a naive layout)
+  front-tuned - the same order, with the modules that change marked `stable=False` (the best front layout)
+  tail        - all memory after history, just before the question
+  placed      - MemoryPlacer picks front or tail per module from observed change rates and cache prices
+Replies are graded by the first value asserted from the question's answer set. Costs use the same units as
+scripts/live_memory_placement.py. --analyze FILE... prints per-scenario totals and exact McNemar tests pairing
+each turn across layouts.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime
+import importlib.util
+import json
+import math
+import os
+import sys
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+
+HERE = os.path.dirname(__file__)
+sys.path.insert(0, os.path.join(HERE, "..", "src"))
+sys.path.insert(0, HERE)
+from pcf import Context, Segment  # noqa: E402
+from pcf.cache import PrefixCache  # noqa: E402
+from pcf.placement import MemoryPlacer  # noqa: E402
+from domain_scenarios import SCENARIOS, answer_value, normalize  # noqa: E402
+
+spec = importlib.util.spec_from_file_location("placement", os.path.join(HERE, "live_memory_placement.py"))
+placement = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(placement)
+
+ARMS = ("front", "front-tuned", "tail", "placed")
+
+
+def memory(scenario, turn: int) -> list[Segment]:
+    mods = [("reference", scenario.reference)] + [(name, fn(turn)) for name, fn in scenario.modules.items()]
+    return [Segment(name, "memory", data, provenance=name) for name, data in mods]
+
+
+def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], volatile: set[str]):
+    if arm == "front-tuned":
+        return [Segment(s.id, "memory", s.content, s.id not in volatile, provenance=s.provenance) for s in mem], []
+    if arm == "placed":
+        return placer.split(mem, history)
+    if arm == "tail":
+        return [], [Segment(s.id, "memory", s.content, False, provenance=s.provenance) for s in mem]
+    return mem, []
+
+
+def grade(ask, answer: str, expected: str, stale: str | None, violation_tokens: int) -> dict:
+    value, want = answer_value(ask, answer), normalize(ask.kind, expected)
+    trap = stale is not None and normalize(ask.kind, stale) != want
+    return {"value": value, "correct": value == want,
+            "gave_stale": trap and value == normalize(ask.kind, stale),
+            "violation": math.ceil(len(answer) / 4) > violation_tokens}
+
+
+def session(key: str, arm: str, nonce: str, cfg, client=None) -> list[dict]:
+    scenario = SCENARIOS[key]
+    compiler = placement.make_compiler(cfg.provider, cfg.model)
+    placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
+                          read_multiplier=cfg.read_multiplier)
+    system = Segment("s", "system", f"Session {nonce}-{key}-{arm}.\n" + scenario.system())
+    history, rows, said = [], [], {}
+    for turn in range(cfg.turns):
+        front, tail = arrange(arm, placer, memory(scenario, turn), history, scenario.volatile())
+        ask, expected = scenario.question(turn)
+        ctx = Context([system, *front, *history, *tail, Segment("u", "user", ask.text, stable=False)],
+                      cache_namespace=f"{key}-{arm}-{nonce}")
+        compiled = compiler.compile(ctx)
+        estimate = compiler.warmth(ctx, PrefixCache(compiler.descriptor.ttl_seconds), 0.0)
+        stale = said.get(ask.text)
+        row = {"turn": turn, "module": ask.module, "tail": [s.id for s in tail], "expected": expected,
+               "stale": stale, "stale_trap": stale is not None and normalize(ask.kind, stale) !=
+               normalize(ask.kind, expected), "est_tokens": compiled.total_tokens,
+               "est_written": estimate.cache_creation_tokens}
+        if client is not None:
+            response, answer, out = placement.call(cfg.provider, client, compiled.request, cfg)
+            usage, answer = compiler.usage_from_response(response), answer.strip()
+            row.update(cached=usage.cache_read_input_tokens, written=usage.cache_creation_input_tokens,
+                       uncached=usage.input_tokens, answer=answer, **out,
+                       **grade(ask, answer, expected, stale, cfg.violation_tokens))
+        rows.append(row)
+        said[ask.text] = expected
+        history.append(Segment(f"h{turn}", "history", [{"role": "user", "content": ask.text},
+                                                        {"role": "assistant",
+                                                         "content": scenario.reply(turn, expected)}]))
+    return rows
+
+
+def mcnemar(b: int, c: int) -> float:
+    """Exact two-sided McNemar p-value for b and c discordant pairs."""
+    n = b + c
+    if n == 0:
+        return 1.0
+    tail = sum(math.comb(n, k) for k in range(min(b, c) + 1)) / 2 ** n
+    return min(1.0, 2 * tail)
+
+
+def analyze(paths: list[str]) -> dict:
+    out = {}
+    for path in paths:
+        saved = json.load(open(path))
+        meta = saved["meta"]
+        model = meta["model"]
+        per = out.setdefault(model, {"scenarios": {}, "pairs": {}})
+        for key, runs in saved["scenarios"].items():
+            per["scenarios"][key] = saved["aggregate"][key]
+            for run in runs:
+                for a, b in (("front", "tail"), ("front", "placed"), ("front-tuned", "tail"),
+                             ("front-tuned", "placed"), ("tail", "placed")):
+                    if a not in run or b not in run:
+                        continue
+                    p = per["pairs"].setdefault(f"{a} vs {b}", {"all": [0, 0], "stale_traps": [0, 0]})
+                    for ra, rb in zip(run[a], run[b]):
+                        for slot in ("all", "stale_traps") if ra["stale_trap"] else ("all",):
+                            if ra["correct"] and not rb["correct"]:
+                                p[slot][0] += 1
+                            elif rb["correct"] and not ra["correct"]:
+                                p[slot][1] += 1
+        for name, p in per["pairs"].items():
+            for slot, (b, c) in list(p.items()):
+                if isinstance(b, int):
+                    p[slot] = {"only_first_correct": b, "only_second_correct": c, "p": round(mcnemar(b, c), 4)}
+        totals = {}
+        for arm in ARMS:
+            agg = [s[arm] for s in per["scenarios"].values() if arm in s]
+            if agg:
+                totals[arm] = {"billed_input_units": sum(s["billed_input_units"]["mean"] for s in agg),
+                               "billed_total_units": sum(s["billed_total_units"]["mean"] for s in agg),
+                               "correct": _sum_frac(s["correct"] for s in agg),
+                               "correct_on_stale_traps": _sum_frac(s["correct_on_stale_traps"] for s in agg),
+                               "gave_stale": sum(s["gave_stale"] for s in agg)}
+        per["totals_of_scenario_means"] = totals
+    return out
+
+
+def _sum_frac(values) -> str:
+    pairs = [v.split("/") for v in values]
+    return f"{sum(int(a) for a, _ in pairs)}/{sum(int(b) for _, b in pairs)}"
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run", action="store_true", help="make paid calls (needs OPENAI_API_KEY or "
+                        "OPENROUTER_API_KEY; any value works when a proxy injects the real key)")
+    parser.add_argument("--provider", choices=("openai", "anthropic"), default="openai")
+    parser.add_argument("--model", help="default: gpt-5.6 (openai) or claude-sonnet-5 (anthropic)")
+    parser.add_argument("--scenarios", nargs="+", choices=sorted(SCENARIOS), default=sorted(SCENARIOS))
+    parser.add_argument("--arms", nargs="+", choices=ARMS, default=list(ARMS))
+    parser.add_argument("--turns", type=int, default=24)
+    parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument("--thinking", choices=("default", "disabled"), default="default")
+    parser.add_argument("--effort", default="low", help="openai reasoning effort")
+    parser.add_argument("--read-multiplier", type=float, default=0.1)
+    parser.add_argument("--output-multiplier", type=float, default=5.0)
+    parser.add_argument("--violation-tokens", type=int, default=80)
+    parser.add_argument("--workers", type=int, default=1, help="sessions run concurrently (paid runs only)")
+    parser.add_argument("--analyze", nargs="+", metavar="FILE", help="summarize saved runs and exit")
+    cfg = parser.parse_args()
+    if cfg.analyze:
+        print(json.dumps(analyze(cfg.analyze), indent=2))
+        raise SystemExit
+    cfg.model = cfg.model or ("gpt-5.6" if cfg.provider == "openai" else "claude-sonnet-5")
+    client = None
+    if cfg.run:
+        key = "OPENAI_API_KEY" if cfg.provider == "openai" else "OPENROUTER_API_KEY"
+        if not os.environ.get(key):
+            raise SystemExit(f"--run --provider {cfg.provider} requires {key}")
+        if cfg.provider == "openai":
+            import openai
+            client = openai.OpenAI()
+        else:
+            import anthropic
+            client = anthropic.Anthropic(api_key=os.environ[key], base_url="https://openrouter.ai/api")
+    writes = placement.make_compiler(cfg.provider, cfg.model).descriptor.cache_write_multiplier
+    repeats = cfg.repeats if client else 1
+    nonces = {(k, i): uuid.uuid4().hex[:12] if client else "offline" for k in cfg.scenarios for i in range(repeats)}
+    jobs = [(k, i, arm) for k in cfg.scenarios for i in range(repeats) for arm in cfg.arms]
+    with ThreadPoolExecutor(max(1, cfg.workers if client else 1)) as pool:
+        done = dict(zip(jobs, pool.map(lambda j: session(j[0], j[2], nonces[(j[0], j[1])], cfg, client), jobs)))
+    scenarios, aggregate = {}, {}
+    for k in cfg.scenarios:
+        runs = []
+        for i in range(repeats):
+            run = {arm: done[(k, i, arm)] for arm in cfg.arms}
+            run["summary"] = {arm: placement.summarize(run[arm], cfg, writes) for arm in cfg.arms}
+            runs.append(run)
+        scenarios[k] = runs
+        aggregate[k] = placement.aggregate(runs, cfg.arms)
+    meta = {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+            "git_sha": placement.git_sha(), "provider": cfg.provider, "model": cfg.model, "turns": cfg.turns,
+            "repeats": repeats, "arms": cfg.arms, "scenarios": cfg.scenarios, "thinking": cfg.thinking,
+            "effort": cfg.effort, "write_multiplier": writes, "read_multiplier": cfg.read_multiplier,
+            "output_multiplier": cfg.output_multiplier, "violation_tokens": cfg.violation_tokens,
+            "paid": client is not None, "data": "synthetic; see scripts/domain_scenarios.py"}
+    print(json.dumps({"meta": meta, "scenarios": scenarios, "aggregate": aggregate}, indent=2))
