@@ -1,4 +1,4 @@
-"""Reproductions of review findings, using offline transport and held-out evidence."""
+"""Regression tests for confidence transport redirects, validation evidence minimums, duplicate samples and token accounting."""
 from __future__ import annotations
 
 import io

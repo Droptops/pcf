@@ -5,3 +5,11 @@ __pycache__/
 build/
 dist/
 .env
+.venv/
+venv/
+.ruff_cache/
+.coverage
+htmlcov/
+.DS_Store
+.idea/
+.vscode/

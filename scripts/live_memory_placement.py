@@ -9,7 +9,7 @@ One scripted support session is run per arm, each in its own cache namespace, --
   front         - all memory before history, most volatile module last (the best hand ordering)
   tail          - all memory after history, just before the user turn
   placed        - MemoryPlacer picks front or tail per module from observed change rates and cache prices
-  placed-spacer - placed, plus a ~200-token neutral note between tail memory and the question
+  placed-spacer - placed, plus a ~280-token neutral note between tail memory and the question
 Four memory modules change at different rates (never, every 6th turn, every 3rd, every turn). History is
 scripted and identical in every arm; each scripted reply states the value it answered, so after a module changes
 the history holds a stale answer. --history-style template repeats one long filler pattern in every reply;

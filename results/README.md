@@ -18,7 +18,7 @@ Raw output of the live scripts (`scripts/live_memory_placement.py`, `scripts/liv
 | `2026-09-25/e1-anthropic-varied.json` | claude-sonnet-5 via OpenRouter, pinned to Anthropic | 20 × 5, same arms | varied history; thinking omitted (adaptive) |
 
 The 2026-09-24 runs predate output-token recording. All placement runs ran back to back with no idle time, so no
-cache entry expired between turns. The E1 runs used a 512-token output limit (now 4096) and the breakpoint rule at
+cache entry expired between turns. The 2026-09-25 placement runs (`e1-*`) used a 512-token output limit (now 4096) and the breakpoint rule at
 commit c95184f; all placement files are re-graded with the current grader.
 
 ## Tool loops (`live_tool_loop.py`)
