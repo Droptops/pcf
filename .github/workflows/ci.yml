@@ -58,7 +58,7 @@ jobs:
           node --test test/*.test.ts
       - name: Typecheck
         working-directory: ts
-        run: npx --yes typescript@6.0.2 tsc -p .
+        run: npx --yes --package=typescript@6.0.2 tsc -p .
 
   test:
     name: Python ${{ matrix.python-version }}
