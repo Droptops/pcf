@@ -116,7 +116,7 @@ ALLERGENS = ("penicillin", "sulfa", "latex", "codeine", "iodinated contrast", "p
 
 
 def _patient(_t: int) -> dict:
-    return {"patient": "SYNTHETIC-A, Maria (test record)", "mrn": "SYN-4471902", "age": 67, "sex": "F",
+    return {"patient": "SYNTHETIC-A, Maria (test record)", "identity_verified": "yes, at session start", "mrn": "SYN-4471902", "age": 67, "sex": "F",
             "code_status": "Full code", "allergies": ["penicillin (hives)"], "attending": "Dr. Test Attending",
             "admitting_diagnosis": "acute decompensated heart failure",
             "history": ["type 2 diabetes", "hypertension", "atrial fibrillation", "CKD stage 3a", "osteoarthritis",
@@ -148,7 +148,7 @@ def _vitals(t: int) -> dict:
 
 CLINICAL = Scenario(
     "clinical", "healthcare", "hospital cardiac step-down unit (nurse copilot)",
-    policy=["Verify patient identity with two identifiers before discussing orders.",
+    policy=["Patient identity is verified with two identifiers when the session starts; the record shows the result.",
             "Medication questions are answered from the active medication administration record (MAR), not from "
             "earlier conversation.",
             "Report critical lab values to the responsible provider within 30 minutes and document the call.",
@@ -200,7 +200,7 @@ def _benefits() -> dict:
 
 
 def _member(_t: int) -> dict:
-    return {"member": "SYNTHETIC-B, James (test record)", "member_id": "SYN-M-88213407", "plan": "Silver PPO",
+    return {"member": "SYNTHETIC-B, James (test record)", "identity_verified": "yes, at session start", "member_id": "SYN-M-88213407", "plan": "Silver PPO",
             "group": "Test Manufacturing Co.", "pcp": "Test Family Clinic", "dependents": ["spouse", "child (9)"],
             "accumulators": {"deductible_met": "$1,180", "oop_met": "$2,040"}}
 
@@ -225,7 +225,7 @@ def _balance(t: int) -> dict:
 
 CLAIMS = Scenario(
     "claims", "healthcare", "health plan member services center (agent copilot)",
-    policy=["Authenticate the caller with member ID and date of birth before sharing plan details.",
+    policy=["Callers are authenticated with member ID and date of birth before the session starts; the record shows the result.",
             "Quote benefits from the benefit grid; never promise coverage for a service still under review.",
             "Prior authorization status comes from the authorization record, not from earlier calls.",
             "Balances and claim status come from the latest claims record.",
@@ -270,7 +270,7 @@ def _program_rules() -> dict:
 
 
 def _household(_t: int) -> dict:
-    return {"case": "SYN-CASE-310775 (test record)", "head_of_household": "SYNTHETIC-C, Alex",
+    return {"case": "SYN-CASE-310775 (test record)", "identity_verified": "yes, at session start", "head_of_household": "SYNTHETIC-C, Alex",
             "household_size": "4", "county": "Test County", "members": ["adult", "adult", "child (6)", "child (3)"],
             "income_sources": ["part-time wages", "child support"], "language": "English"}
 
@@ -295,7 +295,7 @@ def _appointment(t: int) -> dict:
 
 BENEFITS = Scenario(
     "benefits", "government", "state human services agency (caseworker copilot)",
-    policy=["Confirm the case number before discussing a case.",
+    policy=["The case number and client identity are confirmed before the session starts; the record shows the result.",
             "Case stage, documents and appointments come from the current case record, not earlier conversation.",
             "Explain what a client must do next in plain language.",
             "Offer language assistance and reasonable accommodations.",
@@ -341,7 +341,7 @@ def _tax_reference() -> dict:
 
 
 def _taxpayer(_t: int) -> dict:
-    return {"taxpayer": "SYNTHETIC-D, Priya (test record)", "tin_last4": "0000", "filing_status":
+    return {"taxpayer": "SYNTHETIC-D, Priya (test record)", "identity_verified": "yes, at session start", "tin_last4": "0000", "filing_status":
             "married filing jointly", "tax_years_open": [2023, 2024, 2025], "address": "100 Test Street, Test City"}
 
 
@@ -362,7 +362,7 @@ def _tax_balance(t: int) -> dict:
 
 TAX = Scenario(
     "tax", "government", "tax agency taxpayer assistance line (agent copilot)",
-    policy=["Authenticate the caller with the verification items before discussing an account.",
+    policy=["Callers are authenticated with the verification items before the session starts; the record shows the result.",
             "Balances, notices and payment plans come from the current account record, not earlier conversation.",
             "Explain notices in plain language and state the response deadline.",
             "Never give legal advice; refer complex cases to a specialist.",
@@ -409,7 +409,7 @@ def _kb() -> dict:
 
 
 def _employee(_t: int) -> dict:
-    return {"employee": "SYNTHETIC-E, Sam (test record)", "upn": "sam.test@example.com", "department": "Finance",
+    return {"employee": "SYNTHETIC-E, Sam (test record)", "identity_verified": "yes, at session start", "upn": "sam.test@example.com", "department": "Finance",
             "manager": "Test Manager", "location": "Test Office, floor 4",
             "devices": [f"LAPTOP-SYN-{k:03d}" for k in range(3)] + ["PHONE-SYN-001"]}
 
@@ -432,7 +432,7 @@ def _incidents(t: int) -> dict:
 
 HELPDESK = Scenario(
     "helpdesk", "enterprise", "corporate IT service desk (agent copilot)",
-    policy=["Verify the employee with their sign-in name before changing anything.",
+    policy=["Employees are verified by sign-in name before the session starts; the record shows the result.",
             "License, device compliance and incident details come from the current records, not earlier "
             "conversation.",
             "Never ask for a password.", "Link the relevant knowledge base article.",
@@ -470,7 +470,7 @@ def _playbook() -> dict:
 
 
 def _account_rec(_t: int) -> dict:
-    return {"account": "Synthetic Test Industries (test record)", "industry": "Manufacturing", "employees": 4200,
+    return {"account": "Synthetic Test Industries (test record)", "identity_verified": "yes, at session start", "industry": "Manufacturing", "employees": 4200,
             "hq": "Test City", "contacts": [f"Test Contact {k} ({role})" for k, role in
                                             enumerate(["CFO", "CIO", "procurement", "plant manager", "IT director"])]}
 

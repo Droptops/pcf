@@ -108,9 +108,10 @@ def analyze(paths: list[str]) -> dict:
         saved = json.load(open(path))
         meta = saved["meta"]
         model = meta["model"]
-        per = out.setdefault(model, {"scenarios": {}, "pairs": {}})
+        per = out.setdefault(model, {"scenarios": {}, "pairs": {}, "runs": {}})
         for key, runs in saved["scenarios"].items():
             per["scenarios"][key] = saved["aggregate"][key]
+            per["runs"][key] = runs
             for run in runs:
                 for a, b in (("front", "tail"), ("front", "placed"), ("front-tuned", "tail"),
                              ("front-tuned", "placed"), ("tail", "placed")):
@@ -136,7 +137,10 @@ def analyze(paths: list[str]) -> dict:
                                "correct": _sum_frac(s["correct"] for s in agg),
                                "correct_on_stale_traps": _sum_frac(s["correct_on_stale_traps"] for s in agg),
                                "gave_stale": sum(s["gave_stale"] for s in agg)}
+                no_value = [r for key in per["scenarios"] for run in per["runs"][key] for r in run[arm] if not r["value"]]
+                totals[arm]["no_value_given"] = len(no_value)
         per["totals_of_scenario_means"] = totals
+        del per["runs"]
     return out
 
 
