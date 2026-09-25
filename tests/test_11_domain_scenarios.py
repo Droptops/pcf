@@ -49,6 +49,15 @@ def test_grader_takes_the_first_value_and_ignores_times_and_ids():
     assert answer_value(claims, "He owes $1,012.30 now; last month it was $975.00.") == "1012.30"
 
 
+def test_grader_reads_negative_values_that_appear_after_turn_24():
+    overdue, balance = SCENARIOS["crm"].question(31)[0], SCENARIOS["tax"].question(47)[0]
+    for reply in ("-3 days: the close date has passed.", "\u22123 days overdue."):
+        assert answer_value(overdue, reply) == "-3"
+    for reply in ("-$605.63, a credit.", "$-605.63 as of today."):
+        assert answer_value(balance, reply) == "-605.63"
+    assert answer_value(balance, "A credit of $605.63.") == "605.63"
+
+
 def test_offline_sessions_place_memory_as_each_layout_says():
     cfg = SimpleNamespace(provider="openai", model="gpt-5.6", turns=8, read_multiplier=0.1, violation_tokens=80)
     rows = {arm: domain.session("tax", arm, "offline", cfg) for arm in domain.ARMS}
