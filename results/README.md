@@ -97,3 +97,5 @@ the recorded 24-turn live savings and the live 60-turn check.
 |---|---|---|---|
 | `2026-09-25/fleet-probe-openai-before-anchor-fix.json`, `fleet-probe-anthropic-before-anchor-fix.json` | gpt-5.6; claude-sonnet-5 via OpenRouter | `benefits`, tuned-private, tuned-shared, placed-shared, 1 warmup + 1 measured × 8 turns | paid probe: placed-shared read nothing of the shared prefix on the second session's first turn |
 | `2026-09-25/fleet-probe-openai.json`, `fleet-probe-anthropic.json` | same | tuned-private, placed-shared | the same probe after the first-request anchor fix: the second session reads the shared prefix |
+| `2026-09-25/fleet-gpt-5.6.json`, `fleet-claude-sonnet-5.json` | same | `benefits`, `clinical` × tuned-private, tuned-shared, placed-shared × (1 warmup + 8) × 60 turns | the claim run; `live_fleet_sessions.py --analyze` applies the pass rules |
+| `2026-09-25/fleet-cold-claude-sonnet-5.json` | claude-sonnet-5 via OpenRouter | `benefits`, placed-cold × 4 × 12 turns, 330 s gaps | rule 3; analyze together with `fleet-claude-sonnet-5.json` |

@@ -114,3 +114,48 @@ One JSON file per paid run under `results/`, with `meta` (date, git sha, model, 
 scenarios, turns, sessions, sleep, write and read multipliers) and per-turn `cached`, `written`, `uncached`,
 `output_tokens`, and `latency_s`. Quote the file from `results/README.md` only after the run exists. Raw results
 of a run that is quoted in docs are committed, per `CLAUDE.md`.
+
+## Results (2026-09-25)
+
+Run with `scripts/live_fleet_sessions.py`: both models, `benefits` and `clinical`, 60 turns, 1 warmup + 8 measured
+sessions per arm and scenario; Claude cold arm on `benefits`. Raw files: `results/2026-09-25/fleet-gpt-5.6.json`,
+`fleet-claude-sonnet-5.json`, `fleet-cold-claude-sonnet-5.json`; `--analyze` reproduces every number below.
+
+**All three rules pass.**
+
+| | gpt-5.6 | claude-sonnet-5 |
+| --- | ---: | ---: |
+| Rule 1: placed-shared / tuned-shared billed input, 60 turns (pass ≤ 0.60) | **0.527** | **0.497** |
+| Rule 2: median turn-0 read share, tuned-shared / placed-shared / tuned-private | 0.84 / 0.84 / 0 | 1.27 / 1.27 / 0 |
+| Rule 3: Claude cold placed / warm tuned-shared, 12 turns (pass > 0.85) | not run | **5.83** |
+| Correct answers, tuned-shared → placed-shared | 922 → 960 of 960 | 777 → 958 of 960 |
+| Median latency, tuned-shared → placed-shared | 2.3 s → 1.9 s | 5.7 s → 3.4 s |
+
+Read shares divide provider-counted cached tokens by PCF's token estimate of system + reference, which undercounts
+Claude's tokenizer; shares above 1 mean the whole shared prefix was read.
+
+What the fleet adds, and what it does not:
+
+- **A shared prefix is a first-request saving.** Against a private prefix, the tuned layout's first request cost
+  0.19 (gpt-5.6) and 0.18 (Claude) as much, and its first 12 turns about 0.75. Over 60 turns the saving is 3-4%:
+  once a conversation is warm, its own history dominates. Fleets of short conversations gain most.
+- **Placement is the long-session saving,** and it holds with a shared prefix: 0.53 and 0.50 of the tuned-shared
+  bill, close to the private-prefix domain runs (0.49 and 0.53).
+- **Idle gaps remove it.** With every turn after the 5-minute lifetime, no cold turn read anything (48/48), and
+  12 cold turns cost 5.8x the warm tuned-shared turns.
+
+Deviations from the protocol, none of which could be registered before the run:
+
+- **The paid probe failed first, and the library changed.** Placed layouts start a session with every module
+  stable in front, which exceeded the breakpoint budget and dropped the shared reference's anchor: a second session
+  read nothing of the shared prefix on either provider (`fleet-probe-*-before-anchor-fix.json`). The fix (see
+  CHANGELOG) gives a first request's reference directly after the system prompt the system anchor's slot. The
+  probe then passed (`fleet-probe-*.json`) and the claim run used the fixed library.
+- **Per-session segment.** The scripted sessions of a scenario are identical, so without a per-session segment
+  after the shared prefix a session would read the previous session's whole conversation. The harness adds one.
+- **Bridge cell.** The two-scenario 24-turn placed/tuned ratio in the earlier domain runs was 0.954 (gpt-5.6) and
+  0.937 (Claude); the six-scenario 0.86/0.88 quoted above do not apply to this pool. gpt-5.6 landed at 0.949.
+  Claude landed at 0.691: the anchor fix makes placed cheaper on Claude inside a session too (in simulation it
+  moves this cell from 0.80 to 0.63; OpenAI is unchanged). The run was complete before the cell was read.
+- **Cold cell.** 12 turns and 4 sessions, run concurrently with private prefixes, instead of 60 turns and 1 + 4
+  sequential sessions, which at 330 s per gap would take more than a day. No OpenAI cold session was run.

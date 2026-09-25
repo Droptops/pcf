@@ -272,10 +272,12 @@ a zero cache read: by the time usage shows a miss, that request has already rewr
 
 ## Next step: a production pilot
 
-The evidence here is scripted or synthetic. [`docs/FLEET_CACHE.md`](docs/FLEET_CACHE.md) is the next synthetic
-test: a shared prefix across sessions, 60-turn sessions, and a gap past the cache lifetime, with pass rules set
-in advance. [`docs/PILOT.md`](docs/PILOT.md) is the test after that, on one real assistant, measuring billed cost,
-latency and answer quality.
+The evidence here is scripted or synthetic. The last synthetic test, [`docs/FLEET_CACHE.md`](docs/FLEET_CACHE.md),
+passed all its pre-registered rules on both models: at 60 turns with a prefix shared across sessions, placement
+billed 0.53 (gpt-5.6) and 0.50 (Claude) of the tuned layout's input, a shared prefix cut a conversation's first
+request to under a fifth, and turns after the cache lifetime read nothing. [`docs/PILOT.md`](docs/PILOT.md) is the
+next test, on one real assistant, measuring billed cost, latency and answer quality; `scripts/pilot_analysis.py`
+assigns conversations and analyzes the usage log.
 
 ## Status and design limits
 
