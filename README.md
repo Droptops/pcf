@@ -150,15 +150,30 @@ claude-sonnet-5 (`results/2026-09-25/domain-claude-sonnet-5.json`), totals over 
 | Tail | 842.1k | 916.5k | 432/432 | 234/234 |
 | `MemoryPlacer` | 219.9k | 293.9k | 432/432 | 234/234 |
 
-- `MemoryPlacer` answered every question and was cheapest in every scenario: 3.7x below the naive front layout and
-  1.6x below the tuned one, counting output. Paired by turn, it was right where front memory was wrong 23 times and
-  never the reverse (exact McNemar p < 1e-6); the tuned front layout did no better than the naive one on accuracy.
-- All-tail was as accurate but cost 3.1x more than `MemoryPlacer`: with a large stable reference module, moving it
-  after history bills it uncached every turn. Keep stable memory in front and move only what changes.
-- gpt-5.6, input only (`results/2026-09-25/domain-gpt-5.6-run1.json`): naive front 712.3k, tuned front 186.3k,
-  tail 590.5k, `MemoryPlacer` 160.2k (cheapest overall, though tuned front was 6% cheaper in the clinical scenario).
-  That run's answers are not a placement result (a third asked for identity verification first, before the
-  scenarios recorded it), and the corrected rerun stopped when the OpenAI account ran out of credits.
+gpt-5.6 (`results/2026-09-25/domain-gpt-5.6.json`), same sessions:
+
+| Layout | Input | Input + output | Correct | Stale-history checks | Latency p50 / p90 |
+|---|---|---|---|---|---|
+| Front, naive | 715.1k | 741.6k | 422/432 | 226/234 | 1.74 / 3.23 s |
+| Front, tuned | 186.6k | 213.8k | 424/432 | 229/234 | 1.85 / 3.13 s |
+| Tail | 592.8k | 620.1k | 432/432 | 234/234 | 1.62 / 2.98 s |
+| `MemoryPlacer` | 160.7k | 182.7k | 432/432 | 234/234 | 1.65 / 3.02 s |
+
+- **Cost.** `MemoryPlacer` was cheapest overall on both models: 3.7x (Claude) and 4.1x (gpt-5.6) below the naive
+  front layout and 1.6x and 1.2x below the tuned one, counting output. It was cheapest in every scenario on Claude and
+  in five of six on gpt-5.6 (clinical: 1% above tuned front).
+- **Accuracy.** It answered every question on both models. Paired by turn, it was right where tuned front memory was
+  wrong 24 times on Claude and 8 on gpt-5.6, never the reverse (exact McNemar p < 1e-6 and p = 0.008). Tuning cache
+  markers fixed front memory's cost, not its accuracy.
+- **All-tail is the wrong lesson.** It was as accurate but cost 3.1-3.4x more than `MemoryPlacer`: with a large
+  stable reference module, moving it after history bills it uncached every turn. Keep stable memory in front and
+  move only what changes.
+- **Latency.** On gpt-5.6 the layouts were within 0.2 s at the median. On Claude, a replication with latency
+  recording (`domain-claude-sonnet-5-replication.json`, five scenarios; the sixth stopped when OpenRouter credits
+  ran out) gave the same cost factors and 360/360 correct for `MemoryPlacer`, and a median of 3.3 s against 5.4 s for
+  either front layout, which produced about three times as many output tokens per turn.
+- `domain-gpt-5.6-run1.json` is an earlier gpt-5.6 run whose answers are confounded (a third asked for identity
+  verification before the scenarios recorded it); its input costs match this run's.
 
 ## Routing safety: the calibration gate
 
