@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Treat invalid raw probabilities from a fitted Platt scorer as per-request confidence unavailability, allowing
+  routing to fall back. Scorer programming errors and invalid calibration coefficients remain visible.
+- Replace the Jev acceptance-v2 filler/length proxy with question-specific full-answer formats (acceptance-v3),
+  regenerate labels and held-out validation offline, and retain both earlier result files. The gate still fails.
+- Pool compatible domain result files before finalizing summaries, preserving repeated scenarios and paired
+  counts. Reject incompatible settings, duplicate file paths and unpaired turns; expose pooled totals and cost
+  denominators explicitly.
+- Align placement advice and pilot effect sizes with the tuned-baseline results and clarify the synthetic
+  evidence, cost denominators and value-only accuracy boundary.
+- Portable hashes, wire format and compiler cache identity are unchanged. Calibration dataset IDs now include
+  the labeling version; regenerate evaluation records that used the superseded acceptance labels.
+
 ## 0.3.0a1 (2026-09-25)
 
 ### Compatibility

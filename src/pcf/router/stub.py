@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from ..descriptor import hash_object
+from ..validation import number
 from .base import ConfidenceSource, ConfidenceUnavailable
 from .calibration import apply_platt, fit_platt
 
@@ -53,7 +54,13 @@ class PlattScaledSource(ConfidenceSource):
     def p_sufficient(self, ctx, candidate):
         if self.fitted_candidate is not None and self.fitted_candidate != candidate.fingerprint:
             raise ConfidenceUnavailable("calibrator fitted for a different candidate")
-        return apply_platt(self.raw(ctx, candidate), self.a, self.b)
+        raw = self.raw(ctx, candidate)
+        try:
+            probability = number(raw, "raw probability", maximum=1)
+        except ValueError as exc:
+            raise ConfidenceUnavailable(f"invalid raw confidence score: {exc}") from exc
+        # Configuration and scorer programming errors must remain visible.
+        return apply_platt(probability, self.a, self.b)
 
 
 class UncalibratedSource(ConfidenceSource):

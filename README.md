@@ -26,8 +26,10 @@ Measured live on gpt-5.6 and claude-sonnet-5 (raw data in [`results/`](results/)
   history (exact McNemar p = 0.008).
 - **Multi-step tool loops reuse 100% of the previous request's cache** on both providers.
 
-Recommended default: on Claude, put all changing memory after the history; on gpt-5.6, let `MemoryPlacer` decide
-per module (a further 7% input saving). For small models, see the caveat under [Limits](#limits-of-the-evidence).
+Recommended starting point: keep large stable reference modules in front and let `MemoryPlacer` place changing
+modules. All-tail worked well on the smaller support workload below, but was substantially more expensive on the
+domain workloads with large stable references, including Claude. Compare layouts on your workload. For small
+models, see the caveat under [Limits](#limits-of-the-evidence).
 
 ## How it works
 
@@ -60,7 +62,8 @@ PCF covers the pieces this needs:
 
 One scripted support session per cell, 20 turns × 5 repeats. Four memory modules change at different rates (never,
 every 6th turn, every 3rd, every turn). Costs are in uncached-input-token units: cache writes 1.25×, cache reads
-0.1× (an assumed price; `--read-multiplier`), output 5× (`--output-multiplier`).
+0.1× (an assumed price; `--read-multiplier`), output 5× (`--output-multiplier`). Cost columns are per-session
+means over repetitions; correctness and violation counts pool all repetitions.
 
 Terms used below:
 
@@ -141,7 +144,12 @@ knowledge base) and four records changing never / every 6th turn / every 3rd / e
 history, 24 turns per session, 3 repeats. Four layouts: memory in front with every module `stable` (naive), memory in
 front with the changing modules marked `stable=False` (tuned), all memory after history (tail), and `MemoryPlacer`.
 
-claude-sonnet-5 (`results/2026-09-25/domain-claude-sonnet-5.json`), totals over the six scenarios:
+Cost columns below sum the six per-scenario means over three repetitions (144 turns per repetition); correctness
+and stale-history counts pool all three repetitions (432 answers per layout). These are assumed-price token
+units, not invoice dollars. The analyzer also reports `totals_all_repeats` with cost and counts on the same
+pooled denominator.
+
+claude-sonnet-5 (`results/2026-09-25/domain-claude-sonnet-5.json`):
 
 | Layout | Input | Input + output | Correct | Stale-history checks |
 |---|---|---|---|---|
@@ -162,9 +170,10 @@ gpt-5.6 (`results/2026-09-25/domain-gpt-5.6.json`), same sessions:
 - **Cost.** `MemoryPlacer` was cheapest overall on both models: 3.7x (Claude) and 4.1x (gpt-5.6) below the naive
   front layout and 1.6x and 1.2x below the tuned one, counting output. It was cheapest in every scenario on Claude and
   in five of six on gpt-5.6 (clinical: 1% above tuned front).
-- **Accuracy.** It answered every question on both models. Paired by turn, it was right where tuned front memory was
+- **Accuracy.** It answered every question on both models. These are extracted-value scores, not full instruction-compliance or safety grades. Paired by turn, it was right where tuned front memory was
   wrong 24 times on Claude and 8 on gpt-5.6, never the reverse (exact McNemar p < 1e-6 and p = 0.008). Tuning cache
-  markers fixed front memory's cost, not its accuracy.
+  markers reduced front memory's cost without removing its value errors. The turn-level McNemar values are
+  descriptive for these scripted sessions; broader inference needs conversation/scenario-level uncertainty analysis.
 - **All-tail is the wrong lesson.** It was as accurate but cost 3.1-3.4x more than `MemoryPlacer`: with a large
   stable reference module, moving it after history bills it uncached every turn. Keep stable memory in front and
   move only what changes.
@@ -183,12 +192,18 @@ OpenRouter) with `scripts/live_jev_calibration.py`, and the gate correctly refus
 
 Jev is asked whether an answer is acceptable: correct, following the application instructions and satisfying the
 request. On 450 distinct question-bank contexts, claude-haiku-4-5 gave the right value 439 times (97.6%), but only
-253 answers (56.2%) were acceptable under that rubric: the rest also copied the history's filler or ran long when
-the question asked for a bare value. Against acceptance labels (`acceptance-v2`, from the saved answers and scores
-by `--relabel`), Jev scored the 369 contexts it could score 0.19-0.55 and scored rejected answers slightly higher
-than accepted ones (means 0.32 and 0.29, AUC 0.38). No context reaches 0.7 and calibration error is about 0.32, so
-validation fails at every threshold and a Jev-gated router falls back to the default model. (The first write-up
-scored Jev against value correctness alone: AUC 0.33, calibration error about 0.67.) Jev rejects requests above about 32.8k of its input tokens
+145 answers (32.2%) met both value and question-specific answer-format requirements. `acceptance-v3` matches
+whole answers: one word for contact/language, digits for ticket counts, a known plan name for plan lookups, or
+`<number>, <plan>` for cross-module questions. Normalization allows outer whitespace, case differences, one
+terminal period and one enclosing bold pair; extra prose is rejected. This is an operational rubric for these
+lookup questions, not a general quality judge.
+
+The saved answers and scores were relabeled offline with `--relabel`. Across the 369 scorable contexts, Jev scored
+0.19-0.55 and scored rejected answers higher on average (0.31 versus 0.28; AUC 0.328). ECE is about 0.176 and no
+score reaches 0.7, so every tested validation threshold still fails and the router falls back. Raw observations
+are preserved. The earlier value-only report (AUC 0.33, ECE about 0.67) and acceptance-v2 report (AUC 0.38, ECE
+about 0.32) are archived; v2's filler/length heuristic still accepted answers that violated explicit formats.
+Jev rejects requests above about 32.8k of its input tokens
 (`max_tokens_exceeded`; here, compiled prompts above about 18.7k estimated tokens, 81 of 450), which the router
 treats as confidence unavailable. Score noise is small (retest SD about 0.011, no decision flips at 0.8). The
 default model id `jev-latest` is never eligible for validation; pass a dated snapshot id. The Jev transport requires
@@ -245,8 +260,9 @@ a zero cache read: by the time usage shows a miss, that request has already rewr
 
 ## Limits of the evidence
 
-- One scripted support workload with simple lookup questions graded by value: a cost and regression check, not a
-  general quality evaluation.
+- Scripted support and six synthetic domain workloads with lookup questions graded by value. Histories use
+  predetermined replies rather than each model's actual prior answer, so these runs do not test error propagation
+  through real conversations. Value correctness does not imply instruction compliance or domain safety.
 - Cache prices are assumed multipliers, not billed dollars. Runs were back to back, so no cache entry expired
   between turns; idle gaps past the cache lifetime shrink the savings, and `MemoryPlacer`'s edge further.
 - Small models: on conflict items, claude-haiku-4-5 followed the customer's request 50/50 with front memory but

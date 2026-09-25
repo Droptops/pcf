@@ -44,7 +44,8 @@ items.
 | File | Scorer / candidate | Contexts | Notes |
 |---|---|---|---|
 | `2026-09-25/jev-calibration-haiku-4-5-question-bank.json` | Jev `typesafe/jev-1.13-20260917` / claude-haiku-4-5 | 450 distinct (369 scorable) + 60 × 5 retest | conflict items as tail; per-row Jev errors recorded |
-| `2026-09-25/jev-calibration-haiku-4-5-question-bank-acceptance-v2.json` | same | same 450 | relabeled offline (`--relabel`): value_correct, instruction_compliant and label = both; re-validated from the recorded scores |
+| `2026-09-25/jev-calibration-haiku-4-5-question-bank-acceptance-v2.json` | same | same 450 | archived: filler/length compliance proxy; superseded by acceptance-v3 |
+| `2026-09-25/jev-calibration-haiku-4-5-question-bank-acceptance-v3.json` | same | same 450 | question-specific full-answer formats; 145 accepted; recorded answers and scores unchanged; offline validation still fails |
 | `2026-09-25/jev-calibration-haiku-4-5.json` | same | 240 placement contexts, 117 distinct | superseded: session tags made repeats look unique (see `meta.note`) |
 | `2026-09-25/jev-input-limit-probe.json` | Jev via OpenRouter | 10 probes | the input limit behind "about 32.8k tokens" |
 
@@ -56,3 +57,26 @@ items.
 | `2026-09-25/domain-gpt-5.6.json` | OpenAI gpt-5.6 | 6 scenarios × 4 layouts × 3 repeats × 24 turns | corrected scenarios; latency and compile time recorded |
 | `2026-09-25/domain-claude-sonnet-5-replication.json` | claude-sonnet-5 via OpenRouter | same | replication with latency recorded; claims rerun separately after credits ran out (`meta.note`) |
 | `2026-09-25/domain-gpt-5.6-run1.json` | OpenAI gpt-5.6 | same | first run: costs valid, answers confounded by verification requests (see `meta.note`) |
+
+Domain table costs in the main README sum per-scenario means over repetitions; accuracy counts cover all
+repetitions. To pool the two compatible Claude runs, preserving all six repetitions per scenario:
+
+```bash
+python scripts/live_domain_sessions.py --analyze \
+  results/2026-09-25/domain-claude-sonnet-5.json \
+  results/2026-09-25/domain-claude-sonnet-5-replication.json
+```
+
+The output includes explicit cost-basis metadata, repetition counts, latency observation counts, and
+`totals_all_repeats` for pooled cost and accuracy on the same denominator. Incompatible model settings or price
+multipliers and duplicate input paths are rejected. Do not pool the confounded GPT run with the corrected run.
+
+Reproduce the current calibration labels without paid calls:
+
+```bash
+python scripts/live_jev_calibration.py --relabel \
+  results/2026-09-25/jev-calibration-haiku-4-5-question-bank.json
+```
+
+The v3 artifact records its normalization policy and the relabel script's SHA-256. Relabel timestamps may differ;
+answers, Jev scores, labels, metrics and validation records are reproducible from the original file.
