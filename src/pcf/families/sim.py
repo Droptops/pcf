@@ -72,6 +72,19 @@ class SimCompiler(ContextCompiler):
         self.tokenizer = tokenizer
 
     def render(self, ctx: Context, breakpoints: list[int]) -> dict[str, Any]:
+        result = self._result([], [], [])
+        for result in self._steps(ctx, breakpoints):
+            pass
+        return result
+
+    def render_prefixes(self, ctx):
+        return self._steps(ctx, [])
+
+    def _result(self, tools: list, system: list, messages: list) -> dict[str, Any]:
+        return {"model": self.descriptor.model_id, "tools": tools, "system": system, "messages": messages}
+
+    def _steps(self, ctx: Context, breakpoints: list[int]):
+        """The request after each segment; lists only grow."""
         marks = set(breakpoints)
         tools: list[Any] = []
         system: list[dict[str, Any]] = []
@@ -91,7 +104,7 @@ class SimCompiler(ContextCompiler):
                     messages.append(msg)
             else:  # data and user
                 messages.append({"role": "user", "content": seg.content, **({"cache_mark": True} if i in marks else {})})
-        return {"model": self.descriptor.model_id, "tools": tools, "system": system, "messages": messages}
+            yield self._result(tools, system, messages)
 
 
 @dataclass
@@ -111,19 +124,22 @@ class SimEngine:
     def run(self, ctx: Context, now: float) -> tuple[Usage, CompiledPrompt]:
         compiled = self.compiler.compile(ctx)
         key = self.compiler.cache_key_for(self.descriptor)
-        cum = compiled.cum_tokens
-        hit = self.cache.peek(key, compiled.native_chain, now, namespace=ctx.cache_namespace, eligible_indices=compiled.lookup_indices)
-        if hit >= 0:
-            self.cache.touch(key, compiled.native_chain[hit], now, namespace=ctx.cache_namespace)
-        warm = cum[hit] if hit >= 0 else 0
+        # Reads and writes use the prefix each marker actually covers (its native hash and token count), which
+        # for an OpenAI history marker ends before the segment's trailing assistant items.
+        candidates = compiled.read_candidates()
+        found = self.cache.peek(key, [digest for _, digest, _ in candidates], now, namespace=ctx.cache_namespace)
+        warm = candidates[found][0] if found >= 0 else 0
+        if found >= 0:
+            self.cache.touch(key, candidates[found][1], now, namespace=ctx.cache_namespace)
 
-        # Write an entry at every breakpoint past the hit whose prefix meets the vendor minimum.
-        last_written = hit
-        for b in compiled.breakpoints:
-            if b > hit and cum[b] >= self.descriptor.min_cacheable_tokens:
-                self.cache.write(key, compiled.native_chain[b], cum[b], now, namespace=ctx.cache_namespace, ttl_seconds=self.descriptor.ttl_seconds)
-                last_written = b
-        created = (cum[last_written] if last_written >= 0 else 0) - warm
+        # Write an entry at every marker past the hit whose prefix meets the vendor minimum.
+        written = warm
+        for _, digest, tokens in compiled.marker_prefixes:
+            if tokens > warm and tokens >= self.descriptor.min_cacheable_tokens:
+                self.cache.write(key, digest, tokens, now, namespace=ctx.cache_namespace,
+                                 ttl_seconds=self.descriptor.ttl_seconds)
+                written = max(written, tokens)
+        created = written - warm
         after = compiled.total_tokens - warm - created
         return Usage(cache_read_input_tokens=warm, cache_creation_input_tokens=created, input_tokens=after), compiled
 

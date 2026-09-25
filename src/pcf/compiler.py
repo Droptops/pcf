@@ -1,10 +1,11 @@
 """Compilation and conservative, explicitly labelled cache-cost estimates."""
 from __future__ import annotations
 
+import hashlib
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Iterator, Protocol
 
 from .cache import PrefixCache
 from .descriptor import CacheDescriptor, hash_object
@@ -64,6 +65,17 @@ class CompiledPrompt:
     cache_namespace: str
     lookup_indices: tuple[int, ...]
     token_count_is_estimate: bool
+    # (segment index, native prefix hash, prefix tokens) for each marker: the prefix the marker actually caches,
+    # which can end inside its segment (an OpenAI history marker sits before trailing assistant items)
+    marker_prefixes: tuple[tuple[int, str, int], ...] = ()
+
+    def read_candidates(self) -> list[tuple[int, str, int]]:
+        """(prefix tokens, native hash, last whole segment) a cache read can match, shortest first.
+
+        At a marker the readable prefix is the one the marker writes; elsewhere it ends at the segment."""
+        cum = self.cum_tokens
+        marks = {i: (tokens, digest, i if tokens >= cum[i] else i - 1) for i, digest, tokens in self.marker_prefixes}
+        return sorted({marks.get(i, (cum[i], self.native_chain[i], i)) for i in self.lookup_indices})
 
     @property
     def request(self) -> dict[str, Any]:
@@ -163,6 +175,75 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     return sorted({*keep, *(rest[-room:] if room else [])})
 
 
+def _jcs(value: Any) -> str:
+    return canonical_bytes(value).decode("utf-8")
+
+
+class _PrefixEncoder:
+    """RFC 8785 JSON of successive native prefixes, reusing each list element's encoding and hashing state.
+
+    Valid when each prefix's lists extend the previous prefix's lists and only their last element may have
+    changed; ``ContextCompiler.render_prefixes`` overrides promise that. ``text`` is byte-identical to
+    ``canonical_bytes`` of the same object and ``digest`` to ``hash_object(domain, ...)``.
+    """
+
+    def __init__(self, domain: str | None = None) -> None:
+        self.encoded: dict[str, list[str]] = {}
+        self.chunks: list[str] = []
+        self.hasher = hashlib.sha256(domain.encode() + b"\x00") if domain is not None else None
+        self.fed = 0  # chunks[:fed] are already in the hasher
+        self.domain = domain
+
+    def update(self, value: dict) -> None:
+        chunks, settled = ["{"], None
+        for n, key in enumerate(sorted(value, key=lambda k: k.encode("utf-16-be"))):  # JCS: UTF-16 key order
+            head, item = ("," if n else "") + _jcs(key) + ":", value[key]
+            if isinstance(item, list):
+                done = self.encoded.setdefault(key, [])
+                keep = max(0, min(len(done), len(item)) - 1)  # re-encode the last element: it may have grown
+                del done[keep:]
+                done.extend(("," if i else "") + _jcs(x) for i, x in enumerate(item[keep:], keep))
+                chunks.append(head + "[")
+                if settled is None:  # the first list's earlier elements cannot change in a later prefix
+                    settled = len(chunks) + max(0, len(done) - 1)
+                chunks.extend(done)
+                chunks.append("]")
+            else:
+                chunks.append(head + _jcs(item))
+        chunks.append("}")
+        if self.hasher is not None:
+            same = _common_prefix(self.chunks, chunks)
+            if same < self.fed:  # an assumption failed: rebuild the hashing state
+                self.hasher, self.fed = hashlib.sha256(self.domain.encode() + b"\x00"), 0
+            target = min(same if settled is None else settled, len(chunks))
+            if target > self.fed:
+                self.hasher.update("".join(chunks[self.fed:target]).encode())
+                self.fed = target
+        self.chunks = chunks
+
+    @property
+    def text(self) -> str:
+        return "".join(self.chunks)
+
+    @property
+    def digest(self) -> str:
+        h = self.hasher.copy()
+        h.update("".join(self.chunks[self.fed:]).encode())
+        return "sha256:" + h.hexdigest()
+
+
+def _common_prefix(a: list[str], b: list[str]) -> int:
+    """Length of the longest common leading run of two chunk lists (C-speed slice comparisons)."""
+    lo, hi = 0, min(len(a), len(b))
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if a[:mid] == b[:mid]:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
+
+
 class ContextCompiler(ABC):
     descriptor: CacheDescriptor
     tokenizer: Tokenizer
@@ -184,7 +265,22 @@ class ContextCompiler(ABC):
 
     def covered_tokens(self, ctx: Context, index: int, cum_tokens: list[int]) -> int:
         """Prefix tokens a marker on segment ``index`` caches; adapters whose marker sits inside a segment trim it."""
-        return cum_tokens[index]
+        return self.marker_prefix(ctx, index, None, cum_tokens)[1]
+
+    def marker_prefix(self, ctx: Context, index: int, native_hash: str | None,
+                      cum_tokens: list[int]) -> tuple[str | None, int]:
+        """(native hash, tokens) of the prefix a marker on segment ``index`` caches; by default the whole prefix
+        through that segment. Adapters whose marker sits inside a segment return the shorter prefix."""
+        return native_hash, cum_tokens[index]
+
+    def render_prefixes(self, ctx: Context) -> Iterator[dict[str, Any]]:
+        """The unmarked request for each prefix ``ctx.segments[:end]``, in order.
+
+        Each item is read before the next is produced. An override may yield live accumulators instead of fresh
+        copies, provided each prefix's lists extend the previous prefix's lists with only their last element
+        changed; compilation then reuses earlier encodings (see ``_PrefixEncoder``)."""
+        for end in range(1, len(ctx.segments) + 1):
+            yield self.render(Context(ctx.segments[:end], ctx.session_id, ctx.cache_namespace), [])
 
     def native_input(self, request: dict) -> dict:
         """Subclasses must include every input-affecting field, excluding generation controls."""
@@ -224,23 +320,33 @@ class ContextCompiler(ABC):
         ctx.validate_tool_history(require_resolved=True)
         breakpoints = choose_breakpoints(ctx, self.descriptor.max_breakpoints, lambda i: self.supports_boundary(ctx, i),
                                          history_slots=self.history_slots)
-        native, positions, counts = [], [], []
+        incremental = type(self).render_prefixes is not ContextCompiler.render_prefixes
+        hashes, counts = _PrefixEncoder("pcf:native:0.2"), _PrefixEncoder()
+        native, positions, sizes = [], [], []
         previous_count = 0
-        for end in range(1, len(ctx.segments) + 1):
-            prefix = Context(ctx.segments[:end], ctx.session_id, ctx.cache_namespace)
-            rendered = self.render(prefix, [])
+        for rendered in self.render_prefixes(ctx):
             native_input = self.native_input(rendered)
-            native.append(hash_object("pcf:native:0.2", native_input))
+            if incremental:  # same bytes as canonical_bytes, without re-encoding or re-hashing the shared prefix
+                hashes.update(native_input)
+                digest = hashes.digest
+                payload = {k: v for k, v in native_input.items() if v not in (None, [], {}, "")}
+                if payload:
+                    counts.update(payload)
+                cumulative = integer(self.tokenizer.count(counts.text), "token count") if payload else 0
+            else:
+                digest, cumulative = hash_object("pcf:native:0.2", native_input), self.native_token_count(native_input)
+            native.append(digest)
             positions.append(self.native_positions(rendered))
-            cumulative = self.native_token_count(native_input)
             if cumulative < previous_count:
                 raise ValueError("token counter must be monotonic on native input prefixes")
-            counts.append(cumulative - previous_count)
+            sizes.append(cumulative - previous_count)
             previous_count = cumulative
-        return CompiledPrompt(self.descriptor, canonical_bytes(self.render(ctx, breakpoints)), tuple(counts),
+        cum = list(_accumulate(sizes))
+        markers = tuple((b, *self.marker_prefix(ctx, b, native[b], cum)) for b in breakpoints)
+        return CompiledPrompt(self.descriptor, canonical_bytes(self.render(ctx, breakpoints)), tuple(sizes),
                               tuple(breakpoints), tuple(ctx.prefix_chain()), tuple(native), self.cache_key,
                               ctx.cache_namespace, tuple(self.lookup_boundaries(breakpoints, positions)),
-                              self.tokenizer.is_estimate or self.descriptor.identity_kind != "simulated")
+                              self.tokenizer.is_estimate or self.descriptor.identity_kind != "simulated", markers)
 
     def warmth(self, ctx: Context, cache: PrefixCache, now: float) -> Warmth:
         number(now, "now")
@@ -249,17 +355,29 @@ class ContextCompiler(ABC):
         # cache inventory. Never promote a caller's local dictionary into knowledge
         # of a provider's cache. Native reuse is unknown until the provider responds.
         simulated = self.descriptor.identity_kind == "simulated"
-        hit = cache.peek(compiled.cache_key, compiled.native_chain, now, namespace=ctx.cache_namespace,
-                         eligible_indices=compiled.lookup_indices) if simulated else -1
-        warm = compiled.cum_tokens[hit] if hit >= 0 else 0
+        warm, hit = read_hit(compiled, cache, now) if simulated else (0, -1)
         # An implicit breakpoint's position is unknown; assume the most it could write (the whole prompt).
-        implicit = (len(ctx.segments) - 1,) if self.implicit_breakpoint and not compiled.breakpoints else ()
-        cum, covered = compiled.cum_tokens, warm
-        for index in compiled.breakpoints or implicit:
-            reach = self.covered_tokens(ctx, index, cum) if index in compiled.breakpoints else cum[index]
-            if index > hit and reach >= self.descriptor.min_cacheable_tokens:
-                covered = max(covered, reach)
+        cum = compiled.cum_tokens
+        reaches = [tokens for _, _, tokens in compiled.marker_prefixes]
+        if self.implicit_breakpoint and not compiled.breakpoints:
+            reaches = [cum[-1]] if cum else []
+        covered = max([warm] + [r for r in reaches if r > warm and r >= self.descriptor.min_cacheable_tokens])
         written = covered - warm
         cold = compiled.total_tokens - warm
         return Warmth(hit + 1, warm, cold, written, cold - written,
                       "simulated" if simulated else "unknown", now)
+
+
+def _accumulate(sizes):
+    total = 0
+    for n in sizes:
+        total += n
+        yield total
+
+
+def read_hit(compiled: CompiledPrompt, cache: PrefixCache, now: float) -> tuple[int, int]:
+    """(warm tokens, last warm segment index) for the longest live prefix a read can match, or (0, -1)."""
+    candidates = compiled.read_candidates()
+    found = cache.peek(compiled.cache_key, [digest for _, digest, _ in candidates], now,
+                       namespace=compiled.cache_namespace)
+    return (candidates[found][0], candidates[found][2]) if found >= 0 else (0, -1)

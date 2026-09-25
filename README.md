@@ -137,10 +137,14 @@ PCF routes a request to a cheaper model only when an external confidence scorer,
 says the cheaper model will answer well. We tested the third-party scorer Jev (`typesafe/jev-1.13-20260917` via
 OpenRouter) with `scripts/live_jev_calibration.py`, and the gate correctly refused it.
 
-On 450 distinct question-bank contexts, claude-haiku-4-5 answered 439 (97.6%) correctly. Jev scored the 369
-contexts it could score 0.19-0.55 (mean 0.30), and scored the 11 failures 0.28-0.38, no lower than the successes
-(AUC 0.33). No context reaches 0.7 and calibration error is about 0.67, so validation fails at every threshold and a
-Jev-gated router falls back to the default model. Jev rejects requests above about 32.8k of its input tokens
+Jev is asked whether an answer is acceptable: correct, following the application instructions and satisfying the
+request. On 450 distinct question-bank contexts, claude-haiku-4-5 gave the right value 439 times (97.6%), but only
+253 answers (56.2%) were acceptable under that rubric: the rest also copied the history's filler or ran long when
+the question asked for a bare value. Against acceptance labels (`acceptance-v2`, from the saved answers and scores
+by `--relabel`), Jev scored the 369 contexts it could score 0.19-0.55 and scored rejected answers slightly higher
+than accepted ones (means 0.32 and 0.29, AUC 0.38). No context reaches 0.7 and calibration error is about 0.32, so
+validation fails at every threshold and a Jev-gated router falls back to the default model. (The first write-up
+scored Jev against value correctness alone: AUC 0.33, calibration error about 0.67.) Jev rejects requests above about 32.8k of its input tokens
 (`max_tokens_exceeded`; here, compiled prompts above about 18.7k estimated tokens, 81 of 450), which the router
 treats as confidence unavailable. Score noise is small (retest SD about 0.011, no decision flips at 0.8). The
 default model id `jev-latest` is never eligible for validation; pass a dated snapshot id. The Jev transport requires

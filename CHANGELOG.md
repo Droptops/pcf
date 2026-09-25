@@ -78,6 +78,21 @@ validation records.
 
 ### Fixed
 
+- Router: a validated confidence source that returns NaN, infinity, an out-of-range or non-numeric score for one
+  request no longer aborts routing; the candidate is treated as confidence unavailable for that request
+  (`confidence_error` records why) and the router picks another candidate or the fallback.
+- OpenAI `history_from_response` rejects text, or a new call turn, that arrives before earlier calls' outputs,
+  which it previously accepted as history `Context` then rejected. Every accepted conversion of up to five output
+  items (and of Anthropic content blocks) is tested to form valid history once pending calls are resolved.
+- Simulated caching follows each marker's actual prefix: `CompiledPrompt.marker_prefixes` records the native
+  hash and token count a marker covers (an OpenAI history marker stops before the segment's trailing assistant
+  items), and `SimEngine` and `warmth()` read and write that prefix. Previously a simulator run with an OpenAI
+  compiler wrote and matched the whole segment. `covered_tokens()` now comes from `marker_prefix()`.
+- Compilation no longer re-renders and re-encodes every prefix: the built-in compilers render all prefixes in one
+  pass (`render_prefixes`), and their canonical JSON and hashes reuse the shared prefix. Hashes, token counts and
+  requests are unchanged (tested against rendering every prefix from scratch); 400 history segments compile in
+  about 0.1 s instead of about 4 s. Other compilers keep the exact per-prefix path.
+
 - Jev's HTTPS transport rejects all redirects, so bearer credentials cannot follow a different origin or an HTTP
   downgrade; redirects trigger confidence fallback. Malformed or truncated Jev responses fall back instead of
   raising.
@@ -99,9 +114,13 @@ validation records.
 - `scripts/live_question_bank.py` asks paired conflict, cross-module and far-memory questions under each layout,
   with an exact McNemar test.
 - `scripts/live_jev_calibration.py` validates Jev for one candidate on harness contexts and retests score noise.
+  Rows carry `value_correct`, `instruction_compliant` and `label` (both, `acceptance-v2`), matching the rubric Jev
+  is asked about; `--relabel FILE` relabels a saved question-bank run and re-validates from its recorded scores.
+- `scripts/live_domain_sessions.py` runs synthetic healthcare, government and enterprise assistant sessions
+  (`scripts/domain_scenarios.py`) under front, tuned-front, tail and `MemoryPlacer` layouts.
 - Raw results of every run quoted in the README are under `results/`; README summarizes them.
 - CI covers Python 3.11-3.14, lint, offline smoke checks, wheel installation, and a private-session-link check on
-  tracked text and new commits.
+  tracked text, new commits and the pull request title and description (re-run when the description is edited).
 
 ## 0.2.0
 

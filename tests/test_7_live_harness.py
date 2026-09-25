@@ -54,3 +54,18 @@ def test_offline_run_plans_every_arm(provider):
                                          ("claude-opus-5-5", "anthropic/claude-opus-5.5")])
 def test_openrouter_model_names(model, name):
     assert live.openrouter_model(model) == name
+
+
+def test_calibration_labels_separate_value_from_instruction_compliance():
+    import importlib.util
+    import os
+    spec = importlib.util.spec_from_file_location(
+        "jev_calibration", os.path.join(os.path.dirname(__file__), "..", "scripts", "live_jev_calibration.py"))
+    jev = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(jev)
+    assert jev.labels(True, "email") == {"value_correct": 1, "instruction_compliant": 1, "label": 1,
+                                         "labeling": "acceptance-v2"}
+    copied = "email. " + " ".join(f"Order {9000 + k} is on schedule." for k in range(10))
+    assert jev.labels(True, copied)["label"] == 0 and jev.labels(True, copied)["value_correct"] == 1
+    assert jev.labels(True, "x" * 400)["instruction_compliant"] == 0
+    assert jev.labels(False, "phone")["label"] == 0

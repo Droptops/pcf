@@ -170,7 +170,11 @@ class Router:
             score, error = None, None
             if record is not None or self.score_unvalidated:
                 try:
-                    score = number(self.confidence.p_sufficient(ctx, cand), "p_sufficient", maximum=1)
+                    raw = self.confidence.p_sufficient(ctx, cand)
+                    try:
+                        score = number(raw, "p_sufficient", maximum=1)
+                    except ValueError as exc:  # NaN, out of range or not a number: unusable, like no score
+                        raise ConfidenceUnavailable(f"invalid confidence score: {exc}") from None
                 except ConfidenceUnavailable as exc:
                     record, error = None, str(exc)
             p = score if record is not None else None

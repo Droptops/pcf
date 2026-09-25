@@ -185,7 +185,9 @@ def _compile_with_breakpoint_on_last_segment(self, ctx):
     from pcf.segments import canonical_bytes
     compiled = _original_compile(self, ctx)
     bp = [len(ctx.segments) - 1]
-    return replace(compiled, request_json=canonical_bytes(self.render(ctx, bp)), breakpoints=tuple(bp))
+    markers = tuple((b, compiled.native_chain[b], compiled.cum_tokens[b]) for b in bp)
+    return replace(compiled, request_json=canonical_bytes(self.render(ctx, bp)), breakpoints=tuple(bp),
+                   marker_prefixes=markers)
 
 
 def test_breakpoints_never_land_on_unstable_segments(base_ctx):

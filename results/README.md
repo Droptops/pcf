@@ -44,5 +44,6 @@ items.
 | File | Scorer / candidate | Contexts | Notes |
 |---|---|---|---|
 | `2026-09-25/jev-calibration-haiku-4-5-question-bank.json` | Jev `typesafe/jev-1.13-20260917` / claude-haiku-4-5 | 450 distinct (369 scorable) + 60 × 5 retest | conflict items as tail; per-row Jev errors recorded |
+| `2026-09-25/jev-calibration-haiku-4-5-question-bank-acceptance-v2.json` | same | same 450 | relabeled offline (`--relabel`): value_correct, instruction_compliant and label = both; re-validated from the recorded scores |
 | `2026-09-25/jev-calibration-haiku-4-5.json` | same | 240 placement contexts, 117 distinct | superseded: session tags made repeats look unique (see `meta.note`) |
 | `2026-09-25/jev-input-limit-probe.json` | Jev via OpenRouter | 10 probes | the input limit behind "about 32.8k tokens" |
