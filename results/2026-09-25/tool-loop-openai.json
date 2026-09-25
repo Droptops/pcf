@@ -1,0 +1,234 @@
+{
+ "provider": "openai",
+ "model": "gpt-5.6",
+ "paid": true,
+ "rows": [
+  {
+   "request": "q0",
+   "marked": [
+    "s"
+   ],
+   "est_tokens": 2130,
+   "cached": 0,
+   "written": 1810,
+   "uncached": 100
+  },
+  {
+   "request": "r0",
+   "marked": [
+    "s",
+    "q0",
+    "r0"
+   ],
+   "est_tokens": 2344,
+   "cached": 1810,
+   "written": 235,
+   "uncached": 89,
+   "reuse": 1.0
+  },
+  {
+   "request": "q1",
+   "marked": [
+    "s",
+    "q0",
+    "r0"
+   ],
+   "est_tokens": 2382,
+   "cached": 2045,
+   "written": 0,
+   "uncached": 117,
+   "reuse": 1.0
+  },
+  {
+   "request": "r1",
+   "marked": [
+    "s",
+    "r0",
+    "q1",
+    "r1"
+   ],
+   "est_tokens": 2596,
+   "cached": 2045,
+   "written": 252,
+   "uncached": 89,
+   "reuse": 1.0
+  },
+  {
+   "request": "q2",
+   "marked": [
+    "s",
+    "r0",
+    "q1",
+    "r1"
+   ],
+   "est_tokens": 2634,
+   "cached": 2297,
+   "written": 0,
+   "uncached": 117,
+   "reuse": 1.0
+  },
+  {
+   "request": "r2",
+   "marked": [
+    "s",
+    "r1",
+    "q2",
+    "r2"
+   ],
+   "est_tokens": 2848,
+   "cached": 2297,
+   "written": 252,
+   "uncached": 89,
+   "reuse": 1.0
+  },
+  {
+   "request": "q3",
+   "marked": [
+    "s",
+    "r1",
+    "q2",
+    "r2"
+   ],
+   "est_tokens": 2885,
+   "cached": 2549,
+   "written": 0,
+   "uncached": 117,
+   "reuse": 1.0
+  },
+  {
+   "request": "r3",
+   "marked": [
+    "s",
+    "r2",
+    "q3",
+    "r3"
+   ],
+   "est_tokens": 3099,
+   "cached": 2549,
+   "written": 252,
+   "uncached": 89,
+   "reuse": 1.0
+  },
+  {
+   "request": "q4",
+   "marked": [
+    "s",
+    "r2",
+    "q3",
+    "r3"
+   ],
+   "est_tokens": 3137,
+   "cached": 2801,
+   "written": 0,
+   "uncached": 117,
+   "reuse": 1.0
+  },
+  {
+   "request": "r4",
+   "marked": [
+    "s",
+    "r3",
+    "q4",
+    "r4"
+   ],
+   "est_tokens": 3351,
+   "cached": 2801,
+   "written": 252,
+   "uncached": 89,
+   "reuse": 1.0
+  },
+  {
+   "request": "q5",
+   "marked": [
+    "s",
+    "r3",
+    "q4",
+    "r4"
+   ],
+   "est_tokens": 3389,
+   "cached": 3053,
+   "written": 0,
+   "uncached": 117,
+   "reuse": 1.0
+  },
+  {
+   "request": "r5",
+   "marked": [
+    "s",
+    "r4",
+    "q5",
+    "r5"
+   ],
+   "est_tokens": 3603,
+   "cached": 3053,
+   "written": 252,
+   "uncached": 89,
+   "reuse": 1.0
+  },
+  {
+   "request": "q6",
+   "marked": [
+    "s",
+    "r4",
+    "q5",
+    "r5"
+   ],
+   "est_tokens": 3641,
+   "cached": 3305,
+   "written": 0,
+   "uncached": 117,
+   "reuse": 1.0
+  },
+  {
+   "request": "r6",
+   "marked": [
+    "s",
+    "r5",
+    "q6",
+    "r6"
+   ],
+   "est_tokens": 3855,
+   "cached": 3305,
+   "written": 252,
+   "uncached": 89,
+   "reuse": 1.0
+  },
+  {
+   "request": "q7",
+   "marked": [
+    "s",
+    "r5",
+    "q6",
+    "r6"
+   ],
+   "est_tokens": 3893,
+   "cached": 3557,
+   "written": 0,
+   "uncached": 117,
+   "reuse": 1.0
+  },
+  {
+   "request": "r7",
+   "marked": [
+    "s",
+    "r6",
+    "q7",
+    "r7"
+   ],
+   "est_tokens": 4107,
+   "cached": 3557,
+   "written": 252,
+   "uncached": 89,
+   "reuse": 1.0
+  }
+ ],
+ "ok": true,
+ "meta": {
+  "date": "2026-09-25",
+  "script": "scripts/live_tool_loop.py",
+  "script_commit": "f30c59a + script",
+  "iterations": 8,
+  "thinking": null,
+  "route": "OpenAI Responses API"
+ }
+}

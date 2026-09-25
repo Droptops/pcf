@@ -46,6 +46,9 @@ Fixes from coding reviews. Portable segment hashes and PCF document wire format 
   `stable`; mark such modules `stable=False` or place them after history. This replaces an interim rule that kept
   the first anchor, which on Anthropic protected `tools` instead of `system` and on OpenAI made per-message tool
   loops re-bill all history every request.
+- `scripts/live_tool_loop.py`: a scripted tool loop ([user, call] and [tool] segments, four tail memory modules)
+  that checks each request reads back the previous request's cached prefix. Live on 2026-09-25 every request
+  after the first read back 100% on gpt-5.6 and on claude-sonnet-5 via OpenRouter (`results/2026-09-25/`).
 - Tail memory (memory after history) never takes a breakpoint, whatever its `stable` flag: an entry there would be
   rewritten every turn and never read, and several tail modules could crowd history out of the budget.
 - `MemoryPlacer.split`: memory with instruction authority always stays in front, and tail copies keep their

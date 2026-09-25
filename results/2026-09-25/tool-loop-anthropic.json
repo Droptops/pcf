@@ -1,0 +1,237 @@
+{
+ "provider": "anthropic",
+ "model": "claude-sonnet-5",
+ "paid": true,
+ "rows": [
+  {
+   "request": "q0",
+   "marked": [
+    "t",
+    "s"
+   ],
+   "est_tokens": 2081,
+   "cached": 0,
+   "written": 2853,
+   "uncached": 205
+  },
+  {
+   "request": "r0",
+   "marked": [
+    "t",
+    "s",
+    "q0",
+    "r0"
+   ],
+   "est_tokens": 2300,
+   "cached": 2853,
+   "written": 416,
+   "uncached": 127,
+   "reuse": 1.0
+  },
+  {
+   "request": "q1",
+   "marked": [
+    "s",
+    "q0",
+    "r0",
+    "a0"
+   ],
+   "est_tokens": 2343,
+   "cached": 3269,
+   "written": 19,
+   "uncached": 135,
+   "reuse": 1.0
+  },
+  {
+   "request": "r1",
+   "marked": [
+    "s",
+    "a0",
+    "q1",
+    "r1"
+   ],
+   "est_tokens": 2563,
+   "cached": 3288,
+   "written": 346,
+   "uncached": 127,
+   "reuse": 1.0
+  },
+  {
+   "request": "q2",
+   "marked": [
+    "s",
+    "q1",
+    "r1",
+    "a1"
+   ],
+   "est_tokens": 2605,
+   "cached": 3634,
+   "written": 19,
+   "uncached": 135,
+   "reuse": 1.0
+  },
+  {
+   "request": "r2",
+   "marked": [
+    "s",
+    "a1",
+    "q2",
+    "r2"
+   ],
+   "est_tokens": 2825,
+   "cached": 3653,
+   "written": 346,
+   "uncached": 127,
+   "reuse": 1.0
+  },
+  {
+   "request": "q3",
+   "marked": [
+    "s",
+    "q2",
+    "r2",
+    "a2"
+   ],
+   "est_tokens": 2867,
+   "cached": 3999,
+   "written": 19,
+   "uncached": 135,
+   "reuse": 1.0
+  },
+  {
+   "request": "r3",
+   "marked": [
+    "s",
+    "a2",
+    "q3",
+    "r3"
+   ],
+   "est_tokens": 3087,
+   "cached": 4018,
+   "written": 346,
+   "uncached": 127,
+   "reuse": 1.0
+  },
+  {
+   "request": "q4",
+   "marked": [
+    "s",
+    "q3",
+    "r3",
+    "a3"
+   ],
+   "est_tokens": 3130,
+   "cached": 4364,
+   "written": 19,
+   "uncached": 135,
+   "reuse": 1.0
+  },
+  {
+   "request": "r4",
+   "marked": [
+    "s",
+    "a3",
+    "q4",
+    "r4"
+   ],
+   "est_tokens": 3350,
+   "cached": 4383,
+   "written": 346,
+   "uncached": 127,
+   "reuse": 1.0
+  },
+  {
+   "request": "q5",
+   "marked": [
+    "s",
+    "q4",
+    "r4",
+    "a4"
+   ],
+   "est_tokens": 3392,
+   "cached": 4729,
+   "written": 19,
+   "uncached": 135,
+   "reuse": 1.0
+  },
+  {
+   "request": "r5",
+   "marked": [
+    "s",
+    "a4",
+    "q5",
+    "r5"
+   ],
+   "est_tokens": 3612,
+   "cached": 4748,
+   "written": 346,
+   "uncached": 127,
+   "reuse": 1.0
+  },
+  {
+   "request": "q6",
+   "marked": [
+    "s",
+    "q5",
+    "r5",
+    "a5"
+   ],
+   "est_tokens": 3655,
+   "cached": 5094,
+   "written": 19,
+   "uncached": 135,
+   "reuse": 1.0
+  },
+  {
+   "request": "r6",
+   "marked": [
+    "s",
+    "a5",
+    "q6",
+    "r6"
+   ],
+   "est_tokens": 3874,
+   "cached": 5113,
+   "written": 346,
+   "uncached": 127,
+   "reuse": 1.0
+  },
+  {
+   "request": "q7",
+   "marked": [
+    "s",
+    "q6",
+    "r6",
+    "a6"
+   ],
+   "est_tokens": 3917,
+   "cached": 5459,
+   "written": 19,
+   "uncached": 135,
+   "reuse": 1.0
+  },
+  {
+   "request": "r7",
+   "marked": [
+    "s",
+    "a6",
+    "q7",
+    "r7"
+   ],
+   "est_tokens": 4137,
+   "cached": 5478,
+   "written": 346,
+   "uncached": 127,
+   "reuse": 1.0
+  }
+ ],
+ "ok": true,
+ "meta": {
+  "date": "2026-09-25",
+  "script": "scripts/live_tool_loop.py",
+  "script_commit": "f30c59a + script",
+  "iterations": 8,
+  "thinking": "disabled",
+  "route": "OpenRouter /api/v1/messages pinned to Anthropic"
+ }
+}
