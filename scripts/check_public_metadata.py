@@ -3,8 +3,9 @@
 
 PCF_BASE_SHA sets the exclusive commit boundary in CI. Without it, check HEAD.
 Historical commits before that boundary are outside this prevention check.
-In GitHub Actions, the pull request's title and description come from the event payload (GITHUB_EVENT_PATH);
-CI re-runs the check when a description is edited.
+In GitHub Actions, the pull request's title and description come from PCF_PR_JSON when set (the pull request as
+the API returns it at run time, so re-running a failed check sees an edited description), else from the event
+payload (GITHUB_EVENT_PATH). CI also re-runs the check when a description is edited.
 Locations are reported without printing the matching private URL into CI logs.
 """
 from __future__ import annotations
@@ -30,12 +31,17 @@ def locations(label, text):
             if SESSION_LINK.search(line)]
 
 
-def pull_request_findings(event_path: str) -> list[str]:
-    """Findings in the title and description of the pull request an Actions event names, if any."""
-    if not event_path or not os.path.isfile(event_path):
+def pull_request_findings(event_path: str, pr_path: str = "") -> list[str]:
+    """Findings in the title and description of the pull request: the live copy in ``pr_path`` if given, else the
+    one the Actions event names, if any."""
+    if pr_path:
+        with open(pr_path, encoding="utf-8") as handle:
+            pr = json.load(handle)
+    elif event_path and os.path.isfile(event_path):
+        with open(event_path, encoding="utf-8") as handle:
+            pr = json.load(handle).get("pull_request") or {}
+    else:
         return []
-    with open(event_path, encoding="utf-8") as handle:
-        pr = json.load(handle).get("pull_request") or {}
     number = pr.get("number", "?")
     return [*locations(f"pull request #{number} title", pr.get("title") or ""),
             *locations(f"pull request #{number} description", pr.get("body") or "")]
@@ -61,7 +67,7 @@ def main():
     commits = git("rev-list", f"{base}..HEAD").splitlines() if base and set(base) != {"0"} else ["HEAD"]
     for commit in commits:
         findings.extend(locations(f"commit {commit[:12]}", git("show", "-s", "--format=%B", commit)))
-    findings.extend(pull_request_findings(os.environ.get("GITHUB_EVENT_PATH", "")))
+    findings.extend(pull_request_findings(os.environ.get("GITHUB_EVENT_PATH", ""), os.environ.get("PCF_PR_JSON", "")))
     if findings:
         print("\n".join(findings))
         return 1

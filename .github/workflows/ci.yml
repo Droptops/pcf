@@ -20,14 +20,26 @@ jobs:
     name: Public metadata
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Fetch the pull request as it is now
+        # The event payload freezes the description at trigger time; re-running this job after removing a link
+        # must see the edited text.
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.url }}
+        run: gh api "$PR_URL" > "$RUNNER_TEMP/pull-request.json"
       - name: Check public files, new commit messages and the pull request description
         env:
           PCF_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PCF_PR_JSON: ${{ github.event_name == 'pull_request' && format('{0}/pull-request.json', runner.temp) || '' }}
         run: python3 scripts/check_public_metadata.py
 
   test:
