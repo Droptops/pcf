@@ -86,6 +86,5 @@ Python version (the metrics use correctly rounded summation).
 
 `2026-09-25/offline-scaling-validation.json.gz` contains 168 deterministic simulated sessions plus 180 fleet
 first requests; `offline-scaling-summary.json` is the compact summary. These are not live provider observations.
-See [`docs/SCALING_VALIDATION.md`](../docs/SCALING_VALIDATION.md) and [`docs/GROK_TEST_REPORT.md`](../docs/GROK_TEST_REPORT.md)
-for controls, reproduction and the mismatch with the known 24-turn live savings. API credentials were unavailable;
-live validation remains blocked.
+See [`docs/SCALING_VALIDATION.md`](../docs/SCALING_VALIDATION.md) for controls, reproduction, the mismatch with
+the recorded 24-turn live savings and the live 60-turn check.

@@ -12,6 +12,7 @@ import hashlib
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -92,11 +93,15 @@ def summarize(runs):
         checkpoints = (24, 60, 120) if run['schedule'] == 'warm' else (60,)
         for n in checkpoints:
             key = (run['profile'], run['schedule'], n)
-            totals = grouped.setdefault(key, {})
-            totals[run['arm']] = totals.get(run['arm'], 0) + sum(r['input_cost_units'] for r in run['rows'][:n])
-    return [{'profile': p, 'schedule': s, 'turns': n, 'summed_scenario_costs': t,
-             'placed_saving_fraction': 1 - t['placed'] / t['front-tuned']}
-            for (p, s, n), t in sorted(grouped.items())]
+            costs = grouped.setdefault(key, {}).setdefault(run['arm'], [])
+            costs.extend(r['input_cost_units'] for r in run['rows'][:n])
+    summary = []
+    for (p, s, n), arms in sorted(grouped.items()):
+        # Correctly rounded sums, so the summary is identical on every supported Python version.
+        t = {arm: math.fsum(costs) for arm, costs in arms.items()}
+        summary.append({'profile': p, 'schedule': s, 'turns': n, 'summed_scenario_costs': t,
+                        'placed_saving_fraction': 1 - t['placed'] / t['front-tuned']})
+    return summary
 
 
 def main():

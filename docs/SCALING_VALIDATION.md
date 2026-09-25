@@ -1,7 +1,12 @@
 # Offline scaling experiment — September 25, 2026
 
-**Live validation is blocked: the execution environment has no OpenAI, OpenRouter, or Anthropic API credentials.**
-This report contains deterministic simulations, not new provider calls, billed dollars, or model quality results.
+This report simulates longer sessions, cache expiry and shared prefixes offline, then checks the 60-turn
+projection against live runs. The simulations are deterministic and make no provider calls; the live check at
+the end does.
+
+**Result:** placement saves more as a warm session grows, and the saving collapses when every turn arrives after
+the cache lifetime. The simulator overpredicts measured savings at both 24 and 60 turns, so its 60- and 120-turn
+percentages are an upper bound, not a forecast.
 
 ## Design
 
@@ -95,19 +100,28 @@ The compressed file contains every simulated request, usage category, input cost
 includes the source revision and script hash. `offline-scaling-summary.json` is a compact extract from that run.
 The synthetic replies are fixed; no model is asked a question, and no API credential is used by this script.
 
-## Live work still required
+## Live check at 60 turns
 
-With runtime credentials configured, the existing paid domain harness can measure warm sessions independently:
+The paid domain harness ran all six scenarios for 60 warm turns, tuned front against placed, 2 repeats per
+scenario, on both providers
+([`domain-gpt-5.6-60turn.json`](../results/2026-09-25/domain-gpt-5.6-60turn.json),
+[`domain-claude-sonnet-5-60turn.json`](../results/2026-09-25/domain-claude-sonnet-5-60turn.json)):
 
 ```bash
-python scripts/live_domain_sessions.py --run --provider openai --model gpt-5.6 \
-  --turns 60 --repeats 3 --arms front-tuned placed
+python scripts/live_domain_sessions.py --run --provider openai --turns 60 --repeats 2 --arms front-tuned placed
+python scripts/live_domain_sessions.py --run --provider anthropic --turns 60 --repeats 2 --arms front-tuned placed
 ```
 
-Repeat at 24 and 120 turns and with `--provider anthropic --model claude-sonnet-5`; capture each JSON output to
-a separate result file. Actual idle-gap and fleet experiments need timed provider requests and controlled shared
-prefixes, which the existing live harness does not yet implement. Do not substitute virtual-time results for
-those experiments. Live quality, total cost including output/retries, and latency remain unvalidated here.
+| Profile | Recorded input saving, 24 turns | Recorded input saving, 60 turns | Offline model, 60 turns |
+| --- | ---: | ---: | ---: |
+| GPT-5.6 | 13.90% | 50.68% | 56.72% |
+| Claude Sonnet 5, five minutes | 12.27% | 46.61% | 60.46% |
 
-The current conclusion is directional support from a cache model, plus evidence that the model needs better
-calibration. The proposed half-cost result at 60 turns is still a hypothesis.
+Savings are input cost over the sums of per-scenario means, at the same assumed multipliers. The gap between
+model and measurement narrows from 6.94 and 14.21 points at 24 turns to 6.04 and 13.85 at 60, so the direction
+holds and the model stays optimistic. Placed answered 720/720 (GPT) and 719/720 (Claude) record lookups
+correctly, against 703 and 652 for tuned front.
+
+Still unmeasured live: 120 turns, idle gaps past the cache lifetime, and shared prefixes across a fleet. The
+last two need timed requests and shared-prefix arms that the live harness does not implement; do not substitute
+virtual-time results for them.
