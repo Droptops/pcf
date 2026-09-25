@@ -35,15 +35,19 @@ POLICY = ("Policy: when the customer's most recent request in this conversation 
 
 
 def item_specs(per_type: int):
-    """(type, final turn, history style) for every item; deterministic."""
+    """(type, final turn, history style) for every item: deterministic and distinct within each type."""
+    styles = ("template", "varied")
+    pools = {
+        # conflict: the record must not change between the customer's request (final - 2) and the question
+        "conflict": [(f, st) for f in range(12, 51) if f % 6 >= 2 for st in styles],
+        "cross": [(f, st) for f in range(10, 41) for st in styles],
+        "far": [(f, st) for f in range(60, 101) for st in styles],
+    }
     specs = []
-    for k in range(per_type):
-        final = 12 + (k * 7) % 29
-        while final % 6 < 2:  # the record must not change between the customer's request and the question
-            final += 1
-        specs.append(("conflict", final, "varied" if k % 2 else "template"))
-        specs.append(("cross", 10 + (k * 5) % 31, "varied" if k % 2 else "template"))
-        specs.append(("far", 60 + (k * 13) % 41, "template" if k % 3 else "varied"))
+    for kind, pool in pools.items():
+        if per_type > len(pool):
+            raise ValueError(f"at most {len(pool)} distinct {kind} items")
+        specs += [(kind, *pool[k * len(pool) // per_type]) for k in range(per_type)]
     return specs
 
 
