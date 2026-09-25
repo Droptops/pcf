@@ -18,6 +18,8 @@ import importlib.util
 import json
 import math
 import os
+import statistics
+import time
 import sys
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -72,15 +74,19 @@ def session(key: str, arm: str, nonce: str, cfg, client=None) -> list[dict]:
         ask, expected = scenario.question(turn)
         ctx = Context([system, *front, *history, *tail, Segment("u", "user", ask.text, stable=False)],
                       cache_namespace=f"{key}-{arm}-{nonce}")
+        started = time.perf_counter()
         compiled = compiler.compile(ctx)
+        compile_ms = round(1000 * (time.perf_counter() - started), 2)
         estimate = compiler.warmth(ctx, PrefixCache(compiler.descriptor.ttl_seconds), 0.0)
         stale = said.get(ask.text)
         row = {"turn": turn, "module": ask.module, "tail": [s.id for s in tail], "expected": expected,
                "stale": stale, "stale_trap": stale is not None and normalize(ask.kind, stale) !=
                normalize(ask.kind, expected), "est_tokens": compiled.total_tokens,
-               "est_written": estimate.cache_creation_tokens}
+               "est_written": estimate.cache_creation_tokens, "compile_ms": compile_ms}
         if client is not None:
+            started = time.perf_counter()
             response, answer, out = placement.call(cfg.provider, client, compiled.request, cfg)
+            out["latency_s"] = round(time.perf_counter() - started, 3)  # request to full response, not streamed
             usage, answer = compiler.usage_from_response(response), answer.strip()
             row.update(cached=usage.cache_read_input_tokens, written=usage.cache_creation_input_tokens,
                        uncached=usage.input_tokens, answer=answer, **out,
@@ -159,8 +165,12 @@ def analyze(paths: list[str]) -> dict:
                                "correct": _sum_frac(s["correct"] for s in agg),
                                "correct_on_stale_traps": _sum_frac(s["correct_on_stale_traps"] for s in agg),
                                "gave_stale": sum(s["gave_stale"] for s in agg)}
-                no_value = [r for key in per["scenarios"] for run in per["runs"][key] for r in run[arm] if not r["value"]]
-                totals[arm]["no_value_given"] = len(no_value)
+                rows = [r for key in per["scenarios"] for run in per["runs"][key] for r in run[arm]]
+                totals[arm]["no_value_given"] = sum(not r["value"] for r in rows)
+                latencies = sorted(r["latency_s"] for r in rows if "latency_s" in r)
+                if latencies:
+                    totals[arm]["latency_s"] = {"median": round(statistics.median(latencies), 2),
+                                                "p90": latencies[int(0.9 * (len(latencies) - 1))]}
         per["totals_of_scenario_means"] = totals
         del per["runs"]
     return out

@@ -213,6 +213,7 @@ to Anthropic upstream.
 | `scripts/` | Offline checks and opt-in paid live experiments |
 | `results/` | Raw JSON behind every published number |
 | `tests/` | Offline test suite |
+| `docs/PILOT.md` | Protocol for testing PCF in one production assistant |
 
 ## Using MemoryPlacer
 
@@ -237,6 +238,12 @@ a zero cache read: by the time usage shows a miss, that request has already rewr
   43/50 with `MemoryPlacer` and 49/50 with all-tail (`MemoryPlacer` against front: exact McNemar p = 0.016). Every
   miss gave the stale record's value. Where users change preferences in conversation, update the memory record, or
   keep that module in front, for small models.
+
+## Next step: a production pilot
+
+The evidence here is scripted or synthetic. [`docs/PILOT.md`](docs/PILOT.md) describes the next test: one real
+assistant, conversations assigned to a tuned baseline or to `MemoryPlacer`, measuring billed cost, latency and
+answer quality, with sample sizes and stop rules set in advance.
 
 ## Status and design limits
 
