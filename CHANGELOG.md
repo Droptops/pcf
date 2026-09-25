@@ -5,7 +5,7 @@
 ### Compatibility
 
 Portable segment hashes are unchanged, and documents without the new fields hash as before. Document acceptance
-changes: tool results require `is_error`, memory may follow history (tail memory), assistant turns may carry
+changes: tool results require `is_error` (which the segment hash covers), memory may follow history (tail memory), assistant turns may carry
 `provider_blocks`, and 0.1-style `tool_use` blocks are rejected, so a 0.2.0 reader rejects some documents this
 version writes (see SPEC "Validation and compatibility"). Compiler cache keys (a new accounting version), simulated
 billing counts, candidate fingerprints and calibration record identities change: regenerate old cache metadata and
@@ -28,7 +28,7 @@ validation records.
   redacted_thinking blocks, OpenAI reasoning items), which `history_from_response` keeps. The matching adapter
   replays them before the turn's text and calls, or drops them (`AnthropicCompiler(thinking_blocks=)`,
   `OpenAICompiler(reasoning_items=)`); other adapters, Jev and the simulator never see them. Cache markers are
-  rejected at any depth. `AnthropicCompiler(thinking=)` sets the request's thinking configuration. Checked live on
+  rejected at any depth, as are non-string block types and empty `provider_blocks` lists (runtime and schema agree). `AnthropicCompiler(thinking=)` sets the request's thinking configuration. Checked live on
   claude-sonnet-5 and gpt-5.6: a tool round replays the captured block and completes, in both modes.
 - `ContextCompiler.covered_tokens()` reports how much of the prefix a marker caches; `warmth()` and router cost use
   it. The OpenAI adapter counts the covered prefix in native units, excluding assistant turns after a history
@@ -49,10 +49,11 @@ validation records.
 
 ### Changed
 
-- Breakpoints over budget keep the last anchor, then reserve history endpoints (3 on OpenAI, 2 on Anthropic and
-  the simulator, never more than the history available), then add the last anchor of the leading tools/system run
-  when the history slots still fit beside it, then fill the rest with newer candidates. A history boundary that
-  leaves a tool call waiting for its result takes no slot. OpenAI tool loops stay flat instead of re-billing all
+- Breakpoints over budget keep the last anchor, then the last anchor of the leading tools/system run when the
+  history endpoints (3 on OpenAI, 2 on Anthropic and the simulator, never more than the history available) still
+  fit beside both anchors, then those history endpoints, then the newest remaining candidates. A history boundary
+  that leaves a tool call waiting for its result takes no slot, unsupported boundaries use no budget, stable user
+  turns after history remain candidates, and a budget of 2 no longer returns every candidate. OpenAI tool loops stay flat instead of re-billing all
   history, and Anthropic protects `system`, not `tools`. On OpenAI, once a request carries 3 or more history
   candidates, the system prompt is not protected from a volatile module left `stable`, and a stable user segment
   after history is not marked: mark such modules `stable=False` or place them after history, and send the latest
@@ -65,12 +66,15 @@ validation records.
 - Token accounting uses cumulative canonical native input, matching cache identity, so splitting or combining
   history segments cannot change billing for the same native prefix. The character-chunk tokenizer's identity
   includes its configuration. Empty `tools`/`history` segments bill zero tokens.
-- Schemas reject what the runtime rejects: empty or whitespace-only strings, empty history turns, duplicate axes,
+- Schemas reject what the runtime rejects: empty or whitespace-only strings (whitespace as Python's `str.strip()`
+  defines it, spelled out so ECMA-262 validators agree), empty history turns, duplicate axes,
   `byte_compat_key` without a complete manifest, and trailing newlines under `$` anchors. Serialized documents may
   no longer carry the 0.1 assistant `tool_use` history form (constructors still migrate it).
 - Anthropic compilation rejects an empty message list and, on the Claude 4.6+ model IDs it lists, a final assistant
-  turn (prefill), raising `UnsupportedRequest`; the router leaves such a candidate out.
-- `PrefixCache` keeps one store-wide event clock, so warmth can no longer report a hit before the entry existed.
+  turn (prefill), raising `UnsupportedRequest`; the router leaves such a candidate out, and raises only when it is
+  the fallback.
+- `PrefixCache` keeps one store-wide event clock: `write`/`touch`/`prune` reject earlier times and `peek` rejects a
+  time before the latest event, so warmth can no longer report a hit before the entry existed.
 
 ### Fixed
 
@@ -96,7 +100,8 @@ validation records.
   with an exact McNemar test.
 - `scripts/live_jev_calibration.py` validates Jev for one candidate on harness contexts and retests score noise.
 - Raw results of every run quoted in the README are under `results/`; README summarizes them.
-- CI covers Python 3.11-3.14, lint, offline smoke checks and wheel installation.
+- CI covers Python 3.11-3.14, lint, offline smoke checks, wheel installation, and a private-session-link check on
+  tracked text and new commits.
 
 ## 0.2.0
 

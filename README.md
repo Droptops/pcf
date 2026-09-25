@@ -19,8 +19,9 @@ Measured live on gpt-5.6 and claude-sonnet-5 (raw data in [`results/`](results/)
 
 - **Memory placed after the conversation history cuts input cost 1.4-3.9x** against the usual layout with memory in
   front, and the gap grows with conversation length (5.3x at 60 turns on gpt-5.6).
-- **It also answers better.** With memory in front, models sometimes repeated an older value stated earlier in the
-  conversation: 6 of 55 such questions on gpt-5.6 and 12 of 55 on Claude. With memory after the history, none.
+- **It also answers better.** With memory in front and varied history, models sometimes repeated an older value
+  stated earlier in the conversation: 6 of 55 such questions on gpt-5.6 and 12 of 55 on Claude. With memory after
+  the history, none.
   In long sessions (60-100 turns), Claude recalled facts 42/50 times with memory in front and 50/50 after the
   history (exact McNemar p = 0.008).
 - **Multi-step tool loops reuse 100% of the previous request's cache** on both providers.
@@ -198,7 +199,7 @@ a zero cache read: by the time usage shows a miss, that request has already rewr
 - One scripted support workload with simple lookup questions graded by value: a cost and regression check, not a
   general quality evaluation.
 - Cache prices are assumed multipliers, not billed dollars. Runs were back to back, so no cache entry expired
-  between turns; idle gaps past the cache lifetime shrink the savings, and `MemoryPlacer`'s edge most.
+  between turns; idle gaps past the cache lifetime shrink the savings, and `MemoryPlacer`'s edge further.
 - Small models: on conflict items, claude-haiku-4-5 followed the customer's request 50/50 with front memory but
   43/50 with `MemoryPlacer` and 49/50 with all-tail (`MemoryPlacer` against front: exact McNemar p = 0.016). Every
   miss gave the stale record's value. Where users change preferences in conversation, update the memory record, or
