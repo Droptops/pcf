@@ -103,7 +103,8 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     turn and never takes a breakpoint. Stability is a hint, not a cache guarantee.
 
     Over budget, the last anchor is kept, then the last anchor of the leading tools/system
-    run when ``history_slots`` endpoints still fit beside both anchors, so one mislabelled
+    run when ``history_slots`` endpoints (or every history candidate, if fewer) still fit
+    beside both anchors, so one mislabelled
     volatile module cannot take the system prompt out of cache. ``history_slots`` is how
     many history endpoints a compiler needs for the next request to name the endpoint this
     request writes: providers that read only at markers present in the request need one
@@ -135,7 +136,7 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     anchor = anchors[-1] if anchors else candidates[0]
     keep = {anchor}
     lead = [i for i in anchors if ctx.segments[i].kind in {"tools", "system"}]
-    if lead and lead[-1] != anchor and max_breakpoints - 2 >= history_slots:
+    if lead and lead[-1] != anchor and max_breakpoints - 2 >= min(history_slots, len(history)):
         keep.add(lead[-1])
     return sorted({*keep, *[i for i in candidates if i not in keep][-(max_breakpoints - len(keep)):]})
 

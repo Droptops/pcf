@@ -435,3 +435,10 @@ def test_scaled_tokenizer_is_deterministic_monotonic_and_has_its_own_identity():
     for bad in (0, -1, float("nan"), True):
         with pytest.raises(ValueError):
             ScaledTokenizer(base, bad)
+
+
+def test_openai_keeps_the_system_anchor_while_history_is_short():
+    modules = [Segment(f"m{k}", "memory", f"module {k}", provenance=f"m{k}") for k in range(4)]
+    hist = Segment("h0", "history", [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}])
+    ctx = Context([Segment("s", "system", "sys " * 600), *modules, hist, Segment("u", "user", "next", stable=False)])
+    assert [ctx.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(ctx).breakpoints] == ["s", "m2", "m3", "h0"]
