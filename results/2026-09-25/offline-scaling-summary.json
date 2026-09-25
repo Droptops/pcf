@@ -2,8 +2,8 @@
   "meta": {
     "mode": "offline-simulation",
     "paid_calls": 0,
-    "source_git_sha": "a5d09db18d2a15c1d03b1412240fd5b40ac82235",
-    "script_sha256": "5fd3cf95ad9529bb87811bf4b3cac1275fce957e13232764a15e2ad7b5920fc2",
+    "source_git_sha": "f38571b12d1063b71b3359dd8523a133c4bb8cf1",
+    "script_sha256": "2612914fcc070f34ce3a018b95af7d0eb6c6a16f50d37f3cc268d69b171778e1",
     "units": "canonical native JSON heuristic token units; read 0.1x; profile-specific writes",
     "scope": "Scripted short histories, virtual time, deterministic local prefix store. No answer generation, live cache behavior, actual tokenization, real latency, or dollars verified.",
     "expiry": "30-second normal intervals; declared long-gap schedules; placer receives cold=True when gap >= profile TTL; expiry is modeled, not inferred from a miss-rate multiplier.",
@@ -26,9 +26,9 @@
       "turns": 24,
       "summed_scenario_costs": {
         "front-tuned": 354891.3,
-        "placed": 217059.20000000004
+        "placed": 217059.2
       },
-      "placed_saving_fraction": 0.38837835697860146
+      "placed_saving_fraction": 0.38837835697860157
     },
     {
       "profile": "anthropic-1h",
@@ -46,7 +46,7 @@
       "turns": 120,
       "summed_scenario_costs": {
         "front-tuned": 5179544.9,
-        "placed": 894101.5000000001
+        "placed": 894101.5
       },
       "placed_saving_fraction": 0.8273783667750423
     },
@@ -136,9 +136,9 @@
       "turns": 60,
       "summed_scenario_costs": {
         "front-tuned": 940308.7,
-        "placed": 406950.49999999994
+        "placed": 406950.5
       },
-      "placed_saving_fraction": 0.5672160642563449
+      "placed_saving_fraction": 0.5672160642563447
     },
     {
       "profile": "openai-30m",
@@ -156,9 +156,9 @@
       "turns": 60,
       "summed_scenario_costs": {
         "front-tuned": 1077377.2,
-        "placed": 590167.3500000001
+        "placed": 590167.35
       },
-      "placed_saving_fraction": 0.4522184523674716
+      "placed_saving_fraction": 0.4522184523674717
     },
     {
       "profile": "openai-30m",
@@ -196,9 +196,9 @@
       "turns": 60,
       "summed_scenario_costs": {
         "front-tuned": 940308.7,
-        "placed": 406950.49999999994
+        "placed": 406950.5
       },
-      "placed_saving_fraction": 0.5672160642563449
+      "placed_saving_fraction": 0.5672160642563447
     },
     {
       "profile": "openai-30m",
@@ -206,7 +206,7 @@
       "turns": 120,
       "summed_scenario_costs": {
         "front-tuned": 3123216.95,
-        "placed": 850469.6499999999
+        "placed": 850469.65
       },
       "placed_saving_fraction": 0.7276943409262684
     }
