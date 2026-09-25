@@ -11,7 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # a description edit must not cancel the test run of the code it describes
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.action == 'edited' && 'description' || 'code' }}
   cancel-in-progress: true
 
 jobs:
