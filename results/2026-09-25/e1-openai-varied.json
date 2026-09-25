@@ -1963,7 +1963,57 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4932,
+     "written": 52143,
+     "uncached": 833,
+     "output_tokens": 975,
+     "billed_input_units": 66505,
+     "billed_total_units": 71380,
+     "correct": "18/20",
+     "correct_on_stale_traps": "9/11",
+     "gave_stale": 1,
+     "violations": "7/20"
+    },
+    "tail": {
+     "cached": 45464,
+     "written": 2788,
+     "uncached": 9656,
+     "output_tokens": 1493,
+     "billed_input_units": 17687,
+     "billed_total_units": 25152,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 47789,
+     "written": 5938,
+     "uncached": 4201,
+     "output_tokens": 854,
+     "billed_input_units": 16402,
+     "billed_total_units": 20672,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 47825,
+     "written": 5942,
+     "uncached": 8641,
+     "output_tokens": 1090,
+     "billed_input_units": 20851,
+     "billed_total_units": 26301,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   },
   {
    "front": [
@@ -3906,7 +3956,57 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4928,
+     "written": 52107,
+     "uncached": 833,
+     "output_tokens": 1139,
+     "billed_input_units": 66460,
+     "billed_total_units": 72155,
+     "correct": "18/20",
+     "correct_on_stale_traps": "9/11",
+     "gave_stale": 0,
+     "violations": "8/20"
+    },
+    "tail": {
+     "cached": 45426,
+     "written": 2786,
+     "uncached": 9656,
+     "output_tokens": 1352,
+     "billed_input_units": 17681,
+     "billed_total_units": 24441,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 47753,
+     "written": 5934,
+     "uncached": 4201,
+     "output_tokens": 1554,
+     "billed_input_units": 16394,
+     "billed_total_units": 24164,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 47789,
+     "written": 5938,
+     "uncached": 8641,
+     "output_tokens": 669,
+     "billed_input_units": 20842,
+     "billed_total_units": 24187,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   },
   {
    "front": [
@@ -5849,7 +5949,57 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4932,
+     "written": 52143,
+     "uncached": 833,
+     "output_tokens": 1157,
+     "billed_input_units": 66505,
+     "billed_total_units": 72290,
+     "correct": "19/20",
+     "correct_on_stale_traps": "10/11",
+     "gave_stale": 0,
+     "violations": "6/20"
+    },
+    "tail": {
+     "cached": 45464,
+     "written": 2788,
+     "uncached": 9656,
+     "output_tokens": 1286,
+     "billed_input_units": 17687,
+     "billed_total_units": 24117,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 47789,
+     "written": 5938,
+     "uncached": 4201,
+     "output_tokens": 1466,
+     "billed_input_units": 16402,
+     "billed_total_units": 23732,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 47825,
+     "written": 5942,
+     "uncached": 8641,
+     "output_tokens": 944,
+     "billed_input_units": 20851,
+     "billed_total_units": 25571,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   },
   {
    "front": [
@@ -7792,7 +7942,57 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4930,
+     "written": 52125,
+     "uncached": 833,
+     "output_tokens": 1022,
+     "billed_input_units": 66482,
+     "billed_total_units": 71592,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "5/20"
+    },
+    "tail": {
+     "cached": 45445,
+     "written": 2787,
+     "uncached": 9656,
+     "output_tokens": 1370,
+     "billed_input_units": 17684,
+     "billed_total_units": 24534,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 47771,
+     "written": 5936,
+     "uncached": 4201,
+     "output_tokens": 1244,
+     "billed_input_units": 16398,
+     "billed_total_units": 22618,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 47807,
+     "written": 5940,
+     "uncached": 8641,
+     "output_tokens": 897,
+     "billed_input_units": 20847,
+     "billed_total_units": 25332,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   },
   {
    "front": [
@@ -9735,7 +9935,123 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4930,
+     "written": 52125,
+     "uncached": 833,
+     "output_tokens": 1223,
+     "billed_input_units": 66482,
+     "billed_total_units": 72597,
+     "correct": "19/20",
+     "correct_on_stale_traps": "10/11",
+     "gave_stale": 1,
+     "violations": "6/20"
+    },
+    "tail": {
+     "cached": 45445,
+     "written": 2787,
+     "uncached": 9656,
+     "output_tokens": 1392,
+     "billed_input_units": 17684,
+     "billed_total_units": 24644,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 47771,
+     "written": 5936,
+     "uncached": 4201,
+     "output_tokens": 1353,
+     "billed_input_units": 16398,
+     "billed_total_units": 23163,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 47807,
+     "written": 5940,
+     "uncached": 8641,
+     "output_tokens": 1022,
+     "billed_input_units": 20847,
+     "billed_total_units": 25957,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   }
- ]
+ ],
+ "aggregate": {
+  "front": {
+   "billed_input_units": {
+    "mean": 66487,
+    "min": 66460,
+    "max": 66505
+   },
+   "billed_total_units": {
+    "mean": 72003,
+    "min": 71380,
+    "max": 72597
+   },
+   "correct": "94/100",
+   "correct_on_stale_traps": "49/55",
+   "violations": "32/100",
+   "gave_stale": 2
+  },
+  "tail": {
+   "billed_input_units": {
+    "mean": 17685,
+    "min": 17681,
+    "max": 17687
+   },
+   "billed_total_units": {
+    "mean": 24578,
+    "min": 24117,
+    "max": 25152
+   },
+   "correct": "100/100",
+   "correct_on_stale_traps": "55/55",
+   "violations": "0/100",
+   "gave_stale": 0
+  },
+  "placed": {
+   "billed_input_units": {
+    "mean": 16399,
+    "min": 16394,
+    "max": 16402
+   },
+   "billed_total_units": {
+    "mean": 22870,
+    "min": 20672,
+    "max": 24164
+   },
+   "correct": "100/100",
+   "correct_on_stale_traps": "55/55",
+   "violations": "0/100",
+   "gave_stale": 0
+  },
+  "placed-spacer": {
+   "billed_input_units": {
+    "mean": 20848,
+    "min": 20842,
+    "max": 20851
+   },
+   "billed_total_units": {
+    "mean": 25470,
+    "min": 24187,
+    "max": 26301
+   },
+   "correct": "100/100",
+   "correct_on_stale_traps": "55/55",
+   "violations": "0/100",
+   "gave_stale": 0
+  }
+ }
 }

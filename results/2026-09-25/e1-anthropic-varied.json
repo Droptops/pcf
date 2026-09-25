@@ -1963,7 +1963,57 @@
      "violation": true,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 58477,
+     "written": 22530,
+     "uncached": 433,
+     "output_tokens": 2766,
+     "billed_input_units": 34443,
+     "billed_total_units": 48273,
+     "correct": "18/20",
+     "correct_on_stale_traps": "9/11",
+     "gave_stale": 1,
+     "violations": "10/20"
+    },
+    "tail": {
+     "cached": 64190,
+     "written": 3840,
+     "uncached": 13430,
+     "output_tokens": 557,
+     "billed_input_units": 24649,
+     "billed_total_units": 27434,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "2/20"
+    },
+    "placed": {
+     "cached": 70752,
+     "written": 5379,
+     "uncached": 5329,
+     "output_tokens": 1320,
+     "billed_input_units": 19128,
+     "billed_total_units": 25728,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "7/20"
+    },
+    "placed-spacer": {
+     "cached": 70828,
+     "written": 5383,
+     "uncached": 12329,
+     "output_tokens": 631,
+     "billed_input_units": 26141,
+     "billed_total_units": 29296,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "1/20"
+    }
+   }
   },
   {
    "front": [
@@ -3906,7 +3956,57 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 58458,
+     "written": 22529,
+     "uncached": 433,
+     "output_tokens": 2724,
+     "billed_input_units": 34440,
+     "billed_total_units": 48060,
+     "correct": "19/20",
+     "correct_on_stale_traps": "10/11",
+     "gave_stale": 0,
+     "violations": "10/20"
+    },
+    "tail": {
+     "cached": 64171,
+     "written": 3839,
+     "uncached": 13430,
+     "output_tokens": 556,
+     "billed_input_units": 24646,
+     "billed_total_units": 27426,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "5/20"
+    },
+    "placed": {
+     "cached": 70733,
+     "written": 5378,
+     "uncached": 5329,
+     "output_tokens": 1397,
+     "billed_input_units": 19125,
+     "billed_total_units": 26110,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "9/20"
+    },
+    "placed-spacer": {
+     "cached": 70809,
+     "written": 5382,
+     "uncached": 12329,
+     "output_tokens": 807,
+     "billed_input_units": 26137,
+     "billed_total_units": 30172,
+     "correct": "19/20",
+     "correct_on_stale_traps": "10/11",
+     "gave_stale": 0,
+     "violations": "5/20"
+    }
+   }
   },
   {
    "front": [
@@ -5849,7 +5949,57 @@
      "violation": true,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 58534,
+     "written": 22533,
+     "uncached": 433,
+     "output_tokens": 2198,
+     "billed_input_units": 34453,
+     "billed_total_units": 45443,
+     "correct": "16/20",
+     "correct_on_stale_traps": "8/11",
+     "gave_stale": 0,
+     "violations": "10/20"
+    },
+    "tail": {
+     "cached": 64247,
+     "written": 3843,
+     "uncached": 13430,
+     "output_tokens": 423,
+     "billed_input_units": 24658,
+     "billed_total_units": 26773,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "4/20"
+    },
+    "placed": {
+     "cached": 70809,
+     "written": 5382,
+     "uncached": 5329,
+     "output_tokens": 1364,
+     "billed_input_units": 19137,
+     "billed_total_units": 25957,
+     "correct": "19/20",
+     "correct_on_stale_traps": "10/11",
+     "gave_stale": 0,
+     "violations": "10/20"
+    },
+    "placed-spacer": {
+     "cached": 70885,
+     "written": 5386,
+     "uncached": 12329,
+     "output_tokens": 639,
+     "billed_input_units": 26150,
+     "billed_total_units": 29345,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "5/20"
+    }
+   }
   },
   {
    "front": [
@@ -6121,10 +6271,10 @@
      "served_model": "anthropic/claude-sonnet-5",
      "thinking_blocks": 1,
      "lead": "i need to flag something",
-     "correct": false,
+     "correct": true,
      "gave_stale": false,
      "violation": true,
-     "value": "2"
+     "value": "14"
     },
     {
      "turn": 13,
@@ -7792,7 +7942,57 @@
      "violation": true,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 58458,
+     "written": 22529,
+     "uncached": 433,
+     "output_tokens": 2496,
+     "billed_input_units": 34440,
+     "billed_total_units": 46920,
+     "correct": "18/20",
+     "correct_on_stale_traps": "9/11",
+     "gave_stale": 0,
+     "violations": "9/20"
+    },
+    "tail": {
+     "cached": 64171,
+     "written": 3839,
+     "uncached": 13430,
+     "output_tokens": 409,
+     "billed_input_units": 24646,
+     "billed_total_units": 26691,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "3/20"
+    },
+    "placed": {
+     "cached": 70733,
+     "written": 5378,
+     "uncached": 5329,
+     "output_tokens": 1862,
+     "billed_input_units": 19125,
+     "billed_total_units": 28435,
+     "correct": "19/20",
+     "correct_on_stale_traps": "10/11",
+     "gave_stale": 0,
+     "violations": "7/20"
+    },
+    "placed-spacer": {
+     "cached": 70809,
+     "written": 5382,
+     "uncached": 12329,
+     "output_tokens": 627,
+     "billed_input_units": 26137,
+     "billed_total_units": 29272,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "2/20"
+    }
+   }
   },
   {
    "front": [
@@ -9735,7 +9935,123 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 58515,
+     "written": 22532,
+     "uncached": 433,
+     "output_tokens": 1887,
+     "billed_input_units": 34450,
+     "billed_total_units": 43884,
+     "correct": "16/20",
+     "correct_on_stale_traps": "7/11",
+     "gave_stale": 0,
+     "violations": "11/20"
+    },
+    "tail": {
+     "cached": 64228,
+     "written": 3842,
+     "uncached": 13430,
+     "output_tokens": 340,
+     "billed_input_units": 24655,
+     "billed_total_units": 26355,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "2/20"
+    },
+    "placed": {
+     "cached": 70790,
+     "written": 5381,
+     "uncached": 5329,
+     "output_tokens": 1337,
+     "billed_input_units": 19134,
+     "billed_total_units": 25819,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "8/20"
+    },
+    "placed-spacer": {
+     "cached": 70866,
+     "written": 5385,
+     "uncached": 12329,
+     "output_tokens": 826,
+     "billed_input_units": 26147,
+     "billed_total_units": 30277,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "3/20"
+    }
+   }
   }
- ]
+ ],
+ "aggregate": {
+  "front": {
+   "billed_input_units": {
+    "mean": 34445,
+    "min": 34440,
+    "max": 34453
+   },
+   "billed_total_units": {
+    "mean": 46516,
+    "min": 43884,
+    "max": 48273
+   },
+   "correct": "87/100",
+   "correct_on_stale_traps": "43/55",
+   "violations": "50/100",
+   "gave_stale": 1
+  },
+  "tail": {
+   "billed_input_units": {
+    "mean": 24651,
+    "min": 24646,
+    "max": 24658
+   },
+   "billed_total_units": {
+    "mean": 26936,
+    "min": 26355,
+    "max": 27434
+   },
+   "correct": "100/100",
+   "correct_on_stale_traps": "55/55",
+   "violations": "16/100",
+   "gave_stale": 0
+  },
+  "placed": {
+   "billed_input_units": {
+    "mean": 19130,
+    "min": 19125,
+    "max": 19137
+   },
+   "billed_total_units": {
+    "mean": 26410,
+    "min": 25728,
+    "max": 28435
+   },
+   "correct": "98/100",
+   "correct_on_stale_traps": "53/55",
+   "violations": "41/100",
+   "gave_stale": 0
+  },
+  "placed-spacer": {
+   "billed_input_units": {
+    "mean": 26142,
+    "min": 26137,
+    "max": 26150
+   },
+   "billed_total_units": {
+    "mean": 29672,
+    "min": 29272,
+    "max": 30277
+   },
+   "correct": "99/100",
+   "correct_on_stale_traps": "54/55",
+   "violations": "16/100",
+   "gave_stale": 0
+  }
+ }
 }

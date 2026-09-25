@@ -1969,7 +1969,57 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4932,
+     "written": 91347,
+     "uncached": 5189,
+     "output_tokens": 1396,
+     "billed_input_units": 119866,
+     "billed_total_units": 126846,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "tail": {
+     "cached": 80541,
+     "written": 6915,
+     "uncached": 14012,
+     "output_tokens": 1482,
+     "billed_input_units": 30710,
+     "billed_total_units": 38120,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 83680,
+     "written": 8744,
+     "uncached": 9064,
+     "output_tokens": 772,
+     "billed_input_units": 28362,
+     "billed_total_units": 32222,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 83718,
+     "written": 8746,
+     "uncached": 13504,
+     "output_tokens": 812,
+     "billed_input_units": 32808,
+     "billed_total_units": 36868,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   },
   {
    "front": [
@@ -3918,7 +3968,57 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4932,
+     "written": 91347,
+     "uncached": 5189,
+     "output_tokens": 1031,
+     "billed_input_units": 119866,
+     "billed_total_units": 125021,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "tail": {
+     "cached": 80541,
+     "written": 6915,
+     "uncached": 14012,
+     "output_tokens": 1340,
+     "billed_input_units": 30710,
+     "billed_total_units": 37410,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 83680,
+     "written": 8744,
+     "uncached": 9064,
+     "output_tokens": 1059,
+     "billed_input_units": 28362,
+     "billed_total_units": 33657,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 83718,
+     "written": 8746,
+     "uncached": 13504,
+     "output_tokens": 689,
+     "billed_input_units": 32808,
+     "billed_total_units": 36253,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   },
   {
    "front": [
@@ -5867,7 +5967,57 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4930,
+     "written": 91329,
+     "uncached": 5189,
+     "output_tokens": 726,
+     "billed_input_units": 119843,
+     "billed_total_units": 123473,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "tail": {
+     "cached": 80522,
+     "written": 6914,
+     "uncached": 14012,
+     "output_tokens": 1553,
+     "billed_input_units": 30707,
+     "billed_total_units": 38472,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 83661,
+     "written": 8743,
+     "uncached": 9064,
+     "output_tokens": 971,
+     "billed_input_units": 28359,
+     "billed_total_units": 33214,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 83699,
+     "written": 8745,
+     "uncached": 13504,
+     "output_tokens": 797,
+     "billed_input_units": 32805,
+     "billed_total_units": 36790,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   },
   {
    "front": [
@@ -7816,7 +7966,57 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4934,
+     "written": 91365,
+     "uncached": 5189,
+     "output_tokens": 664,
+     "billed_input_units": 119889,
+     "billed_total_units": 123209,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "tail": {
+     "cached": 80560,
+     "written": 6916,
+     "uncached": 14012,
+     "output_tokens": 1191,
+     "billed_input_units": 30713,
+     "billed_total_units": 36668,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 83699,
+     "written": 8745,
+     "uncached": 9064,
+     "output_tokens": 892,
+     "billed_input_units": 28365,
+     "billed_total_units": 32825,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 83737,
+     "written": 8747,
+     "uncached": 13504,
+     "output_tokens": 613,
+     "billed_input_units": 32811,
+     "billed_total_units": 35876,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   },
   {
    "front": [
@@ -9765,7 +9965,123 @@
      "violation": false,
      "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 4932,
+     "written": 91347,
+     "uncached": 5189,
+     "output_tokens": 574,
+     "billed_input_units": 119866,
+     "billed_total_units": 122736,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "tail": {
+     "cached": 80541,
+     "written": 6915,
+     "uncached": 14012,
+     "output_tokens": 1479,
+     "billed_input_units": 30710,
+     "billed_total_units": 38105,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed": {
+     "cached": 83680,
+     "written": 8744,
+     "uncached": 9064,
+     "output_tokens": 1096,
+     "billed_input_units": 28362,
+     "billed_total_units": 33842,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    },
+    "placed-spacer": {
+     "cached": 83718,
+     "written": 8746,
+     "uncached": 13504,
+     "output_tokens": 735,
+     "billed_input_units": 32808,
+     "billed_total_units": 36483,
+     "correct": "20/20",
+     "correct_on_stale_traps": "11/11",
+     "gave_stale": 0,
+     "violations": "0/20"
+    }
+   }
   }
- ]
+ ],
+ "aggregate": {
+  "front": {
+   "billed_input_units": {
+    "mean": 119866,
+    "min": 119843,
+    "max": 119889
+   },
+   "billed_total_units": {
+    "mean": 124257,
+    "min": 122736,
+    "max": 126846
+   },
+   "correct": "100/100",
+   "correct_on_stale_traps": "55/55",
+   "violations": "0/100",
+   "gave_stale": 0
+  },
+  "tail": {
+   "billed_input_units": {
+    "mean": 30710,
+    "min": 30707,
+    "max": 30713
+   },
+   "billed_total_units": {
+    "mean": 37755,
+    "min": 36668,
+    "max": 38472
+   },
+   "correct": "100/100",
+   "correct_on_stale_traps": "55/55",
+   "violations": "0/100",
+   "gave_stale": 0
+  },
+  "placed": {
+   "billed_input_units": {
+    "mean": 28362,
+    "min": 28359,
+    "max": 28365
+   },
+   "billed_total_units": {
+    "mean": 33152,
+    "min": 32222,
+    "max": 33842
+   },
+   "correct": "100/100",
+   "correct_on_stale_traps": "55/55",
+   "violations": "0/100",
+   "gave_stale": 0
+  },
+  "placed-spacer": {
+   "billed_input_units": {
+    "mean": 32808,
+    "min": 32805,
+    "max": 32811
+   },
+   "billed_total_units": {
+    "mean": 36454,
+    "min": 35876,
+    "max": 36868
+   },
+   "correct": "100/100",
+   "correct_on_stale_traps": "55/55",
+   "violations": "0/100",
+   "gave_stale": 0
+  }
+ }
 }

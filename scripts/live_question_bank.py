@@ -38,8 +38,9 @@ def item_specs(per_type: int):
     """(type, final turn, history style) for every item: deterministic and distinct within each type."""
     styles = ("template", "varied")
     pools = {
-        # conflict: the record must not change between the customer's request (final - 2) and the question
-        "conflict": [(f, st) for f in range(12, 51) if f % 6 >= 2 for st in styles],
+        # conflict: the record must not change between the customer's request (final - 2) and the question, and the
+        # scripted turn in between (final - 1) must not be the contact question, whose reply restates the old channel
+        "conflict": [(f, st) for f in range(12, 71) if f % 6 >= 2 and (f - 1) % 4 != 2 for st in styles],
         "cross": [(f, st) for f in range(10, 41) for st in styles],
         "far": [(f, st) for f in range(60, 101) for st in styles],
     }

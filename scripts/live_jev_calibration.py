@@ -19,7 +19,6 @@ import json
 import os
 import statistics
 import sys
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -51,7 +50,7 @@ def contexts(repeats: int, turns: int):
     for style in ("template", "varied"):
         for repeat in range(repeats):
             for arm in ("front", "tail", "placed"):
-                nonce = f"cal{repeat}-{style}-{uuid.uuid4().hex[:6]}"
+                nonce = "calibration"  # no per-session tag: repeated scripted contexts must stay identical
                 compiler = AnthropicCompiler("claude-haiku-4-5")
                 placer = placement.MemoryPlacer(compiler.tokenizer, write_multiplier=1.25, read_multiplier=0.1)
                 system = Segment("s", "system", f"Session {nonce}-{arm}.\n" + "\n".join(placement.POLICIES))
@@ -75,7 +74,7 @@ def bank_contexts(per_type: int, compiler):
     """Question-bank items under every arm; the conflict items are the tail slice."""
     for i, (kind, final, style) in enumerate(bank.item_specs(per_type)):
         for arm in bank.ARMS:
-            ctx, expected = bank.build(kind, final, style, arm, compiler, f"cal-qb{i}")
+            ctx, expected = bank.build(kind, final, style, arm, compiler, "calibration")
             yield ({"source": "question-bank", "type": kind, "final_turn": final, "style": style, "arm": arm,
                     "turn": final, "expected": expected, "tail": kind == "conflict"}, ctx)
 
@@ -116,7 +115,9 @@ if __name__ == "__main__":
         rows = list(contexts(args.repeats, args.turns))
     else:
         rows = list(bank_contexts(args.per_type, AnthropicCompiler(args.candidate)))
-    summary = {"contexts": len(rows), "tail": sum(m["tail"] for m, _ in rows)}
+    built, seen, rows = len(rows), set(), [r for r in rows]
+    rows = [r for r in rows if not (r[1].prefix_chain()[-1] in seen or seen.add(r[1].prefix_chain()[-1]))]
+    summary = {"contexts": len(rows), "duplicates_removed": built - len(rows), "tail": sum(m["tail"] for m, _ in rows)}
     if not args.run:
         print(json.dumps({"offline": True, **summary}, indent=1))
         raise SystemExit
@@ -143,15 +144,20 @@ if __name__ == "__main__":
 
     def score(item):
         try:
-            return source.p_sufficient(item[1], candidate)
-        except ConfidenceUnavailable:  # e.g. Jev's max_tokens_exceeded above ~32.8k of its input tokens
-            return None
+            return source.p_sufficient(item[1], candidate), None
+        except ConfidenceUnavailable as exc:  # e.g. Jev's max_tokens_exceeded above ~32.8k of its input tokens
+            cause = exc.__cause__
+            detail = cause.read().decode("utf-8", "replace")[:300] if hasattr(cause, "read") else repr(cause)
+            return None, f"{exc}: {detail}"
 
     with ThreadPoolExecutor(args.workers) as pool:
         graded = list(pool.map(answer, rows))
         scores = list(pool.map(score, rows))
-    for row, s in zip(graded, scores):
+    for row, (s, error), (_, ctx) in zip(graded, scores, rows):
         row["jev"] = s
+        row["est_tokens"] = compiler.compile(ctx).total_tokens
+        if error:
+            row["jev_error"] = error
     scored = [(row, ctx) for row, (_, ctx) in zip(graded, rows) if row["jev"] is not None]
     samples = [ValidationSample(ctx, candidate, row["label"], row["tail"]) for row, ctx in scored]
     records = {}
@@ -170,12 +176,15 @@ if __name__ == "__main__":
     labels = [r["label"] for r, _ in scored]
     scores = [r["jev"] for r, _ in scored]
     summary["unscorable"] = len(graded) - len(scored)
+    summary["scorable_label_rate"] = round(sum(labels) / len(labels), 3)
+    summary["unscorable_label_rate"] = (round(sum(r["label"] for r in graded if r["jev"] is None) /
+                                         summary["unscorable"], 3) if summary["unscorable"] else None)
     result = {
         "meta": {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                  "git_sha": placement.git_sha(), "candidate": args.candidate, "jev_model": JEV_MODEL,
                  "contexts": args.contexts, "repeats": args.repeats, "turns": args.turns,
                  "route": "OpenRouter, candidate pinned to Anthropic"},
-        "summary": {**summary, "label_rate": round(sum(labels) / len(labels), 3),
+        "summary": {**summary, "label_rate": round(sum(r["label"] for r in graded) / len(graded), 3),
                     "tail_label_rate": round(sum(r["label"] for r in graded if r["tail"]) /
                                              max(1, sum(r["tail"] for r in graded)), 3),
                     "auc": auc(scores, labels),

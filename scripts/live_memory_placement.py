@@ -113,18 +113,32 @@ LANGUAGES = ["Spanish", "English", "French", "German", "Portuguese", "Italian"]
 NUMBER = re.compile(r"(?<![\w-])(\d{1,3})(?![\w-])")  # skips ticket/order ids such as T-4108 or 9042
 
 
+BOLD = re.compile(r"\*\*(.+?)\*\*", re.S)
+
+
+def _first_value(text: str, kind: int) -> str:
+    if kind == 0:
+        match = NUMBER.search(text)
+        return match.group(1) if match else ""
+    domain = {1: PLANS, 2: CHANNELS, 3: LANGUAGES}[kind]
+    hits = [(m.start(), -len(v), v) for v in domain for m in re.finditer(rf"(?<!\w){re.escape(v)}(?!\w)", text, re.I)]
+    return min(hits)[2].lower() if hits else ""
+
+
 def answer_value(answer: str, turn: int) -> str:
-    """The first value the reply asserts from the question's own answer set (after "The answer is", if any)."""
+    """The value the reply asserts from the question's answer set.
+
+    The last bolded span that holds such a value wins (replies that first recap earlier answers bold the final one);
+    otherwise the first value, after "The answer is" if present.
+    """
+    kind = turn % len(QUESTIONS)
+    bolded = [v for v in (_first_value(span, kind) for span in BOLD.findall(answer)) if v]
+    if bolded:
+        return bolded[-1]
     lower = answer.lower()
     if "the answer is" in lower:
         answer = answer[lower.index("the answer is") + len("the answer is"):]
-    kind = turn % len(QUESTIONS)
-    if kind == 0:
-        match = NUMBER.search(answer)
-        return match.group(1) if match else ""
-    domain = {1: PLANS, 2: CHANNELS, 3: LANGUAGES}[kind]
-    hits = [(m.start(), -len(v), v) for v in domain for m in re.finditer(rf"(?<!\w){re.escape(v)}(?!\w)", answer, re.I)]
-    return min(hits)[2].lower() if hits else ""
+    return _first_value(answer, kind)
 
 
 def grade(answer: str, turn: int, expected: str, stale: str | None, style: str, violation_tokens: int) -> dict:
@@ -237,14 +251,26 @@ def aggregate(runs: list[dict], arms) -> dict:
 
 
 def regrade(path: str, violation_tokens: int) -> dict:
-    """Re-grade a saved result offline: expected and stale values are recomputed from the scripted turns."""
+    """Re-grade a saved result offline: expected and stale values are recomputed from the scripted turns.
+
+    Keeps the file's meta, recomputes each run's summary and the aggregate, and lists every changed grade.
+    """
     saved = json.load(open(path))
-    style = saved.get("meta", {}).get("history_style", "template")
-    changes = []
+    meta = saved.get("meta", {})
+    style = meta.get("history_style")
+    if style not in {"template", "varied"}:
+        raise SystemExit(f"{path}: meta.history_style is missing; cannot tell which filler marks a violation")
+
+    class Prices:
+        read_multiplier = meta.get("read_multiplier", 0.1)
+        output_multiplier = meta.get("output_multiplier", 5.0)
+
+    changes, arms = [], []
     for i, run in enumerate(saved["runs"]):
         for arm, rows in run.items():
             if arm == "summary" or not rows or "answer" not in rows[0]:
                 continue
+            arms.append(arm) if arm not in arms else None
             said = {}
             for row in rows:
                 text, expected = question(row["turn"])
@@ -255,7 +281,11 @@ def regrade(path: str, violation_tokens: int) -> dict:
                     changes.append({"run": i, "arm": arm, "turn": row["turn"], "answer": row["answer"][:80],
                                     "was": old, "now": row["correct"]})
                 said[text] = expected
-    return {"file": path, "grade_changes": changes, "runs": saved["runs"]}
+        run["summary"] = {arm: summarize(run[arm], Prices, meta.get("write_multiplier", 1.25))
+                          for arm in run if arm != "summary" and run[arm] and "answer" in run[arm][0]}
+    return {"meta": meta, "file": path, "grade_changes": changes, "runs": saved["runs"],
+            "aggregate": aggregate(saved["runs"], arms) if all("output_tokens" in r[a][0] for r in saved["runs"]
+                                                               for a in arms) else None}
 
 
 def git_sha() -> str:

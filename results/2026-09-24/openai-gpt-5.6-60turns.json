@@ -33,7 +33,8 @@
      "stale": null,
      "lead": "2",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "2"
     },
     {
      "turn": 1,
@@ -48,7 +49,8 @@
      "stale": null,
      "lead": "basic",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "basic"
     },
     {
      "turn": 2,
@@ -63,7 +65,8 @@
      "stale": null,
      "lead": "email",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "email"
     },
     {
      "turn": 3,
@@ -78,7 +81,8 @@
      "stale": null,
      "lead": "spanish",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 4,
@@ -93,7 +97,8 @@
      "stale": "2",
      "lead": "6",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "6"
     },
     {
      "turn": 5,
@@ -108,7 +113,8 @@
      "stale": "Basic",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 6,
@@ -123,7 +129,8 @@
      "stale": "email",
      "lead": "sms",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 7,
@@ -137,8 +144,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 8,
@@ -153,7 +161,8 @@
      "stale": "6",
      "lead": "10",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "10"
     },
     {
      "turn": 9,
@@ -168,7 +177,8 @@
      "stale": "Unlimited",
      "lead": "premium",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "premium"
     },
     {
      "turn": 10,
@@ -182,8 +192,9 @@
      "expected": "SMS",
      "stale": "SMS",
      "lead": "sms",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 11,
@@ -197,8 +208,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 12,
@@ -213,7 +225,8 @@
      "stale": "10",
      "lead": "14",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "14"
     },
     {
      "turn": 13,
@@ -228,7 +241,8 @@
      "stale": "Premium",
      "lead": "family",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "family"
     },
     {
      "turn": 14,
@@ -243,7 +257,8 @@
      "stale": "SMS",
      "lead": "phone",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "phone"
     },
     {
      "turn": 15,
@@ -257,8 +272,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 16,
@@ -273,7 +289,8 @@
      "stale": "14",
      "lead": "18",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "18"
     },
     {
      "turn": 17,
@@ -288,7 +305,8 @@
      "stale": "Family",
      "lead": "business",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "business"
     },
     {
      "turn": 18,
@@ -303,7 +321,8 @@
      "stale": "phone",
      "lead": "chat",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 19,
@@ -317,8 +336,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 20,
@@ -333,7 +353,8 @@
      "stale": "18",
      "lead": "22",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "22"
     },
     {
      "turn": 21,
@@ -348,7 +369,8 @@
      "stale": "Business",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 22,
@@ -362,8 +384,9 @@
      "expected": "chat",
      "stale": "chat",
      "lead": "chat",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 23,
@@ -377,8 +400,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 24,
@@ -393,7 +417,8 @@
      "stale": "22",
      "lead": "26",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "26"
     },
     {
      "turn": 25,
@@ -408,7 +433,8 @@
      "stale": "Unlimited",
      "lead": "unlimited plus",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited plus"
     },
     {
      "turn": 26,
@@ -423,7 +449,8 @@
      "stale": "chat",
      "lead": "email",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "email"
     },
     {
      "turn": 27,
@@ -437,8 +464,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 28,
@@ -453,7 +481,8 @@
      "stale": "26",
      "lead": "30",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "30"
     },
     {
      "turn": 29,
@@ -468,7 +497,8 @@
      "stale": "Unlimited Plus",
      "lead": "premium",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "premium"
     },
     {
      "turn": 30,
@@ -483,7 +513,8 @@
      "stale": "email",
      "lead": "sms",
      "gave_stale": false,
-     "violation": true
+     "violation": true,
+     "value": "sms"
     },
     {
      "turn": 31,
@@ -497,8 +528,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 32,
@@ -513,7 +545,8 @@
      "stale": "30",
      "lead": "34",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "34"
     },
     {
      "turn": 33,
@@ -528,7 +561,8 @@
      "stale": "Premium",
      "lead": "business",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "business"
     },
     {
      "turn": 34,
@@ -542,8 +576,9 @@
      "expected": "SMS",
      "stale": "SMS",
      "lead": "sms",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 35,
@@ -557,8 +592,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 36,
@@ -573,7 +609,8 @@
      "stale": "34",
      "lead": "38",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "38"
     },
     {
      "turn": 37,
@@ -588,7 +625,8 @@
      "stale": "Business",
      "lead": "basic",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "basic"
     },
     {
      "turn": 38,
@@ -603,7 +641,8 @@
      "stale": "SMS",
      "lead": "phone",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "phone"
     },
     {
      "turn": 39,
@@ -617,8 +656,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 40,
@@ -633,7 +673,8 @@
      "stale": "38",
      "lead": "42",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "42"
     },
     {
      "turn": 41,
@@ -648,7 +689,8 @@
      "stale": "Basic",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 42,
@@ -663,7 +705,8 @@
      "stale": "phone",
      "lead": "chat",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 43,
@@ -677,8 +720,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 44,
@@ -693,7 +737,8 @@
      "stale": "42",
      "lead": "46",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "46"
     },
     {
      "turn": 45,
@@ -708,7 +753,8 @@
      "stale": "Unlimited",
      "lead": "premium",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "premium"
     },
     {
      "turn": 46,
@@ -722,8 +768,9 @@
      "expected": "chat",
      "stale": "chat",
      "lead": "chat",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 47,
@@ -737,8 +784,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 48,
@@ -753,7 +801,8 @@
      "stale": "46",
      "lead": "50",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "50"
     },
     {
      "turn": 49,
@@ -768,7 +817,8 @@
      "stale": "Premium",
      "lead": "family",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "family"
     },
     {
      "turn": 50,
@@ -783,7 +833,8 @@
      "stale": "chat",
      "lead": "email",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "email"
     },
     {
      "turn": 51,
@@ -797,8 +848,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 52,
@@ -813,7 +865,8 @@
      "stale": "50",
      "lead": "54",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "54"
     },
     {
      "turn": 53,
@@ -828,7 +881,8 @@
      "stale": "Family",
      "lead": "business",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "business"
     },
     {
      "turn": 54,
@@ -843,7 +897,8 @@
      "stale": "email",
      "lead": "sms",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 55,
@@ -857,8 +912,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 56,
@@ -873,7 +929,8 @@
      "stale": "54",
      "lead": "58",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "58"
     },
     {
      "turn": 57,
@@ -888,7 +945,8 @@
      "stale": "Business",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 58,
@@ -902,8 +960,9 @@
      "expected": "SMS",
      "stale": "SMS",
      "lead": "sms",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 59,
@@ -917,8 +976,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     }
    ],
    "tail": [
@@ -940,7 +1000,8 @@
      "stale": null,
      "lead": "2",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "2"
     },
     {
      "turn": 1,
@@ -960,7 +1021,8 @@
      "stale": null,
      "lead": "basic",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "basic"
     },
     {
      "turn": 2,
@@ -980,7 +1042,8 @@
      "stale": null,
      "lead": "email",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "email"
     },
     {
      "turn": 3,
@@ -1000,7 +1063,8 @@
      "stale": null,
      "lead": "spanish",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 4,
@@ -1020,7 +1084,8 @@
      "stale": "2",
      "lead": "6",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "6"
     },
     {
      "turn": 5,
@@ -1040,7 +1105,8 @@
      "stale": "Basic",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 6,
@@ -1060,7 +1126,8 @@
      "stale": "email",
      "lead": "sms",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 7,
@@ -1079,8 +1146,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 8,
@@ -1100,7 +1168,8 @@
      "stale": "6",
      "lead": "10",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "10"
     },
     {
      "turn": 9,
@@ -1120,7 +1189,8 @@
      "stale": "Unlimited",
      "lead": "premium",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "premium"
     },
     {
      "turn": 10,
@@ -1139,8 +1209,9 @@
      "expected": "SMS",
      "stale": "SMS",
      "lead": "sms",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 11,
@@ -1159,8 +1230,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 12,
@@ -1180,7 +1252,8 @@
      "stale": "10",
      "lead": "14",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "14"
     },
     {
      "turn": 13,
@@ -1200,7 +1273,8 @@
      "stale": "Premium",
      "lead": "family",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "family"
     },
     {
      "turn": 14,
@@ -1220,7 +1294,8 @@
      "stale": "SMS",
      "lead": "phone",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "phone"
     },
     {
      "turn": 15,
@@ -1239,8 +1314,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 16,
@@ -1260,7 +1336,8 @@
      "stale": "14",
      "lead": "18",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "18"
     },
     {
      "turn": 17,
@@ -1280,7 +1357,8 @@
      "stale": "Family",
      "lead": "business",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "business"
     },
     {
      "turn": 18,
@@ -1300,7 +1378,8 @@
      "stale": "phone",
      "lead": "chat",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 19,
@@ -1319,8 +1398,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 20,
@@ -1340,7 +1420,8 @@
      "stale": "18",
      "lead": "22",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "22"
     },
     {
      "turn": 21,
@@ -1360,7 +1441,8 @@
      "stale": "Business",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 22,
@@ -1379,8 +1461,9 @@
      "expected": "chat",
      "stale": "chat",
      "lead": "chat",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 23,
@@ -1399,8 +1482,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 24,
@@ -1420,7 +1504,8 @@
      "stale": "22",
      "lead": "26",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "26"
     },
     {
      "turn": 25,
@@ -1440,7 +1525,8 @@
      "stale": "Unlimited",
      "lead": "unlimited plus",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited plus"
     },
     {
      "turn": 26,
@@ -1460,7 +1546,8 @@
      "stale": "chat",
      "lead": "email",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "email"
     },
     {
      "turn": 27,
@@ -1479,8 +1566,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 28,
@@ -1500,7 +1588,8 @@
      "stale": "26",
      "lead": "30",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "30"
     },
     {
      "turn": 29,
@@ -1520,7 +1609,8 @@
      "stale": "Unlimited Plus",
      "lead": "premium",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "premium"
     },
     {
      "turn": 30,
@@ -1540,7 +1630,8 @@
      "stale": "email",
      "lead": "sms",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 31,
@@ -1559,8 +1650,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 32,
@@ -1580,7 +1672,8 @@
      "stale": "30",
      "lead": "34",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "34"
     },
     {
      "turn": 33,
@@ -1600,7 +1693,8 @@
      "stale": "Premium",
      "lead": "business",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "business"
     },
     {
      "turn": 34,
@@ -1619,8 +1713,9 @@
      "expected": "SMS",
      "stale": "SMS",
      "lead": "sms",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 35,
@@ -1639,8 +1734,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 36,
@@ -1660,7 +1756,8 @@
      "stale": "34",
      "lead": "38",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "38"
     },
     {
      "turn": 37,
@@ -1680,7 +1777,8 @@
      "stale": "Business",
      "lead": "basic",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "basic"
     },
     {
      "turn": 38,
@@ -1700,7 +1798,8 @@
      "stale": "SMS",
      "lead": "phone",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "phone"
     },
     {
      "turn": 39,
@@ -1719,8 +1818,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 40,
@@ -1740,7 +1840,8 @@
      "stale": "38",
      "lead": "42",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "42"
     },
     {
      "turn": 41,
@@ -1760,7 +1861,8 @@
      "stale": "Basic",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 42,
@@ -1780,7 +1882,8 @@
      "stale": "phone",
      "lead": "chat",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 43,
@@ -1799,8 +1902,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 44,
@@ -1820,7 +1924,8 @@
      "stale": "42",
      "lead": "46",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "46"
     },
     {
      "turn": 45,
@@ -1840,7 +1945,8 @@
      "stale": "Unlimited",
      "lead": "premium",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "premium"
     },
     {
      "turn": 46,
@@ -1859,8 +1965,9 @@
      "expected": "chat",
      "stale": "chat",
      "lead": "chat",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 47,
@@ -1879,8 +1986,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 48,
@@ -1900,7 +2008,8 @@
      "stale": "46",
      "lead": "50",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "50"
     },
     {
      "turn": 49,
@@ -1920,7 +2029,8 @@
      "stale": "Premium",
      "lead": "family",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "family"
     },
     {
      "turn": 50,
@@ -1940,7 +2050,8 @@
      "stale": "chat",
      "lead": "email",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "email"
     },
     {
      "turn": 51,
@@ -1959,8 +2070,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 52,
@@ -1980,7 +2092,8 @@
      "stale": "50",
      "lead": "54",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "54"
     },
     {
      "turn": 53,
@@ -2000,7 +2113,8 @@
      "stale": "Family",
      "lead": "business",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "business"
     },
     {
      "turn": 54,
@@ -2020,7 +2134,8 @@
      "stale": "email",
      "lead": "sms",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 55,
@@ -2039,8 +2154,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 56,
@@ -2060,7 +2176,8 @@
      "stale": "54",
      "lead": "58",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "58"
     },
     {
      "turn": 57,
@@ -2080,7 +2197,8 @@
      "stale": "Business",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 58,
@@ -2099,8 +2217,9 @@
      "expected": "SMS",
      "stale": "SMS",
      "lead": "sms",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 59,
@@ -2119,8 +2238,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     }
    ],
    "placed": [
@@ -2137,7 +2257,8 @@
      "stale": null,
      "lead": "2",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "2"
     },
     {
      "turn": 1,
@@ -2154,7 +2275,8 @@
      "stale": null,
      "lead": "basic",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "basic"
     },
     {
      "turn": 2,
@@ -2171,7 +2293,8 @@
      "stale": null,
      "lead": "email",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "email"
     },
     {
      "turn": 3,
@@ -2189,7 +2312,8 @@
      "stale": null,
      "lead": "spanish",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 4,
@@ -2207,7 +2331,8 @@
      "stale": "2",
      "lead": "6",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "6"
     },
     {
      "turn": 5,
@@ -2225,7 +2350,8 @@
      "stale": "Basic",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 6,
@@ -2244,7 +2370,8 @@
      "stale": "email",
      "lead": "sms",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 7,
@@ -2262,8 +2389,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 8,
@@ -2282,7 +2410,8 @@
      "stale": "6",
      "lead": "10",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "10"
     },
     {
      "turn": 9,
@@ -2301,7 +2430,8 @@
      "stale": "Unlimited",
      "lead": "premium",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "premium"
     },
     {
      "turn": 10,
@@ -2319,8 +2449,9 @@
      "expected": "SMS",
      "stale": "SMS",
      "lead": "sms",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 11,
@@ -2338,8 +2469,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 12,
@@ -2358,7 +2490,8 @@
      "stale": "10",
      "lead": "14",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "14"
     },
     {
      "turn": 13,
@@ -2377,7 +2510,8 @@
      "stale": "Premium",
      "lead": "family",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "family"
     },
     {
      "turn": 14,
@@ -2396,7 +2530,8 @@
      "stale": "SMS",
      "lead": "phone",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "phone"
     },
     {
      "turn": 15,
@@ -2414,8 +2549,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 16,
@@ -2434,7 +2570,8 @@
      "stale": "14",
      "lead": "18",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "18"
     },
     {
      "turn": 17,
@@ -2453,7 +2590,8 @@
      "stale": "Family",
      "lead": "business",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "business"
     },
     {
      "turn": 18,
@@ -2472,7 +2610,8 @@
      "stale": "phone",
      "lead": "chat",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 19,
@@ -2490,8 +2629,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 20,
@@ -2510,7 +2650,8 @@
      "stale": "18",
      "lead": "22",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "22"
     },
     {
      "turn": 21,
@@ -2529,7 +2670,8 @@
      "stale": "Business",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 22,
@@ -2547,8 +2689,9 @@
      "expected": "chat",
      "stale": "chat",
      "lead": "chat",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 23,
@@ -2566,8 +2709,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 24,
@@ -2586,7 +2730,8 @@
      "stale": "22",
      "lead": "26",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "26"
     },
     {
      "turn": 25,
@@ -2605,7 +2750,8 @@
      "stale": "Unlimited",
      "lead": "unlimited plus",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited plus"
     },
     {
      "turn": 26,
@@ -2624,7 +2770,8 @@
      "stale": "chat",
      "lead": "email",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "email"
     },
     {
      "turn": 27,
@@ -2642,8 +2789,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 28,
@@ -2662,7 +2810,8 @@
      "stale": "26",
      "lead": "30",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "30"
     },
     {
      "turn": 29,
@@ -2681,7 +2830,8 @@
      "stale": "Unlimited Plus",
      "lead": "premium",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "premium"
     },
     {
      "turn": 30,
@@ -2700,7 +2850,8 @@
      "stale": "email",
      "lead": "sms",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 31,
@@ -2718,8 +2869,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 32,
@@ -2738,7 +2890,8 @@
      "stale": "30",
      "lead": "34",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "34"
     },
     {
      "turn": 33,
@@ -2757,7 +2910,8 @@
      "stale": "Premium",
      "lead": "business",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "business"
     },
     {
      "turn": 34,
@@ -2775,8 +2929,9 @@
      "expected": "SMS",
      "stale": "SMS",
      "lead": "sms",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 35,
@@ -2794,8 +2949,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 36,
@@ -2814,7 +2970,8 @@
      "stale": "34",
      "lead": "38",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "38"
     },
     {
      "turn": 37,
@@ -2833,7 +2990,8 @@
      "stale": "Business",
      "lead": "basic",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "basic"
     },
     {
      "turn": 38,
@@ -2852,7 +3010,8 @@
      "stale": "SMS",
      "lead": "phone",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "phone"
     },
     {
      "turn": 39,
@@ -2870,8 +3029,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 40,
@@ -2890,7 +3050,8 @@
      "stale": "38",
      "lead": "42",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "42"
     },
     {
      "turn": 41,
@@ -2909,7 +3070,8 @@
      "stale": "Basic",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 42,
@@ -2928,7 +3090,8 @@
      "stale": "phone",
      "lead": "chat",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 43,
@@ -2946,8 +3109,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 44,
@@ -2966,7 +3130,8 @@
      "stale": "42",
      "lead": "46",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "46"
     },
     {
      "turn": 45,
@@ -2985,7 +3150,8 @@
      "stale": "Unlimited",
      "lead": "premium",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "premium"
     },
     {
      "turn": 46,
@@ -3003,8 +3169,9 @@
      "expected": "chat",
      "stale": "chat",
      "lead": "chat",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "chat"
     },
     {
      "turn": 47,
@@ -3022,8 +3189,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 48,
@@ -3042,7 +3210,8 @@
      "stale": "46",
      "lead": "50",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "50"
     },
     {
      "turn": 49,
@@ -3061,7 +3230,8 @@
      "stale": "Premium",
      "lead": "family",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "family"
     },
     {
      "turn": 50,
@@ -3080,7 +3250,8 @@
      "stale": "chat",
      "lead": "email",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "email"
     },
     {
      "turn": 51,
@@ -3098,8 +3269,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 52,
@@ -3118,7 +3290,8 @@
      "stale": "50",
      "lead": "54",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "54"
     },
     {
      "turn": 53,
@@ -3137,7 +3310,8 @@
      "stale": "Family",
      "lead": "business",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "business"
     },
     {
      "turn": 54,
@@ -3156,7 +3330,8 @@
      "stale": "email",
      "lead": "sms",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 55,
@@ -3174,8 +3349,9 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     },
     {
      "turn": 56,
@@ -3194,7 +3370,8 @@
      "stale": "54",
      "lead": "58",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "58"
     },
     {
      "turn": 57,
@@ -3213,7 +3390,8 @@
      "stale": "Business",
      "lead": "unlimited",
      "gave_stale": false,
-     "violation": false
+     "violation": false,
+     "value": "unlimited"
     },
     {
      "turn": 58,
@@ -3231,8 +3409,9 @@
      "expected": "SMS",
      "stale": "SMS",
      "lead": "sms",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "sms"
     },
     {
      "turn": 59,
@@ -3250,10 +3429,40 @@
      "expected": "Spanish",
      "stale": "Spanish",
      "lead": "spanish",
-     "gave_stale": true,
-     "violation": false
+     "gave_stale": false,
+     "violation": false,
+     "value": "spanish"
     }
-   ]
+   ],
+   "summary": {
+    "front": {
+     "cached": 121480,
+     "written": 489568,
+     "uncached": 16070,
+     "correct": "60/60",
+     "correct_on_stale_traps": "37/37",
+     "gave_stale": 0,
+     "violations": "1/60"
+    },
+    "tail": {
+     "cached": 566905,
+     "written": 17674,
+     "uncached": 42539,
+     "correct": "60/60",
+     "correct_on_stale_traps": "37/37",
+     "gave_stale": 0,
+     "violations": "0/60"
+    },
+    "placed": {
+     "cached": 578254,
+     "written": 19713,
+     "uncached": 29151,
+     "correct": "60/60",
+     "correct_on_stale_traps": "37/37",
+     "gave_stale": 0,
+     "violations": "0/60"
+    }
+   }
   }
  ]
 }

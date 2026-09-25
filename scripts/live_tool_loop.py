@@ -9,7 +9,8 @@ memory is never marked. The model's replies are ignored: history is scripted so 
 --provider openai uses gpt-5.6 in explicit cache mode; --provider anthropic sends the Anthropic adapter's request
 to OpenRouter's Anthropic-compatible endpoint pinned to Anthropic, with thinking disabled so the request carries no
 thinking blocks. Exit status is 1 when any request reads back less than --min-reuse of the previous request's
-cached prefix.
+cached prefix, when a request's cached + written tokens fall short of --min-coverage of the estimated prefix up to its
+last marker (history never cached), or when nothing after the first request is read.
 """
 from __future__ import annotations
 
@@ -71,6 +72,8 @@ if __name__ == "__main__":
     parser.add_argument("--model", help="default: gpt-5.6 (openai) or claude-sonnet-5 (anthropic)")
     parser.add_argument("--iterations", type=int, default=8)
     parser.add_argument("--min-reuse", type=float, default=0.95)
+    parser.add_argument("--min-coverage", type=float, default=0.7,
+                        help="cached + written must reach this share of the estimated prefix up to the last marker")
     args = parser.parse_args()
     model = args.model or ("gpt-5.6" if args.provider == "openai" else "claude-sonnet-5")
     compiler = OpenAICompiler(model) if args.provider == "openai" else AnthropicCompiler(model)
@@ -88,8 +91,10 @@ if __name__ == "__main__":
     rows, previous, failed = [], None, False
     for label, ctx in requests(args.iterations, uuid.uuid4().hex[:12] if client else "offline"):
         compiled = compiler.compile(ctx)
+        cum = compiled.cum_tokens
+        covered = compiler.covered_tokens(ctx, compiled.breakpoints[-1], cum) if compiled.breakpoints else 0
         row = {"request": label, "marked": [ctx.segments[i].id for i in compiled.breakpoints],
-               "est_tokens": compiled.total_tokens}
+               "est_tokens": compiled.total_tokens, "est_covered": covered}
         if client is not None:
             usage = compiler.usage_from_response(send(args.provider, client, compiled.request))
             row.update(cached=usage.cache_read_input_tokens, written=usage.cache_creation_input_tokens,
@@ -98,8 +103,13 @@ if __name__ == "__main__":
                 expected = previous["cached"] + previous["written"]
                 row["reuse"] = round(row["cached"] / expected, 3) if expected else None
                 failed |= expected > 0 and row["cached"] < args.min_reuse * expected
+            # The cache must reach this request's last marker (estimates run 0.86-1.4x provider counts).
+            row["reaches_marker"] = row["cached"] + row["written"] >= args.min_coverage * covered
+            failed |= not row["reaches_marker"]
             previous = row
         rows.append(row)
+    if client is not None and not any(r["cached"] for r in rows[1:]):
+        failed = True  # nothing after the first request was ever read
     print(json.dumps({"provider": args.provider, "model": model, "paid": client is not None, "rows": rows,
                       "ok": not failed}, indent=1))
     raise SystemExit(1 if failed else 0)
