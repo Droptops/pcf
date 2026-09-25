@@ -87,8 +87,9 @@ Secondary, reported and not folded into the ratio:
 Set these before reading the paid JSON.
 
 1. **Long session.** Warm 60-turn placed-shared billed input ≤ 0.60 × warm 60-turn tuned-shared, on each model.
-   The fitted domain slope projects about 0.48 (gpt-5.6) and 0.53 (Claude) at 60 turns of this history length.
-   0.60 leaves room for the one-time rewrite when a module moves to the tail.
+   Warm 60-turn sessions with private prefixes measured 0.49 (gpt-5.6) and 0.53 (Claude)
+   (`results/2026-09-25/domain-*-60turn.json`); the offline model in `docs/SCALING_VALIDATION.md` predicts 0.43 and
+   0.40 and overpredicts. 0.60 leaves room for the one-time rewrite when a module moves to the tail.
 2. **Fleet.** On both shared arms, the median turn-0 read share of system + reference, over measured sessions, is
    ≥ 0.80. On tuned-private it is < 0.20. A pass of rule 1 with a fail of rule 2 means the layout saving is real
    and the fleet saving is not.
@@ -102,7 +103,7 @@ slope is about 3 units per turn against about 40.
 
 ## What a pass is worth
 
-A pass of all three says the projection in the domain review is a property of the provider caches: about half the
+A pass of all three says the measured 60-turn result holds with a shared prefix: about half the
 tuned input bill at 60 warm turns of this length, a shared prefix the fleet actually hits, and no saving once the
 gap exceeds the lifetime. A fail of rule 2, with rule 1 passing, limits the claim to a single long conversation.
 A fail of rule 3 means the cold model is wrong and `split(..., cold=True)` is being aimed at the wrong signal.
