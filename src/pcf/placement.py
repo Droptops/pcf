@@ -1,6 +1,7 @@
 """Self-placing memory: each module picks front or tail from its own observed change rate.
 
-A front module is re-billed with all history after it when it changes: expected p * (m + H) per turn.
+A front module is re-billed with everything after it when it changes (H: the front modules that follow it plus
+history): expected p * (m + H) per turn.
 A tail module is re-billed every turn: m. A module goes to the tail when p * (m + H) > m, where p is its
 observed change rate. With cache prices (write w, read r, relative to uncached input) the comparison is
 p * (w - r) * (m + H) > (1 - r) * m: a changed front prefix is written instead of read, while a tail module is
@@ -47,31 +48,42 @@ class MemoryPlacer:
               cold: bool = False) -> tuple[list[Segment], list[Segment]]:
         """Return (front, tail); call once per turn. Pass cold=True when the provider cache has expired.
 
-        Tail copies are unstable so they get no breakpoint.
+        Predict cold from time (``now - last_request >= descriptor.ttl_seconds``), not from a zero cache read in
+        usage: by then that request has already rewritten the cache in the old layout, so re-placing re-bills it.
+
+        A change to a front module re-bills everything after it: history and the front modules that follow
+        it, so H for each module counts both. List modules stable-first; order is kept. Modules with
+        instruction authority never move (instructions precede data). Tail copies are unstable so they
+        get no breakpoint.
         """
         if any(seg.kind != "memory" for seg in memory):
             raise ValueError("only memory segments can be placed")
-        history_tokens = sum(self.tokenizer.count(segment_text(h)) for h in history)
-        front, tail = [], []
-        for seg in memory:
+        behind = sum(self.tokenizer.count(segment_text(h)) for h in history)
+        placed = [False] * len(memory)
+        for i in range(len(memory) - 1, -1, -1):  # later front modules add to what an earlier change re-bills
+            seg = memory[i]
             obs, changes, rate, last, in_tail = self._seen.get(seg.id, (-1, 0, 0.0, seg.hash, False))
             changed = seg.hash != last
             obs, changes = obs + 1, changes + changed
             rate = self.decay * rate + (1 - self.decay) * changed
             m = self.tokenizer.count(segment_text(seg))
-            if cold:
-                in_tail = self._tail_pays(rate, m, history_tokens)
+            if seg.authority == "instruction":
+                in_tail = False
+            elif cold:
+                in_tail = self._tail_pays(rate, m, behind)
                 if not in_tail:
                     obs, changes = 0, 0  # back in front: evidence restarts
             elif not in_tail:
-                in_tail = self._tail_pays(changes / (obs + 1), m, history_tokens)
+                in_tail = self._tail_pays(changes / (obs + 1), m, behind)
             self._seen[seg.id] = (obs, changes, rate, seg.hash, in_tail)
-            if in_tail:
-                tail.append(Segment(seg.id, "memory", seg.content, False, provenance=seg.provenance))
-            else:
-                front.append(seg)
+            placed[i] = in_tail
+            if not in_tail:
+                behind += m
+        front = [seg for seg, in_tail in zip(memory, placed) if not in_tail]
+        tail = [Segment(seg.id, "memory", seg.content, False, authority=seg.authority, provenance=seg.provenance)
+                for seg, in_tail in zip(memory, placed) if in_tail]
         return front, tail
 
-    def _tail_pays(self, p: float, m: int, history_tokens: int) -> bool:
+    def _tail_pays(self, p: float, m: int, behind: int) -> bool:
         w, r = self.write_multiplier, self.read_multiplier
-        return p * (w - r) * (m + history_tokens) > (1 - r) * m
+        return p * (w - r) * (m + behind) > (1 - r) * m

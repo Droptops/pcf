@@ -12,6 +12,9 @@ from .validation import ID_PATTERN, nonempty
 
 PCF_VERSION = "0.2"
 KIND_RANK = {"tools": 0, "system": 1, "memory": 2, "document": 2, "history": 3, "user": 4}
+# Opaque reasoning state a provider accepts back in history; nothing else may ride in provider_blocks.
+PROVIDER_BLOCK_TYPES = {"anthropic": {"thinking", "redacted_thinking"}, "openai": {"reasoning"}}
+CACHE_MARKER_KEYS = {"cache_control", "prompt_cache_breakpoint"}
 
 
 def canonical_bytes(content: Any) -> bytes:
@@ -33,6 +36,13 @@ def text_content(content: Any) -> str:
 def _fields(record: dict, allowed: set[str], required: set[str]) -> None:
     if not isinstance(record, dict) or set(record) - allowed or required - set(record):
         raise ValueError(f"invalid fields: expected {sorted(required)}, allowed {sorted(allowed)}")
+
+
+def _has_marker(value: Any) -> bool:
+    """A cache marker key at any depth (OpenAI markers sit on nested content parts)."""
+    if isinstance(value, dict):
+        return bool(CACHE_MARKER_KEYS & set(value)) or any(_has_marker(v) for v in value.values())
+    return isinstance(value, list) and any(_has_marker(v) for v in value)
 
 
 def normalize_history(turns: Any) -> list[dict]:
@@ -62,9 +72,24 @@ def normalize_history(turns: Any) -> list[dict]:
             result.append({"role": "tool", "call_id": call_id, "content": content,
                            "is_error": turn.get("is_error", False)})
             continue
-        _fields(turn, {"role", "content", "tool_calls"}, {"role"})
+        _fields(turn, {"role", "content", "tool_calls", "provider_blocks"}, {"role"})
         content = turn.get("content", "")
         calls = turn.get("tool_calls", [])
+        blocks = turn.get("provider_blocks", [])
+        if "provider_blocks" in turn and role != "assistant":
+            raise ValueError("only assistant entries can carry provider blocks")
+        if not isinstance(blocks, list) or ("provider_blocks" in turn and not blocks):
+            raise ValueError("provider_blocks must be a non-empty array")
+        for block in blocks:  # opaque provider reasoning state, replayed only by its provider
+            _fields(block, {"provider", "block"}, {"provider", "block"})
+            allowed = PROVIDER_BLOCK_TYPES.get(block["provider"])
+            if allowed is None:
+                raise ValueError(f"unknown provider block owner {block['provider']!r}")
+            kind = block["block"].get("type") if isinstance(block["block"], dict) else None
+            if not isinstance(kind, str) or kind not in allowed:
+                raise ValueError(f"{block['provider']} provider blocks must have type {sorted(allowed)}")
+            if _has_marker(block["block"]):
+                raise ValueError("provider blocks cannot carry cache markers")
         if isinstance(content, dict) and content.get("type") == "tool_use":
             if calls or role != "assistant":
                 raise ValueError("tool_use must be a standalone assistant call")
@@ -90,6 +115,8 @@ def normalize_history(turns: Any) -> list[dict]:
         item = {"role": role, "content": content}
         if clean_calls:
             item["tool_calls"] = clean_calls
+        if blocks:
+            item["provider_blocks"] = [{"provider": b["provider"], "block": dict(b["block"])} for b in blocks]
         result.append(item)
     return result
 

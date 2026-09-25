@@ -189,6 +189,85 @@
                               "additionalProperties": false
                             },
                             "minItems": 1
+                          },
+                          "provider_blocks": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "provider": {
+                                  "enum": [
+                                    "anthropic",
+                                    "openai"
+                                  ]
+                                },
+                                "block": {
+                                  "type": "object",
+                                  "required": [
+                                    "type"
+                                  ],
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "$ref": "#/$defs/noCacheMarker"
+                                }
+                              },
+                              "required": [
+                                "provider",
+                                "block"
+                              ],
+                              "additionalProperties": false,
+                              "allOf": [
+                                {
+                                  "if": {
+                                    "properties": {
+                                      "provider": {
+                                        "const": "anthropic"
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "properties": {
+                                      "block": {
+                                        "properties": {
+                                          "type": {
+                                            "enum": [
+                                              "thinking",
+                                              "redacted_thinking"
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "if": {
+                                    "properties": {
+                                      "provider": {
+                                        "const": "openai"
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "properties": {
+                                      "block": {
+                                        "properties": {
+                                          "type": {
+                                            "enum": [
+                                              "reasoning"
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
                           }
                         },
                         "required": [
@@ -328,6 +407,30 @@
     "nonblank": {
       "$comment": "At least one character that Python's str.strip() keeps (the runtime nonempty() check). Spelled out because \\S differs between Python re and ECMA-262.",
       "pattern": "[^\\t\\n\\x0b\\x0c\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]"
+    },
+    "noCacheMarker": {
+      "not": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "cache_control"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "prompt_cache_breakpoint"
+            ]
+          }
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/noCacheMarker"
+      },
+      "items": {
+        "$ref": "#/$defs/noCacheMarker"
+      }
     }
   }
 }

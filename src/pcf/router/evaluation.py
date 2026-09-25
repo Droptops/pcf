@@ -72,7 +72,8 @@ def validate_source(source, samples, *, dataset_id, threshold=.8, max_ece=.10,
     candidate = samples[0].candidate
     if not source.can_validate(candidate):
         raise ValueError("source must be fitted/versioned for this candidate before validation")
-    context_ids = [s.context.prefix_chain()[-1] for s in samples]
+    key = getattr(source, "context_key", lambda ctx: ctx.prefix_chain()[-1])
+    context_ids = [key(s.context) for s in samples]
     if len(set(context_ids)) != len(context_ids):
         raise ValueError("validation requires unique contexts; repeated rows are not independent evidence")
     if any(context_id in getattr(source, "training_contexts", set()) for context_id in context_ids):

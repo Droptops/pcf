@@ -9,7 +9,6 @@ import pytest
 from pcf import Context, Segment, Usage, canonical_bytes
 from pcf.cache import PrefixCache
 from pcf.compiler import UnsupportedRequest, choose_breakpoints
-from pcf.segments import text_content
 from pcf.families.anthropic_adapter import AnthropicCompiler, history_from_response as anthropic_history
 from pcf.families.capabilities import OpenAICapabilities
 from pcf.families.openai_adapter import OpenAICompiler, history_from_response as openai_history
@@ -150,7 +149,7 @@ def test_malformed_confidence_responses_fall_back():
     for transport in (lambda body: {}, lambda body: [], _raising(json.JSONDecodeError("bad", "", 0)),
                       _raising(http.client.IncompleteRead(b"")),
                       lambda body: {"answers": {"sufficient": {"type": "noul", "noul": 10 ** 400}}}):
-        d = Router(cands, JevConfidenceSource(transport)).route(ctx, now=0)
+        d = Router(cands, JevConfidenceSource(transport), score_unvalidated=True).route(ctx, now=0)
         assert d.escalate and d.chosen == "sim-a-large" and all(c.confidence_error for c in d.candidates)
 
 
@@ -320,12 +319,196 @@ def test_over_budget_selection_keeps_first_anchor_as_well_as_last():
     assert choose_breakpoints(ctx, 3) == [1, 4, 5]
 
 
-def test_openai_write_estimate_excludes_trailing_assistant_text():
-    # The history marker sits on the user item, so the assistant reply after it is not written this request.
-    reply = "word " * 2000
-    hist = Segment("h", "history", [{"role": "user", "content": "q"}, {"role": "assistant", "content": reply}])
-    ctx = Context([Segment("s", "system", "rule " * 2000), hist, Segment("u", "user", "next", stable=False)])
+def _native_prefix_tokens(compiler, segments):
+    """Native tokens of a request rendered from exactly these segments (what a marker at its end covers)."""
+    return compiler.native_token_count(compiler.native_input(compiler.render(Context(segments), [])))
+
+
+@pytest.mark.parametrize("trailing", [
+    [{"role": "assistant", "content": "word " * 2000}],
+    [{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "f", "arguments":
+      {"q": 'quote " and \\ backslash ' * 300}}]}, {"role": "tool", "call_id": "c1", "content": "ok"},
+     {"role": "assistant", "content": "done " * 50}],
+])
+def test_openai_write_estimate_stops_at_the_marker_in_native_units(trailing):
+    # The history marker sits on the last user/tool item; what follows it is not written this request.
+    turns = [{"role": "user", "content": "q"}, *trailing]
+    marked = max(k for k, t in enumerate(turns) if t["role"] in {"user", "tool"})
+    system = Segment("s", "system", "rule " * 2000)
+    ctx = Context([system, Segment("h", "history", turns), Segment("u", "user", "next", stable=False)])
     c = OpenAICompiler("gpt-5.6")
     w, cum = c.warmth(ctx, PrefixCache(1800), 0.0), c.compile(ctx).cum_tokens
-    trailing = c.tokenizer.count(text_content([{"role": "assistant", "content": reply}]))
-    assert w.cache_creation_tokens == cum[1] - trailing and trailing > 2000
+    exact = _native_prefix_tokens(c, [system, Segment("h", "history", turns[:marked + 1])])
+    assert w.cache_creation_tokens == exact < cum[1]
+
+
+def test_openai_tool_loop_keeps_naming_the_previous_write():
+    # Per-message history appends [user], [call], [tool] segments; with markers only readable when present,
+    # the budget must keep enough history endpoints that each request names the previous request's write.
+    from pcf.families.sim import SimEngine
+    def user(k):
+        return {"role": "user", "content": f"question {k} " * 40}
+
+    def call(k):
+        return {"role": "assistant", "content": "", "tool_calls": [{"id": f"c{k}", "name": "f", "arguments": {"k": k}}]}
+
+    def tool(k):
+        return {"role": "tool", "call_id": f"c{k}", "content": f"result {k} " * 200, "is_error": False}
+
+    base = [Segment("s", "system", "policy " * 1500), Segment("p", "memory", "profile " * 600, provenance="p")]
+    hist, contexts = [], []
+    for k in range(6):
+        contexts.append(Context([*base, *hist, Segment("u", "user", f"question {k} " * 40, stable=False)]))
+        hist += [Segment(f"u{k}", "history", [user(k)]), Segment(f"c{k}", "history", [call(k)]),
+                 Segment(f"r{k}", "history", [tool(k)])]
+        contexts.append(Context([*base, *hist]))
+        hist.append(Segment(f"a{k}", "history", [{"role": "assistant", "content": f"answer {k} " * 40}]))
+    compiler = OpenAICompiler("gpt-5.6")
+    engine = SimEngine(compiler, PrefixCache(compiler.descriptor.ttl_seconds))
+    cold = [engine.run(ctx, 10.0 * (t + 1))[0].cold_tokens for t, ctx in enumerate(contexts)]
+    per_question = cold[3::2]  # flat (within digit-width noise) instead of growing ~700 tokens a question
+    assert max(per_question) - min(per_question) <= 2, cold
+
+
+def test_lead_system_anchor_survives_a_volatile_stable_module_behind_tools():
+    tools = Segment("t", "tools", [{"name": "f", "parameters": {}}])
+    hist = [Segment(f"h{i}", "history", [{"role": "user", "content": f"q{i}"},
+                                         {"role": "assistant", "content": f"a{i}"}]) for i in range(4)]
+    ctx = Context([tools, Segment("s", "system", "sys " * 600), Segment("m", "memory", "changes every turn"),
+                   *hist, Segment("u", "user", "next", stable=False)])
+    request = AnthropicCompiler("claude-sonnet-5").compile(ctx).request
+    assert "cache_control" in request["system"][-1] and "cache_control" not in request["tools"][-1]
+    # OpenAI needs three history endpoints, so its budget keeps only the last anchor.
+    assert OpenAICompiler("gpt-5.6").compile(ctx).breakpoints == (2, 4, 5, 6)
+
+
+@pytest.mark.parametrize("compiler", [AnthropicCompiler("claude-sonnet-5"), OpenAICompiler("gpt-5.6")])
+@pytest.mark.parametrize("stable", [None, False])
+def test_tail_memory_never_takes_a_breakpoint(compiler, stable):
+    hist = [Segment(f"h{i}", "history", [{"role": "user", "content": f"q{i}"},
+                                         {"role": "assistant", "content": f"a{i}"}]) for i in range(10)]
+    tail = [Segment(f"m{k}", "memory", f"module {k}", stable, provenance=f"m{k}") for k in range(4)]
+    ctx = Context([Segment("s", "system", "sys " * 600), *hist, *tail, Segment("u", "user", "hi", stable=False)])
+    assert [ctx.segments[i].id for i in compiler.compile(ctx).breakpoints] == ["s", "h7", "h8", "h9"]
+
+
+def test_every_prefill_rejecting_model_has_a_cache_profile():
+    from pcf.families.anthropic_adapter import MIN_CACHEABLE, PREFILL_REJECTED
+    assert PREFILL_REJECTED <= MIN_CACHEABLE.keys()
+    for model in PREFILL_REJECTED:
+        AnthropicCompiler(model)  # no "unknown cache profile"
+
+
+def test_router_does_not_pay_for_scores_that_cannot_route():
+    calls = []
+
+    def transport(body):
+        calls.append(body)
+        return {"model": "jev-1.13.0", "answers": {"sufficient": {"type": "noul", "noul": 0.9}}}
+
+    ctx = Context([Segment("s", "system", "x"), Segment("u", "user", "hi", stable=False)])
+    cands = [Candidate(family_a().compiler, family_a().cache, 1.0, 0.1, is_fallback=True)]
+    source = JevConfidenceSource(transport, model="jev-1.13.0")
+    report = Router(cands, source).route(ctx, now=0).candidates[0]
+    assert calls == [] and report.score is None and not report.calibration_valid
+    report = Router(cands, source, score_unvalidated=True).route(ctx, now=0).candidates[0]
+    assert len(calls) == 1 and report.score == 0.9 and report.p_sufficient is None
+
+
+def test_a_stable_user_turn_after_history_is_still_a_candidate():
+    hist = Segment("h", "history", [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}])
+    ctx = Context([Segment("s", "system", "sys"), hist, Segment("m", "memory", "tail", False),
+                   Segment("u", "user", "same question every time", stable=True)])
+    assert [ctx.segments[i].id for i in choose_breakpoints(ctx, 4)] == ["s", "h", "u"]
+
+
+def test_scaled_tokenizer_is_deterministic_monotonic_and_has_its_own_identity():
+    from pcf.families.anthropic_adapter import HeuristicTokenizer, ScaledTokenizer
+    base = HeuristicTokenizer()
+    scaled = ScaledTokenizer(base, 1.3)
+    assert scaled.count("x" * 400) == 130 and scaled.count("") == 0
+    assert scaled.tokenizer_hash not in {base.tokenizer_hash, ScaledTokenizer(base, 1.4).tokenizer_hash}
+    assert ScaledTokenizer(base, 2).tokenizer_hash == ScaledTokenizer(base, 2.0).tokenizer_hash
+    ctx = Context([Segment("s", "system", "rule " * 800), Segment("u", "user", "hi", stable=False)])
+    plain, corrected = AnthropicCompiler("claude-sonnet-5"), AnthropicCompiler("claude-sonnet-5", tokenizer=scaled)
+    assert corrected.compile(ctx).total_tokens > plain.compile(ctx).total_tokens
+    assert corrected.cache_key != plain.cache_key
+    for bad in (0, -1, float("nan"), True):
+        with pytest.raises(ValueError):
+            ScaledTokenizer(base, bad)
+
+
+def test_openai_keeps_the_system_anchor_while_history_is_short():
+    modules = [Segment(f"m{k}", "memory", f"module {k}", provenance=f"m{k}") for k in range(4)]
+    hist = Segment("h0", "history", [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}])
+    ctx = Context([Segment("s", "system", "sys " * 600), *modules, hist, Segment("u", "user", "next", stable=False)])
+    assert [ctx.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(ctx).breakpoints] == ["s", "m2", "m3", "h0"]
+
+
+def test_openai_parallel_tool_results_in_separate_segments_keep_cost_flat():
+    from pcf.families.sim import SimEngine
+    base = [Segment("s", "system", "policy " * 1500), Segment("p", "memory", "profile " * 600, provenance="p")]
+    hist, contexts = [], []
+    for k in range(6):
+        contexts.append(Context([*base, *hist, Segment("u", "user", f"question {k} " * 40, stable=False)]))
+        calls = [{"id": f"c{k}{j}", "name": "f", "arguments": {"k": k, "j": j}} for j in range(2)]
+        hist += [Segment(f"u{k}", "history", [{"role": "user", "content": f"question {k} " * 40}]),
+                 Segment(f"c{k}", "history", [{"role": "assistant", "content": "", "tool_calls": calls}])]
+        hist += [Segment(f"r{k}{j}", "history", [{"role": "tool", "call_id": f"c{k}{j}", "content": f"result {k} " * 200,
+                                                   "is_error": False}]) for j in range(2)]
+        contexts.append(Context([*base, *hist]))
+        hist.append(Segment(f"a{k}", "history", [{"role": "assistant", "content": f"answer {k} " * 40}]))
+    compiler = OpenAICompiler("gpt-5.6")
+    engine = SimEngine(compiler, PrefixCache(compiler.descriptor.ttl_seconds))
+    cold = [engine.run(ctx, 10.0 * (t + 1))[0].cold_tokens for t, ctx in enumerate(contexts)]
+    per_round = cold[3::2]
+    assert max(per_round) - min(per_round) <= 2, cold
+    # A boundary between the two results leaves a call pending: it can never end a request, so it is not marked.
+    marked = [contexts[-1].segments[i].id for i in compiler.compile(contexts[-1]).breakpoints]
+    assert not any(m.startswith("r") and m.endswith("0") for m in marked), marked
+
+
+def test_budget_of_two_never_returns_more_than_two():
+    ctx = Context([Segment("t", "tools", [{"name": "f", "parameters": {}}]), Segment("s", "system", "sys"),
+                   Segment("m", "memory", "mem"), Segment("u", "user", "hi", stable=True)])
+    for slots in (0, 1, 2, 3):
+        assert len(choose_breakpoints(ctx, 2, history_slots=slots)) <= 2
+
+
+def test_openai_tool_loop_with_a_stable_trailing_reminder_stays_flat():
+    from pcf.families.sim import SimEngine
+    base = [Segment("s", "system", "policy " * 1500), Segment("p", "memory", "profile " * 600, provenance="p")]
+    reminder = Segment("rem", "user", "Reminder: cite the order id.", stable=True)
+    hist, contexts = [], []
+    for k in range(6):
+        call = {"id": f"c{k}", "name": "f", "arguments": {"k": k}}
+        hist += [Segment(f"u{k}", "history", [{"role": "user", "content": f"question {k} " * 40}]),
+                 Segment(f"c{k}", "history", [{"role": "assistant", "content": "", "tool_calls": [call]}]),
+                 Segment(f"r{k}", "history", [{"role": "tool", "call_id": f"c{k}", "content": f"result {k} " * 200,
+                                               "is_error": False}])]
+        contexts.append(Context([*base, *hist, reminder]))
+        hist.append(Segment(f"a{k}", "history", [{"role": "assistant", "content": f"answer {k} " * 40}]))
+    compiler = OpenAICompiler("gpt-5.6")
+    engine = SimEngine(compiler, PrefixCache(compiler.descriptor.ttl_seconds))
+    cold = [engine.run(ctx, 10.0 * (t + 1))[0].cold_tokens for t, ctx in enumerate(contexts)]
+    assert max(cold[1:]) - min(cold[1:]) <= 2, cold
+
+
+def test_anthropic_keeps_the_system_anchor_beside_a_stable_reminder():
+    hist = [Segment(f"h{i}", "history", [{"role": "user", "content": f"q{i}"},
+                                         {"role": "assistant", "content": f"a{i}"}]) for i in range(4)]
+    ctx = Context([Segment("s", "system", "sys " * 600), Segment("m", "memory", "volatile"), *hist,
+                   Segment("rem", "user", "Reminder: cite the order id.", stable=True)])
+    assert "s" in [ctx.segments[i].id for i in AnthropicCompiler("claude-sonnet-5").compile(ctx).breakpoints]
+
+
+def test_openai_serves_history_endpoints_before_a_stable_latest_user_turn():
+    # Documented trade-off: OpenAI's budget keeps the anchor and three history endpoints; send the latest user
+    # turn as the last history segment to cache it.
+    hist = [Segment(f"h{i}", "history", [{"role": "user", "content": f"q{i}"},
+                                         {"role": "assistant", "content": f"a{i}"}]) for i in range(4)]
+    ctx = Context([Segment("s", "system", "sys " * 600), *hist, Segment("u", "user", "latest", stable=True)])
+    assert [ctx.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(ctx).breakpoints] == ["s", "h1", "h2", "h3"]
+    as_history = Context([Segment("s", "system", "sys " * 600), *hist,
+                          Segment("q", "history", [{"role": "user", "content": "latest"}])])
+    assert "q" in [as_history.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(as_history).breakpoints]

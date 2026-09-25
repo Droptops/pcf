@@ -91,7 +91,7 @@ def data_text(seg: Segment) -> str:
     return canonical_bytes({"kind": seg.kind, "source": seg.provenance, "data": seg.content}).decode()
 
 
-def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> list[int]:
+def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, history_slots: int = 2) -> list[int]:
     """Keep stable group anchors and recent history endpoints, up to the explicit budget.
 
     History endpoints are retained individually so an append-only explicit-mode
@@ -99,15 +99,44 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> li
     indices rejected by ``supported``, have no native marker location and do not
     consume budget. Memory segments sharing a ``provenance`` form one module with its
     own anchor, so a change to a later module keeps earlier modules warm; memory without
-    provenance shares the document anchor. Stability is a hint, not a cache guarantee.
+    provenance shares the document anchor. Tail memory (after history) is rebuilt every turn
+    in a conversation, so an entry there is reused only by a request that repeats the same
+    history (a retry); it never takes a breakpoint. A history boundary that leaves a tool call
+    waiting for its result can never end a request, so it takes no slot either. Stability is
+    a hint, not a cache guarantee.
+
+    Over budget (and above a budget of one, which marks the newest candidate), the last anchor
+    is kept (with no anchor, the oldest candidate stands in); then the last anchor of the
+    leading tools/system run when ``history_slots`` endpoints (or every history candidate, if
+    fewer) still fit beside both anchors, so one mislabelled
+    volatile module cannot take the system prompt out of cache; then the newest history
+    endpoints, up to ``history_slots``; then the newest remaining candidates. ``history_slots`` is how
+    many history endpoints a compiler needs for the next request to name the endpoint this
+    request writes: providers that read only at markers present in the request need one
+    per markable segment a request can append.
     """
     integer(max_breakpoints, "max_breakpoints")
+    integer(history_slots, "history_slots")
+    first_history = next((i for i, seg in enumerate(ctx.segments) if seg.kind == "history"), len(ctx.segments))
+    pending, settled = set(), set()  # history indices whose end leaves no tool call waiting for its result
+    for i, seg in enumerate(ctx.segments):
+        if seg.kind == "history":
+            for turn in seg.content:
+                if turn["role"] == "tool":
+                    pending.discard(turn["call_id"])
+                else:
+                    pending.update(call["id"] for call in turn.get("tool_calls", []))
+            if not pending:
+                settled.add(i)
     groups, history = {}, []
     for i, seg in enumerate(ctx.segments):
         if not seg.stable or not seg.content or (supported is not None and not supported(i)):
             continue
         if seg.kind == "history":
-            history.append(i)
+            if i in settled:
+                history.append(i)
+        elif i > first_history and seg.kind in {"memory", "document"}:
+            continue  # tail memory: rebuilt every turn, so an entry here is rewritten, not read
         elif seg.kind == "memory" and seg.provenance is not None:
             groups[("memory", seg.provenance)] = i
         else:
@@ -117,15 +146,21 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None) -> li
         return candidates
     if max_breakpoints == 0:
         return []
-    anchors = [i for i in candidates if ctx.segments[i].kind not in {"history", "user"}]
-    anchor = anchors[-1] if anchors else candidates[0]
     if max_breakpoints == 1:
         return [candidates[-1]]
-    # Stability is only a hint: with budget to spare, also keep the first anchor so one mislabelled
-    # volatile module cannot take the whole prefix (system, tools) out of cache. Two history endpoints
-    # remain, enough for an append-only request to name the endpoint the previous request wrote.
-    keep = {anchor, anchors[0]} if max_breakpoints >= 4 and anchors else {anchor}
-    return sorted({*keep, *[i for i in candidates if i not in keep][-(max_breakpoints - len(keep)):]})
+    anchors = [i for i in candidates if ctx.segments[i].kind not in {"history", "user"}]
+    anchor = anchors[-1] if anchors else candidates[0]
+    keep = {anchor}
+    need = min(history_slots, len(history))
+    lead = [i for i in anchors if ctx.segments[i].kind in {"tools", "system"}]
+    if lead and lead[-1] != anchor and max_breakpoints - 2 >= need:
+        keep.add(lead[-1])
+    reserve = min(need, max_breakpoints - len(keep))  # history endpoints before any newer non-history candidate
+    if reserve:
+        keep |= set([i for i in history if i not in keep][-reserve:])
+    room = max_breakpoints - len(keep)
+    rest = [i for i in candidates if i not in keep]
+    return sorted({*keep, *(rest[-room:] if room else [])})
 
 
 class ContextCompiler(ABC):
@@ -134,12 +169,18 @@ class ContextCompiler(ABC):
     compiler_id = "pcf.base:0.2"
     cache_mode = "simulated"
     implicit_breakpoint = False  # the provider places its own breakpoint when a request carries none
+    history_slots = 2  # history endpoints kept over budget; see choose_breakpoints
 
     @abstractmethod
     def render(self, ctx: Context, breakpoints: list[int]) -> dict[str, Any]: ...
 
     def supports_boundary(self, ctx: Context, index: int) -> bool:
         return bool(ctx.segments[index].content)
+
+    @property
+    def generation_identity(self) -> dict:
+        """Non-default settings that change what the model does or sees (e.g. thinking); part of quality identity."""
+        return {}
 
     def covered_tokens(self, ctx: Context, index: int, cum_tokens: list[int]) -> int:
         """Prefix tokens a marker on segment ``index`` caches; adapters whose marker sits inside a segment trim it."""
@@ -181,7 +222,8 @@ class ContextCompiler(ABC):
 
     def compile(self, ctx: Context) -> CompiledPrompt:
         ctx.validate_tool_history(require_resolved=True)
-        breakpoints = choose_breakpoints(ctx, self.descriptor.max_breakpoints, lambda i: self.supports_boundary(ctx, i))
+        breakpoints = choose_breakpoints(ctx, self.descriptor.max_breakpoints, lambda i: self.supports_boundary(ctx, i),
+                                         history_slots=self.history_slots)
         native, positions, counts = [], [], []
         previous_count = 0
         for end in range(1, len(ctx.segments) + 1):
