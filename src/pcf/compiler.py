@@ -121,9 +121,9 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     is kept (with no anchor, the oldest candidate stands in); then the last anchor of the
     leading tools/system run when ``history_slots`` endpoints (or every history candidate, if
     fewer) still fit beside both anchors, so one mislabelled
-    volatile module cannot take the system prompt out of cache (on a request with no history, the first of a
-    conversation, a memory or document anchor directly after that run takes the place: it covers the system prompt
-    too, and it is the context other conversations share); then the newest history
+    volatile module cannot take the system prompt out of cache (a memory or document anchor directly after that
+    run takes the place: it covers the system prompt too, and it is the context other conversations share; every
+    request makes the same choice, so a later request reads the entry the first one wrote); then the newest history
     endpoints, up to ``history_slots``; then the newest remaining candidates. ``history_slots`` is how
     many history endpoints a compiler needs for the next request to name the endpoint this
     request writes: providers that read only at markers present in the request need one
@@ -168,9 +168,8 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     need = min(history_slots, len(history))
     lead = [i for i in anchors if ctx.segments[i].kind in {"tools", "system"}]
     if lead and lead[-1] != anchor and max_breakpoints - 2 >= need:
-        after = lead[-1] + 1  # a first request's shared context right after the system run covers the system too
-        shared = (not history and after in anchors and after != anchor
-                  and ctx.segments[after].kind in {"memory", "document"})
+        after = lead[-1] + 1  # shared context right after the system run covers the system too
+        shared = after in anchors and after != anchor and ctx.segments[after].kind in {"memory", "document"}
         keep.add(after if shared else lead[-1])
     reserve = min(need, max_breakpoints - len(keep))  # history endpoints before any newer non-history candidate
     if reserve:

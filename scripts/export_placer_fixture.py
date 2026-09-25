@@ -4,7 +4,8 @@
 The TypeScript port (ts/) replays the same inputs and must reach the same decisions. Module content is replaced
 by its hash and token count, which is all the placer reads. Each scenario runs twice: with every 17th turn
 reported cold, and with every 4th turn cold. Seeded random sessions then put module sizes, change rates and cold
-turns near the decision threshold, so a small difference in the rule changes a decision.
+turns near the decision threshold, so a small difference in the rule changes a decision; in half of them modules
+join partway through, appended or inserted.
 """
 from __future__ import annotations
 
@@ -58,12 +59,16 @@ def fixture() -> dict:
                 return counts[text]
         placer = MemoryPlacer(Lookup(), write_multiplier=1.25, read_multiplier=0.1)
         spec = [(f"m{k}", rng.uniform(0.02, 0.7), rng.randint(20, 3000)) for k in range(rng.randint(2, 7))]
+        # from session 4 on, modules after the first join partway through: appended at the end or inserted
+        start = {name: 0 if n < 4 or k == 0 else rng.randint(0, 40) for k, (name, _, _) in enumerate(spec)}
         version = {name: 0 for name, _, _ in spec}
         history, history_tokens, turns = [], 0, []
         for turn in range(80):
             mem = []
             for name, p, size in spec:
                 version[name] += rng.random() < p
+                if turn < start[name]:
+                    continue
                 text = f"{name} v{version[name]}"
                 counts[text] = size
                 mem.append(Segment(name, "memory", text, provenance=name))

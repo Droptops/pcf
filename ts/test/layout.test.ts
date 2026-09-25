@@ -43,3 +43,21 @@ test("openai chat: system first, then front, history, tail and question", () => 
   assert.deepEqual(out.map((m) => m.role), ["system", "user", "user", "assistant", "user"]);
   assert.deepEqual((out[4].content as any[]).map((p) => p.text), ["BALANCE", "q2"]);
 });
+
+test("anthropic: tool results stay first, empty history content is skipped, tool markers are removed", () => {
+  const out = layoutAnthropic({
+    tools: [{ name: "a", input_schema: {}, cache_control: { type: "ephemeral" } } as any,
+            { name: "b", input_schema: {}, cache_control: { type: "ephemeral" } } as any],
+    messages: [{ role: "user", content: "hi" }, { role: "assistant", content: [] },
+               { role: "user", content: [{ type: "tool_result", tool_use_id: "t1",
+                                           content: [{ type: "text", text: "ok", cache_control: { type: "ephemeral" } }] },
+                                         { type: "text", text: "go on" }] }],
+  }, placement);
+  const last = out.messages[out.messages.length - 1].content as any[];
+  assert.deepEqual(last.map((b) => b.type), ["tool_result", "text", "text"]);
+  assert.deepEqual(last.map((b) => b.text), [undefined, "BALANCE", "go on"]);
+  const count = (v: unknown): number => Array.isArray(v) ? v.reduce((n, x) => n + count(x), 0)
+    : v && typeof v === "object" ? Object.entries(v).reduce((n, [k, x]) => n + (k === "cache_control" ? 1 : count(x)), 0) : 0;
+  assert.equal(count(out), 3);
+  assert.equal(((out.messages[1].content as any[])[0]).cache_control !== undefined, true);  // "hi", the newest with content
+});
