@@ -272,9 +272,10 @@ a zero cache read: by the time usage shows a miss, that request has already rewr
 
 ## Next step: a production pilot
 
-The evidence here is scripted or synthetic. [`docs/PILOT.md`](docs/PILOT.md) describes the next test: one real
-assistant, conversations assigned to a tuned baseline or to `MemoryPlacer`, measuring billed cost, latency and
-answer quality, with sample sizes and stop rules set in advance.
+The evidence here is scripted or synthetic. [`docs/FLEET_CACHE.md`](docs/FLEET_CACHE.md) is the next synthetic
+test: a shared prefix across sessions, 60-turn sessions, and a gap past the cache lifetime, with pass rules set
+in advance. [`docs/PILOT.md`](docs/PILOT.md) is the test after that, on one real assistant, measuring billed cost,
+latency and answer quality.
 
 ## Status and design limits
 

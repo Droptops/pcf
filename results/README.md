@@ -57,6 +57,8 @@ items.
 | `2026-09-25/domain-gpt-5.6.json` | OpenAI gpt-5.6 | 6 scenarios × 4 layouts × 3 repeats × 24 turns | corrected scenarios; latency and compile time recorded |
 | `2026-09-25/domain-claude-sonnet-5-replication.json` | claude-sonnet-5 via OpenRouter | same | replication with latency recorded; claims rerun separately after credits ran out (`meta.note`) |
 | `2026-09-25/domain-gpt-5.6-run1.json` | OpenAI gpt-5.6 | same | first run: costs valid, answers confounded by verification requests (see `meta.note`) |
+| `2026-09-25/domain-gpt-5.6-60turn.json` | OpenAI gpt-5.6 | 6 scenarios × front-tuned, placed × 2 repeats × 60 turns | warm sessions; re-graded offline after the grader learned negative values (`meta.regrade_changes`) |
+| `2026-09-25/domain-claude-sonnet-5-60turn.json` | claude-sonnet-5 via OpenRouter | same | same |
 
 Domain table costs in the main README sum per-scenario means over repetitions; accuracy counts cover all
 repetitions. To pool the two compatible Claude runs, preserving all six repetitions per scenario:
@@ -81,3 +83,10 @@ python scripts/live_jev_calibration.py --relabel \
 The v3 artifact records its normalization policy and the relabel script's SHA-256. Relabel timestamps may differ;
 answers, Jev scores, labels, metrics and validation records are reproducible from the original file on any supported
 Python version (the metrics use correctly rounded summation).
+
+## Offline scaling experiment
+
+`2026-09-25/offline-scaling-validation.json.gz` contains 168 deterministic simulated sessions plus 180 fleet
+first requests; `offline-scaling-summary.json` is the compact summary. These are not live provider observations.
+See [`docs/SCALING_VALIDATION.md`](../docs/SCALING_VALIDATION.md) for controls, reproduction, the mismatch with
+the recorded 24-turn live savings and the live 60-turn check.

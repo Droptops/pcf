@@ -511,8 +511,8 @@ SCENARIOS = {s.key: s for s in (CLINICAL, CLAIMS, BENEFITS, TAX, HELPDESK, CRM)}
 
 
 # Grading -----------------------------------------------------------------------------------------------------------
-NUMBER = re.compile(r"(?<![\w$.,:/-])(\d{1,3}(?:\.\d)?)(?![\w:/]|[.,]\d)")
-MONEY = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{2})?)")
+NUMBER = re.compile(r"(?<![\w$.,:/-])([-\u2212]?\d{1,3}(?:\.\d)?)(?![\w:/]|[.,]\d)")
+MONEY = re.compile(r"([-\u2212]?)\$\s?([-\u2212]?)(\d[\d,]*(?:\.\d{2})?)")
 DATE = re.compile(r"\b(" + "|".join(MONTHS) + r")[a-z]*\.?\s+(\d{1,2})\b", re.I)
 ALIASES = {"text message": ("text", "texts", "SMS"), "member portal": ("portal",), "postal mail": ("mail",),
            "noncompliant": ("non-compliant", "not compliant"),
@@ -538,13 +538,13 @@ def normalize(kind: str, value: str) -> str:
 def _first(ask: Ask, text: str) -> str:
     if ask.kind == "money":
         m = MONEY.search(text)
-        return normalize("money", m.group(1)) if m else ""
+        return normalize("money", ("-" if m.group(1) or m.group(2) else "") + m.group(3)) if m else ""
     if ask.kind == "date":
         m = DATE.search(text)
         return normalize("date", m.group(0)) if m else ""
     if ask.kind == "number":
         m = NUMBER.search(text)
-        return m.group(1) if m else ""
+        return m.group(1).replace("\u2212", "-") if m else ""
     hits = [(m.start(), -len(form), v) for v in ask.choices for form in (v, *ALIASES.get(v, ()))
             for m in re.finditer(_pattern(form), text, re.I)]
     return min(hits)[2].lower() if hits else ""
