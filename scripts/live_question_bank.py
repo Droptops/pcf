@@ -36,19 +36,25 @@ POLICY = ("Policy: when the customer's most recent request in this conversation 
 
 def item_specs(per_type: int):
     """(type, final turn, history style) for every item: deterministic and distinct within each type."""
-    styles = ("template", "varied")
-    pools = {
+    finals = {
         # conflict: the record must not change between the customer's request (final - 2) and the question, and the
         # scripted turn in between (final - 1) must not be the contact question, whose reply restates the old channel
-        "conflict": [(f, st) for f in range(12, 71) if f % 6 >= 2 and (f - 1) % 4 != 2 for st in styles],
-        "cross": [(f, st) for f in range(10, 41) for st in styles],
-        "far": [(f, st) for f in range(60, 101) for st in styles],
+        "conflict": [f for f in range(12, 71) if f % 6 >= 2 and (f - 1) % 4 != 2],
+        "cross": list(range(10, 41)),
+        "far": list(range(60, 101)),
     }
+    # Style order alternates by final, so any stride through a pool picks both history styles.
+    pools = {kind: [(f, st) for i, f in enumerate(fs) for st in (("template", "varied"), ("varied", "template"))[i % 2]]
+             for kind, fs in finals.items()}
     specs = []
     for kind, pool in pools.items():
         if per_type > len(pool):
             raise ValueError(f"at most {len(pool)} distinct {kind} items")
-        specs += [(kind, *pool[k * len(pool) // per_type]) for k in range(per_type)]
+        fs = finals[kind]
+        if per_type <= len(fs):  # distinct finals, styles alternating by item
+            specs += [(kind, fs[k * len(fs) // per_type], ("template", "varied")[k % 2]) for k in range(per_type)]
+        else:
+            specs += [(kind, *pool[k * len(pool) // per_type]) for k in range(per_type)]
     return specs
 
 

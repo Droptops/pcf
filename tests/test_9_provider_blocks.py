@@ -147,3 +147,51 @@ def test_reasoning_settings_are_part_of_the_validated_candidate():
     assert len({base, fp(AnthropicCompiler("claude-sonnet-5", thinking={"type": "disabled"})),
                 fp(AnthropicCompiler("claude-sonnet-5", thinking_blocks="drop"))}) == 3
     assert fp(OpenAICompiler("gpt-5.6", reasoning_items="drop")) != fp(OpenAICompiler("gpt-5.6"))
+
+
+@pytest.mark.parametrize("block", [
+    {"type": "reasoning", "summary": [{"type": "summary_text", "text": "x",
+                                       "prompt_cache_breakpoint": {"mode": "explicit"}}]},
+    {"type": "reasoning", "content": [{"type": "reasoning_text", "text": "x", "cache_control": {"type": "ephemeral"}}]},
+])
+def test_nested_cache_markers_are_rejected_in_runtime_and_schema(block):
+    turn = {"role": "assistant", "content": "a", "provider_blocks": [{"provider": "openai", "block": block}]}
+    with pytest.raises(ValueError, match="cache markers"):
+        Segment("h", "history", [turn])
+    raw = Context([Segment("s", "system", "sys"), Segment("h", "history", [{"role": "assistant", "content": "a"}])]).to_json()
+    raw["segments"][1]["content"][0]["provider_blocks"] = [{"provider": "openai", "block": block}]
+    with pytest.raises(Exception):
+        validate("pcf", raw)
+
+
+@pytest.mark.parametrize("blocks", [[{"provider": "anthropic", "block": {"type": ["thinking"]}}],
+                                    [{"provider": "anthropic", "block": {"type": {"x": 1}}}], []])
+def test_malformed_provider_blocks_raise_value_error(blocks):
+    with pytest.raises(ValueError):
+        Segment("h", "history", [{"role": "assistant", "content": "a", "provider_blocks": blocks}])
+
+
+def test_empty_text_between_thinking_blocks_keeps_one_turn():
+    second = {"type": "thinking", "thinking": "", "signature": "sig-2"}
+    call = {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {}}
+    turns = anthropic_history({"content": [THINKING, {"type": "text", "text": ""}, second, call]})
+    assert len(turns) == 1 and len(turns[0]["provider_blocks"]) == 2
+    Segment("h", "history", turns)
+
+
+def test_contexts_differing_only_in_provider_blocks_are_not_independent_jev_evidence():
+    from pcf.cache import PrefixCache
+    from pcf.router import Candidate, JevConfidenceSource, ValidationSample
+
+    def ctx(signature):
+        block = {"type": "thinking", "thinking": "", "signature": signature}
+        turn = {"role": "assistant", "content": "a", "provider_blocks": [{"provider": "anthropic", "block": block}]}
+        return Context([Segment("s", "system", "sys"), Segment("h", "history", [{"role": "user", "content": "q"}, turn]),
+                        Segment("u", "user", "next", stable=False)])
+
+    source = JevConfidenceSource(lambda body: {"model": "jev-1", "answers": {"sufficient": {"type": "noul", "noul": 0.9}}},
+                                 model="jev-1")
+    cand = Candidate(OpenAICompiler("gpt-5.6"), PrefixCache(300), 1.0, 0.1, is_fallback=True)
+    samples = [ValidationSample(ctx(f"sig-{k}"), cand, 1, k == 0) for k in range(3)]
+    with pytest.raises(ValueError, match="unique contexts"):
+        source.validate(samples, dataset_id="d")

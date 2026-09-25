@@ -38,6 +38,13 @@ def _fields(record: dict, allowed: set[str], required: set[str]) -> None:
         raise ValueError(f"invalid fields: expected {sorted(required)}, allowed {sorted(allowed)}")
 
 
+def _has_marker(value: Any) -> bool:
+    """A cache marker key at any depth (OpenAI markers sit on nested content parts)."""
+    if isinstance(value, dict):
+        return bool(CACHE_MARKER_KEYS & set(value)) or any(_has_marker(v) for v in value.values())
+    return isinstance(value, list) and any(_has_marker(v) for v in value)
+
+
 def normalize_history(turns: Any) -> list[dict]:
     if not isinstance(turns, list):
         raise ValueError("history content must be an array")
@@ -69,18 +76,19 @@ def normalize_history(turns: Any) -> list[dict]:
         content = turn.get("content", "")
         calls = turn.get("tool_calls", [])
         blocks = turn.get("provider_blocks", [])
-        if blocks and role != "assistant":
+        if "provider_blocks" in turn and role != "assistant":
             raise ValueError("only assistant entries can carry provider blocks")
-        if not isinstance(blocks, list):
-            raise ValueError("provider_blocks must be an array")
+        if not isinstance(blocks, list) or ("provider_blocks" in turn and not blocks):
+            raise ValueError("provider_blocks must be a non-empty array")
         for block in blocks:  # opaque provider reasoning state, replayed only by its provider
             _fields(block, {"provider", "block"}, {"provider", "block"})
             allowed = PROVIDER_BLOCK_TYPES.get(block["provider"])
             if allowed is None:
                 raise ValueError(f"unknown provider block owner {block['provider']!r}")
-            if not isinstance(block["block"], dict) or block["block"].get("type") not in allowed:
+            kind = block["block"].get("type") if isinstance(block["block"], dict) else None
+            if not isinstance(kind, str) or kind not in allowed:
                 raise ValueError(f"{block['provider']} provider blocks must have type {sorted(allowed)}")
-            if CACHE_MARKER_KEYS & set(block["block"]):
+            if _has_marker(block["block"]):
                 raise ValueError("provider blocks cannot carry cache markers")
         if isinstance(content, dict) and content.get("type") == "tool_use":
             if calls or role != "assistant":

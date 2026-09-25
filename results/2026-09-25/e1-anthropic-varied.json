@@ -19,7 +19,7 @@
   "read_multiplier": 0.1,
   "output_multiplier": 5.0,
   "paid": true,
-  "note": "Re-graded offline with the answer-set grader (scripts/live_memory_placement.py --regrade); 17 grades changed from the grader in use at run time. Runs used max_tokens 512; Anthropic adaptive thinking ended 2 placed turns (varied) with no visible text at that limit."
+  "note": "Re-graded offline with the answer-set grader (scripts/live_memory_placement.py --regrade); 18 grades changed (17 by the answer-set grader, 1 more by reading a bolded final answer) from the grader in use at run time. Runs used max_tokens 512; Anthropic adaptive thinking ended 2 placed turns (varied) with no visible text at that limit."
  },
  "runs": [
   {

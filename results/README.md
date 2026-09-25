@@ -35,9 +35,14 @@ commit c95184f; all placement files are re-graded with the current grader.
 | `2026-09-25/question-bank-gpt-5.6.json` | OpenAI gpt-5.6 | 150 distinct items × 3 arms | conflict, cross-module, far-memory |
 | `2026-09-25/question-bank-claude-sonnet-5.json` | claude-sonnet-5 via OpenRouter | same items | |
 
+Each row records its item (type, final turn, history style). The committed items were selected at commit 4211554
+(`meta.git_sha`); `item_specs` later changed to mix history styles for any item count, so a new run picks different
+items.
+
 ## Jev calibration (`live_jev_calibration.py`)
 
 | File | Scorer / candidate | Contexts | Notes |
 |---|---|---|---|
 | `2026-09-25/jev-calibration-haiku-4-5-question-bank.json` | Jev `typesafe/jev-1.13-20260917` / claude-haiku-4-5 | 450 distinct (369 scorable) + 60 × 5 retest | conflict items as tail; per-row Jev errors recorded |
 | `2026-09-25/jev-calibration-haiku-4-5.json` | same | 240 placement contexts, 117 distinct | superseded: session tags made repeats look unique (see `meta.note`) |
+| `2026-09-25/jev-input-limit-probe.json` | Jev via OpenRouter | 10 probes | the input limit behind "about 32.8k tokens" |

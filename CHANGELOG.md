@@ -77,6 +77,12 @@ Fixes from coding reviews. Portable segment hashes remain unchanged. Document ac
 - `ScaledTokenizer(base, factor)` (in `pcf.families.anthropic_adapter`): a deterministic fixed-factor correction of a
   token counter with its own identity. Measured against billed input, chars/4 undercounts claude-sonnet-5 by
   1.22-1.40x and overcounts gpt-5.6 at 0.86-0.97x depending on content; defaults are unchanged.
+- Review follow-ups: provider blocks reject cache markers at any depth, non-string types and empty lists (runtime
+  and schema agree); empty text between thinking blocks keeps one turn; held-out uniqueness is keyed on what the
+  confidence source scores (`ConfidenceSource.context_key`; Jev ignores provider blocks), so contexts differing only
+  in reasoning state are not independent evidence. The lead-anchor condition no longer counts a stable user segment,
+  so Anthropic keeps `system` marked beside a stable reminder. On OpenAI, once a request has 3 history candidates, a
+  stable user segment after history is not marked; send the latest user turn as the last history segment to cache it.
 - Provider reasoning state in history: assistant turns may carry `provider_blocks` (Anthropic thinking and
   redacted_thinking blocks, OpenAI reasoning items), which `history_from_response` now keeps instead of rejecting.
   The matching adapter replays them unchanged before the turn's text and calls (`AnthropicCompiler(thinking_blocks=)`,

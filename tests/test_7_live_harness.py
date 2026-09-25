@@ -23,6 +23,7 @@ spec.loader.exec_module(live)
     ("SMS[T-4106]", 2, "sms"), ("Spanish [T-4119]", 3, "spanish"), ("Español", 3, ""), ("", 1, ""),
     ("Earlier I said 2, 6, 10 open tickets. **Open tickets:** 14 (per record). Directly: **14**", 0, "14"),
     ("**Premium** (you moved from Unlimited)", 1, "premium"),
+    ("**SMS**; I will no longer use **email**.", 2, "sms"),
 ])
 def test_answer_value(answer, turn, value):
     assert live.answer_value(answer, turn) == value

@@ -1,0 +1,63 @@
+{
+ "meta": {
+  "date": "2026-09-25",
+  "endpoint": "https://openrouter.ai/api/alpha/decisions",
+  "jev_model": "typesafe/jev-1.13-20260917",
+  "candidate": "claude-haiku-4-5",
+  "contexts": "question-bank items compiled by AnthropicCompiler('claude-haiku-4-5')",
+  "method": "binary search over compiled prompt size; est_tokens is the compiler's chars/4 estimate, jev_input_tokens is usage.input_tokens from Jev"
+ },
+ "probes": [
+  {
+   "est_tokens": 3433,
+   "status": 200,
+   "jev_input_tokens": 5557
+  },
+  {
+   "est_tokens": 7875,
+   "status": 200,
+   "jev_input_tokens": 18638
+  },
+  {
+   "est_tokens": 12378,
+   "status": 200,
+   "jev_input_tokens": 21334
+  },
+  {
+   "est_tokens": 17896,
+   "status": 200,
+   "jev_input_tokens": 31493
+  },
+  {
+   "est_tokens": 18396,
+   "status": 200,
+   "jev_input_tokens": 32412
+  },
+  {
+   "est_tokens": 18646,
+   "status": 200,
+   "jev_input_tokens": 32861
+  },
+  {
+   "est_tokens": 18900,
+   "status": 400,
+   "error": "max_tokens_exceeded"
+  },
+  {
+   "est_tokens": 21405,
+   "status": 400,
+   "error": "max_tokens_exceeded"
+  },
+  {
+   "est_tokens": 23413,
+   "status": 400,
+   "error": "max_tokens_exceeded"
+  },
+  {
+   "est_tokens": 27944,
+   "status": 400,
+   "error": "max_tokens_exceeded"
+  }
+ ],
+ "conclusion": "largest accepted request: 32,861 Jev input tokens; requests from about 18.7k estimated tokens fail with max_tokens_exceeded"
+}

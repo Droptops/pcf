@@ -39,7 +39,7 @@ def history_from_response(response: Any) -> list[dict]:
     text, calls, kept = [], [], []
 
     def close() -> None:
-        if text or calls:
+        if "".join(text) or calls:  # empty text does not end a turn, so thinking blocks around it stay together
             turns.append({"role": "assistant", "content": "".join(text), **({"tool_calls": list(calls)} if calls else {}),
                           **({"provider_blocks": list(kept)} if kept else {})})
             text.clear(), calls.clear(), kept.clear()
@@ -60,7 +60,7 @@ def history_from_response(response: Any) -> list[dict]:
             calls.append({"id": block["id"], "name": block["name"], "arguments": block["input"]})
         else:
             raise ValueError(f"unsupported Anthropic response block: {typ!r}")
-    if kept and not (text or calls):
+    if kept and not ("".join(text) or calls):
         raise ValueError("Anthropic thinking without text or tool_use is not representable")
     close()
     return turns

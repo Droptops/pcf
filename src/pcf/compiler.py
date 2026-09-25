@@ -108,7 +108,7 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     Over budget (and above a budget of one, which marks the newest candidate), the last anchor
     is kept (with no anchor, the oldest candidate stands in); then the last anchor of the
     leading tools/system run when ``history_slots`` endpoints (or every history candidate, if
-    fewer) and the stable user group still fit beside both anchors, so one mislabelled
+    fewer) still fit beside both anchors, so one mislabelled
     volatile module cannot take the system prompt out of cache; then the newest history
     endpoints, up to ``history_slots``; then the newest remaining candidates. ``history_slots`` is how
     many history endpoints a compiler needs for the next request to name the endpoint this
@@ -149,12 +149,11 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     if max_breakpoints == 1:
         return [candidates[-1]]
     anchors = [i for i in candidates if ctx.segments[i].kind not in {"history", "user"}]
-    users = [i for i in candidates if ctx.segments[i].kind == "user"]
     anchor = anchors[-1] if anchors else candidates[0]
     keep = {anchor}
     need = min(history_slots, len(history))
     lead = [i for i in anchors if ctx.segments[i].kind in {"tools", "system"}]
-    if lead and lead[-1] != anchor and max_breakpoints - 2 - len(users) >= need:
+    if lead and lead[-1] != anchor and max_breakpoints - 2 >= need:
         keep.add(lead[-1])
     reserve = min(need, max_breakpoints - len(keep))  # history endpoints before any newer non-history candidate
     if reserve:

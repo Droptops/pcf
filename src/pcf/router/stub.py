@@ -44,7 +44,7 @@ class PlattScaledSource(ConfidenceSource):
         raw = [self.raw(ctx, cand) for ctx, cand, _ in samples]
         self.a, self.b = fit_platt(raw, [y for _, _, y in samples])
         self.fitted_candidate = samples[0][1].fingerprint
-        self.training_contexts = {ctx.prefix_chain()[-1] for ctx, _, _ in samples}
+        self.training_contexts = {self.context_key(ctx) for ctx, _, _ in samples}
         return self.a, self.b
 
     def can_validate(self, candidate):

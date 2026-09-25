@@ -119,6 +119,10 @@ class ConfidenceSource(ABC):
             self._records = {}
         return validate_source(self, samples, **kwargs)
 
+    def context_key(self, ctx: Context) -> str:
+        """Identity of what this source scores; held-out rows must differ in it to count as independent evidence."""
+        return ctx.prefix_chain()[-1]
+
     def validation_for(self, candidate, threshold):
         record = getattr(self, "_records", {}).get((candidate.fingerprint, threshold))
         return record if record and record.passed and record.source_fingerprint == self.fingerprint else None

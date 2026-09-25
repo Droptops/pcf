@@ -128,13 +128,14 @@ def _first_value(text: str, kind: int) -> str:
 def answer_value(answer: str, turn: int) -> str:
     """The value the reply asserts from the question's answer set.
 
-    The last bolded span that holds such a value wins (replies that first recap earlier answers bold the final one);
-    otherwise the first value, after "The answer is" if present.
+    The first bolded span that holds such a value wins (a reply that recaps earlier answers in plain text bolds the
+    one it gives, and one that bolds its answer may bold a stale value later in an aside); otherwise the first value,
+    after "The answer is" if present.
     """
     kind = turn % len(QUESTIONS)
     bolded = [v for v in (_first_value(span, kind) for span in BOLD.findall(answer)) if v]
     if bolded:
-        return bolded[-1]
+        return bolded[0]
     lower = answer.lower()
     if "the answer is" in lower:
         answer = answer[lower.index("the answer is") + len("the answer is"):]

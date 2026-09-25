@@ -122,6 +122,9 @@ class JevConfidenceSource(ConfidenceSource):
         self.model = model
         self.last_response: dict[str, Any] | None = None
 
+    def context_key(self, ctx: Context) -> str:
+        return _prompt_only(ctx).prefix_chain()[-1]  # Jev never sees provider_blocks
+
     @property
     def fingerprint(self):
         return hash_object("pcf:jev-source:0.2", {"base": super().fingerprint, "model": self.model, "rubric": self.rubric})

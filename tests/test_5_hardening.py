@@ -492,3 +492,23 @@ def test_openai_tool_loop_with_a_stable_trailing_reminder_stays_flat():
     engine = SimEngine(compiler, PrefixCache(compiler.descriptor.ttl_seconds))
     cold = [engine.run(ctx, 10.0 * (t + 1))[0].cold_tokens for t, ctx in enumerate(contexts)]
     assert max(cold[1:]) - min(cold[1:]) <= 2, cold
+
+
+def test_anthropic_keeps_the_system_anchor_beside_a_stable_reminder():
+    hist = [Segment(f"h{i}", "history", [{"role": "user", "content": f"q{i}"},
+                                         {"role": "assistant", "content": f"a{i}"}]) for i in range(4)]
+    ctx = Context([Segment("s", "system", "sys " * 600), Segment("m", "memory", "volatile"), *hist,
+                   Segment("rem", "user", "Reminder: cite the order id.", stable=True)])
+    assert "s" in [ctx.segments[i].id for i in AnthropicCompiler("claude-sonnet-5").compile(ctx).breakpoints]
+
+
+def test_openai_serves_history_endpoints_before_a_stable_latest_user_turn():
+    # Documented trade-off: OpenAI's budget keeps the anchor and three history endpoints; send the latest user
+    # turn as the last history segment to cache it.
+    hist = [Segment(f"h{i}", "history", [{"role": "user", "content": f"q{i}"},
+                                         {"role": "assistant", "content": f"a{i}"}]) for i in range(4)]
+    ctx = Context([Segment("s", "system", "sys " * 600), *hist, Segment("u", "user", "latest", stable=True)])
+    assert [ctx.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(ctx).breakpoints] == ["s", "h1", "h2", "h3"]
+    as_history = Context([Segment("s", "system", "sys " * 600), *hist,
+                          Segment("q", "history", [{"role": "user", "content": "latest"}])])
+    assert "q" in [as_history.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(as_history).breakpoints]

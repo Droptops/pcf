@@ -103,8 +103,13 @@ if __name__ == "__main__":
                 expected = previous["cached"] + previous["written"]
                 row["reuse"] = round(row["cached"] / expected, 3) if expected else None
                 failed |= expected > 0 and row["cached"] < args.min_reuse * expected
-            # The cache must reach this request's last marker (estimates run 0.86-1.4x provider counts).
-            row["reaches_marker"] = row["cached"] + row["written"] >= args.min_coverage * covered
+            # The cache must reach this request's last marker (estimates run 0.86-1.4x provider counts), and when the
+            # marked prefix grows, what is cached must grow with it (a cached system prompt alone never grows).
+            stored = row["cached"] + row["written"]
+            row["reaches_marker"] = stored >= args.min_coverage * covered
+            if previous is not None and covered > previous["est_covered"]:
+                grown = stored - (previous["cached"] + previous["written"])
+                row["reaches_marker"] &= grown >= args.min_coverage * (covered - previous["est_covered"])
             failed |= not row["reaches_marker"]
             previous = row
         rows.append(row)
