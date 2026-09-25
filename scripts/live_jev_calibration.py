@@ -2,7 +2,8 @@
 """Held-out calibration of Jev (via OpenRouter) for one candidate model. Offline by default; paid calls need --run.
 
 Contexts come from the placement harness (scripts/live_memory_placement.py): template and varied history, arms
-front / tail / placed, --repeats sessions each. The candidate model answers every context once; its answer is
+front / tail / placed, --repeats sessions each; or, with --contexts question-bank, from the paired question bank
+(scripts/live_question_bank.py), whose conflict items form the tail slice. The candidate model answers every context once; its answer is
 graded by value, which gives the label. Jev scores every context once; scores are memoized by exact request body,
 so validating at several thresholds re-uses them and the validated source keeps the fingerprint a live router
 uses. The tail slice is the stale-history traps whose answer sits in front memory, the hardest cases in these
@@ -27,10 +28,15 @@ from pcf.families.anthropic_adapter import AnthropicCompiler  # noqa: E402
 from pcf.router import Candidate, JevConfidenceSource, ValidationSample, openrouter_transport  # noqa: E402
 from pcf.segments import Context, Segment, canonical_bytes  # noqa: E402
 
-spec = importlib.util.spec_from_file_location("placement", os.path.join(os.path.dirname(__file__),
-                                                                        "live_memory_placement.py"))
-placement = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(placement)
+def _load(name: str, file: str):
+    spec = importlib.util.spec_from_file_location(name, os.path.join(os.path.dirname(__file__), file))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+placement = _load("placement", "live_memory_placement.py")
+bank = _load("question_bank", "live_question_bank.py")
 
 JEV_MODEL = "typesafe/jev-1.13-20260917"
 
@@ -64,6 +70,15 @@ def contexts(repeats: int, turns: int):
                     history.append(placement.history_turn(turn, text, expected, style))
 
 
+def bank_contexts(per_type: int, compiler):
+    """Question-bank items under every arm; the conflict items are the tail slice."""
+    for i, (kind, final, style) in enumerate(bank.item_specs(per_type)):
+        for arm in bank.ARMS:
+            ctx, expected = bank.build(kind, final, style, arm, compiler, f"cal-qb{i}")
+            yield ({"source": "question-bank", "type": kind, "final_turn": final, "style": style, "arm": arm,
+                    "turn": final, "expected": expected, "tail": kind == "conflict"}, ctx)
+
+
 def memoized(transport):
     cache = {}
 
@@ -93,8 +108,13 @@ if __name__ == "__main__":
     parser.add_argument("--retest", type=int, default=60)
     parser.add_argument("--retest-repeats", type=int, default=5)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--contexts", choices=("placement", "question-bank"), default="placement")
+    parser.add_argument("--per-type", type=int, default=50, help="question-bank items per type")
     args = parser.parse_args()
-    rows = list(contexts(args.repeats, args.turns))
+    if args.contexts == "placement":
+        rows = list(contexts(args.repeats, args.turns))
+    else:
+        rows = list(bank_contexts(args.per_type, AnthropicCompiler(args.candidate)))
     summary = {"contexts": len(rows), "tail": sum(m["tail"] for m, _ in rows)}
     if not args.run:
         print(json.dumps({"offline": True, **summary}, indent=1))
@@ -113,6 +133,8 @@ if __name__ == "__main__":
         response = client.messages.create(**{**request, "model": placement.openrouter_model(request["model"])},
                                           extra_body={"provider": {"order": ["Anthropic"], "allow_fallbacks": False}})
         text = "".join(getattr(b, "text", "") for b in response.content).strip()
+        if meta.get("source") == "question-bank":
+            return {**meta, "answer": text, "label": int(bank.grade(meta["type"], meta["turn"], text, meta["expected"]))}
         value = placement.answer_value(text, meta["turn"])
         return {**meta, "answer": text, "value": value, "label": int(value == meta["expected"].lower())}
 
@@ -129,7 +151,7 @@ if __name__ == "__main__":
     samples = [ValidationSample(ctx, candidate, row["label"], row["tail"]) for row, (_, ctx) in zip(graded, rows)]
     records = {}
     for threshold in (0.7, 0.8, 0.9):
-        record = source.validate(samples, dataset_id=f"placement-harness-{args.candidate}", threshold=threshold)
+        record = source.validate(samples, dataset_id=f"{args.contexts}-{args.candidate}", threshold=threshold)
         records[str(threshold)] = record.to_json()
     # Retest: fresh (unmemoized) scores for a spread of contexts.
     fresh = JevConfidenceSource(openrouter_transport(key), model=JEV_MODEL)
@@ -143,7 +165,8 @@ if __name__ == "__main__":
     result = {
         "meta": {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                  "git_sha": placement.git_sha(), "candidate": args.candidate, "jev_model": JEV_MODEL,
-                 "repeats": args.repeats, "turns": args.turns, "route": "OpenRouter, candidate pinned to Anthropic"},
+                 "contexts": args.contexts, "repeats": args.repeats, "turns": args.turns,
+                 "route": "OpenRouter, candidate pinned to Anthropic"},
         "summary": {**summary, "label_rate": round(sum(labels) / len(labels), 3),
                     "tail_label_rate": round(sum(r["label"] for r in graded if r["tail"]) /
                                              max(1, sum(r["tail"] for r in graded)), 3),
