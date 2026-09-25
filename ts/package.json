@@ -1,0 +1,13 @@
+{
+  "name": "pcf-memory-placer",
+  "version": "0.1.0",
+  "description": "Place LLM memory modules for prompt caching: a TypeScript port of PCF's MemoryPlacer",
+  "license": "MIT",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc -p ."
+  }
+}

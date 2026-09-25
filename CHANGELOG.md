@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `ts/`, a TypeScript port of `MemoryPlacer` with Anthropic and OpenAI chat layouts, tested for decision parity
+  against the Python placer (`scripts/export_placer_fixture.py` writes the fixture).
 - `MemoryPlacer`: on a warm turn where a module moves between front and tail, the front modules after the first are
   returned unstable, so the first front module (typically the shared reference) carries the cache marker. OpenAI
   reads only at markers present in the request and had rewritten the whole prefix on those turns. Cache markers

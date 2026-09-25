@@ -268,6 +268,12 @@ whose budget keeps three history endpoints, it can take the system prompt's slot
 when the provider cache has expired, predicted from time (`now - last_request >= descriptor.ttl_seconds`), not from
 a zero cache read: by the time usage shows a miss, that request has already rewritten the cache in the old layout.
 
+## TypeScript
+
+[`ts/`](ts/) is a dependency-free TypeScript port of `MemoryPlacer` with request layouts for Anthropic Messages and
+OpenAI chat, for applications that keep their own message list. Its decisions match the Python placer turn for
+turn on the domain scenarios and on random sessions near the decision threshold.
+
 ## Auditing an existing assistant
 
 `scripts/cache_audit.py` reads the requests an assistant already sends, with the usage each response returned, and

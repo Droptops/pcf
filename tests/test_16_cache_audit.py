@@ -59,3 +59,11 @@ def test_rebuilt_probes_show_the_first_request_anchor_bug_and_its_fix():
     unread = [e for e in before["events"] if e["kind"] == "unread"]
     assert any(not e["same_conversation"] and e["reusable_tokens"] > 3000 and e["cached"] == 0 for e in unread)
     assert not [e for e in after["events"] if e["kind"] == "unread"]
+
+
+def test_typescript_placer_fixture_is_current():
+    fixture_spec = importlib.util.spec_from_file_location("fixture", os.path.join(SCRIPTS, "export_placer_fixture.py"))
+    exporter = importlib.util.module_from_spec(fixture_spec)
+    fixture_spec.loader.exec_module(exporter)
+    committed = json.loads((SCRIPTS.parent / "ts/test/fixtures/placer.json").read_text())
+    assert committed == exporter.fixture(), "run python scripts/export_placer_fixture.py"
