@@ -174,3 +174,37 @@ def test_invalid_confidence_from_a_validated_scorer_falls_back(bad):
     assert decision.escalate and decision.chosen == candidates[0].model_id
     report = decision.candidates[1]
     assert report.p_sufficient is None and report.confidence_error.startswith("invalid confidence score")
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), "0.9", None, True, -0.1, 1.5])
+def test_fitted_platt_raw_failure_uses_fallback(bad):
+    from pcf.router import PlattScaledSource
+    candidates = _candidates()
+    def raw(ctx, cand):
+        value = ctx.segments[-1].content
+        return bad if value["question"] == "glitch" else value["p"]
+    def population(tag):
+        for i in range(300):
+            high = i < 150
+            yield (_context(f"{tag}-{i}", .9 if high else .1), (i // 10) % 2 == 0,
+                   int(i % 10 != 9) if high else int(i % 10 == 9))
+    source = PlattScaledSource(raw, scorer_version="raw-failure:1")
+    source.fit([(ctx, candidates[1], y) for ctx, tail, y in population("fit")])
+    record = source.validate([ValidationSample(ctx, candidates[1], y, tail)
+                              for ctx, tail, y in population("validation")], dataset_id="raw-failure")
+    assert record.passed and record.n_tail_selected == 80
+    decision = Router(candidates, source).route(_context("glitch"), 0)
+    assert decision.escalate and decision.chosen == candidates[0].model_id
+    assert decision.candidates[1].confidence_error.startswith("invalid raw confidence score")
+
+
+def test_platt_preserves_configuration_and_programming_errors():
+    from pcf.router import PlattScaledSource
+    candidate = _candidates()[1]
+    source = PlattScaledSource(lambda ctx, cand: .9, a=float("nan"))
+    with pytest.raises(ValueError, match="coefficients"):
+        source.p_sufficient(_context("test"), candidate)
+    def broken(ctx, cand):
+        raise ValueError("scorer programming error")
+    with pytest.raises(ValueError, match="scorer programming error"):
+        PlattScaledSource(broken).p_sufficient(_context("test"), candidate)

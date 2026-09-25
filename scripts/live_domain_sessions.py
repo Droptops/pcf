@@ -131,48 +131,82 @@ def mcnemar(b: int, c: int) -> float:
 
 
 def analyze(paths: list[str]) -> dict:
-    out = {}
+    """Pool compatible repetitions before producing reports; never overwrite an earlier scenario."""
+    grouped, seen = {}, set()
+    fields = ("provider", "turns", "thinking", "effort", "write_multiplier", "read_multiplier",
+              "output_multiplier", "violation_tokens", "data")
     for path in paths:
-        saved = json.load(open(path))
+        real = os.path.realpath(path)
+        if real in seen:
+            raise ValueError(f"duplicate input file: {path}")
+        seen.add(real)
+        with open(path) as handle:
+            saved = json.load(handle)
         meta = saved["meta"]
         model = meta["model"]
-        per = out.setdefault(model, {"scenarios": {}, "pairs": {}, "runs": {}})
+        config = {k: meta[k] for k in fields}
+        config["arms"] = sorted(meta["arms"])
+        per = grouped.setdefault(model, {"config": config, "runs": {}, "sources": []})
+        if config != per["config"]:
+            different = [k for k in config if config[k] != per["config"][k]]
+            raise ValueError(f"incompatible runs for {model}: {', '.join(different)}")
+        per["sources"].append(path)
+        prices = argparse.Namespace(**config)
         for key, runs in saved["scenarios"].items():
-            per["scenarios"][key] = saved["aggregate"][key]
-            per["runs"][key] = runs
+            for run in runs:
+                for arm in config["arms"]:
+                    if len(run[arm]) != config["turns"]:
+                        raise ValueError(f"incomplete session: {model}/{key}/{arm}")
+                # Recompute summaries from the observations, not a possibly stale saved aggregate.
+                run["summary"] = {arm: placement.summarize(run[arm], prices, config["write_multiplier"])
+                                  for arm in config["arms"]}
+            per["runs"].setdefault(key, []).extend(runs)
+
+    out = {}
+    for model, per in grouped.items():
+        arms = per["config"]["arms"]
+        scenarios = {key: placement.aggregate(runs, arms) for key, runs in per["runs"].items()}
+        pairs = {}
+        for key, runs in per["runs"].items():
             for run in runs:
                 for a, b in (("front", "tail"), ("front", "placed"), ("front-tuned", "tail"),
                              ("front-tuned", "placed"), ("tail", "placed")):
-                    if a not in run or b not in run:
+                    if a not in arms or b not in arms:
                         continue
-                    p = per["pairs"].setdefault(f"{a} vs {b}", {"all": [0, 0], "stale_traps": [0, 0]})
-                    for ra, rb in zip(run[a], run[b]):
+                    p = pairs.setdefault(f"{a} vs {b}", {"all": [0, 0], "stale_traps": [0, 0]})
+                    for ra, rb in zip(run[a], run[b], strict=True):
+                        if any(ra[k] != rb[k] for k in ("turn", "expected", "stale_trap")):
+                            raise ValueError(f"unpaired observations: {model}/{key}/{a}/{b}")
                         for slot in ("all", "stale_traps") if ra["stale_trap"] else ("all",):
                             if ra["correct"] and not rb["correct"]:
                                 p[slot][0] += 1
                             elif rb["correct"] and not ra["correct"]:
                                 p[slot][1] += 1
-        for name, p in per["pairs"].items():
+        for p in pairs.values():
             for slot, (b, c) in list(p.items()):
-                if isinstance(b, int):
-                    p[slot] = {"only_first_correct": b, "only_second_correct": c, "p": round(mcnemar(b, c), 4)}
-        totals = {}
-        for arm in ARMS:
-            agg = [s[arm] for s in per["scenarios"].values() if arm in s]
-            if agg:
-                totals[arm] = {"billed_input_units": sum(s["billed_input_units"]["mean"] for s in agg),
-                               "billed_total_units": sum(s["billed_total_units"]["mean"] for s in agg),
-                               "correct": _sum_frac(s["correct"] for s in agg),
-                               "correct_on_stale_traps": _sum_frac(s["correct_on_stale_traps"] for s in agg),
-                               "gave_stale": sum(s["gave_stale"] for s in agg)}
-                rows = [r for key in per["scenarios"] for run in per["runs"][key] for r in run[arm]]
-                totals[arm]["no_value_given"] = sum(not r["value"] for r in rows)
-                latencies = sorted(r["latency_s"] for r in rows if "latency_s" in r)
-                if latencies:
-                    totals[arm]["latency_s"] = {"median": round(statistics.median(latencies), 2),
-                                                "p90": latencies[int(0.9 * (len(latencies) - 1))]}
-        per["totals_of_scenario_means"] = totals
-        del per["runs"]
+                p[slot] = {"only_first_correct": b, "only_second_correct": c, "p": round(mcnemar(b, c), 4)}
+        totals, all_repeats = {}, {}
+        prices = argparse.Namespace(**per["config"])
+        for arm in arms:
+            agg = [s[arm] for s in scenarios.values()]
+            totals[arm] = {"billed_input_units": sum(s["billed_input_units"]["mean"] for s in agg),
+                           "billed_total_units": sum(s["billed_total_units"]["mean"] for s in agg),
+                           "correct": _sum_frac(s["correct"] for s in agg),
+                           "correct_on_stale_traps": _sum_frac(s["correct_on_stale_traps"] for s in agg),
+                           "gave_stale": sum(s["gave_stale"] for s in agg)}
+            rows = [r for runs in per["runs"].values() for run in runs for r in run[arm]]
+            all_repeats[arm] = placement.summarize(rows, prices, per["config"]["write_multiplier"])
+            totals[arm]["no_value_given"] = sum(not r["value"] for r in rows)
+            latencies = sorted(r["latency_s"] for r in rows if "latency_s" in r)
+            if latencies:
+                totals[arm]["latency_s"] = {"median": round(statistics.median(latencies), 2),
+                                            "p90": latencies[int(0.9 * (len(latencies) - 1))],
+                                            "n": len(latencies)}
+        out[model] = {"sources": per["sources"], "config": per["config"], "scenarios": scenarios,
+                      "repeats_by_scenario": {k: len(v) for k, v in per["runs"].items()}, "pairs": pairs,
+                      "totals_of_scenario_means": totals, "totals_all_repeats": all_repeats,
+                      "cost_basis": "totals_of_scenario_means averages cost over repetitions within each scenario; "
+                                    "accuracy counts cover all repetitions. totals_all_repeats sums both."}
     return out
 
 

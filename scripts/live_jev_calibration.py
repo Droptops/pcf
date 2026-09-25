@@ -4,14 +4,14 @@
 Contexts come from the placement harness (scripts/live_memory_placement.py): template and varied history, arms
 front / tail / placed, --repeats sessions each; or, with --contexts question-bank, from the paired question bank
 (scripts/live_question_bank.py), whose conflict items form the tail slice. The candidate model answers every context once; its answer is
-graded by value, which gives the label. Jev scores every context once; scores are memoized by exact request body,
+graded by value and the required answer format, which together give the label. Jev scores every context once; scores are memoized by exact request body,
 so validating at several thresholds re-uses them and the validated source keeps the fingerprint a live router
 uses. The tail slice is the stale-history traps whose answer sits in front memory, the hardest cases in these
 runs. A retest re-scores --retest contexts --retest-repeats times to measure score noise and decision flips.
 
 Jev is asked whether an answer is acceptable: correct, following the application instructions and satisfying the
-request. Each row therefore carries three labels: value_correct (the graded value), instruction_compliant (no
-copied history filler and at most 60 estimated tokens, since every question asks for a bare value) and label
+request. Each row therefore carries three labels: value_correct (the graded value), instruction_compliant (full-answer matching
+against the question-specific format, with normalization documented in LABELING_SPEC) and label
 (both). --relabel FILE recomputes them for a saved question-bank run and re-validates from its recorded scores,
 offline.
 """
@@ -22,7 +22,7 @@ import datetime
 import hashlib
 import importlib.util
 import json
-import math
+import re
 import os
 import statistics
 import sys
@@ -47,19 +47,33 @@ placement = _load("placement", "live_memory_placement.py")
 bank = _load("question_bank", "live_question_bank.py")
 
 JEV_MODEL = "typesafe/jev-1.13-20260917"
-LABELING = "acceptance-v2"  # label = value_correct and instruction_compliant
-MAX_ANSWER_TOKENS = 60
-FILLERS = [placement.TEMPLATE_FILLER] + [f.split("{n}")[1].strip() for f in placement.VARIED_FILLER]
+LABELING = "acceptance-v3"
+LABELING_SPEC = ("Case-insensitive full-answer matching after trimming outer whitespace, an optional terminal "
+                 "period and one enclosing bold pair. Conflict/channel/language: one ASCII word; ticket count: "
+                 "digits; plan: a known plan name; cross-module: digits, comma, known plan. No extra prose.")
 
 
-def instruction_compliant(answer: str) -> bool:
-    """Every question asks for a bare value: copying the history's filler or running long breaks that."""
-    copied = any(f.lower() in answer.lower() for f in FILLERS)
-    return not copied and math.ceil(len(answer) / 4) <= MAX_ANSWER_TOKENS
+def instruction_compliant(answer: str, *, kind: str, turn: int) -> bool:
+    """Enforce the question's answer shape separately from whether its value is correct."""
+    text = answer.strip()
+    if text.endswith("."):
+        text = text[:-1]
+    if text.startswith("**") and text.endswith("**"):
+        text = text[2:-2]
+    plans = "(?:" + "|".join(re.escape(p) for p in placement.PLANS) + ")"
+    if kind == "cross":
+        pattern = rf"[0-9]+, *{plans}"
+    elif kind == "conflict":
+        pattern = r"[A-Za-z]+"
+    elif kind in {"far", "placement"}:
+        pattern = {0: r"[0-9]+", 1: plans, 2: r"[A-Za-z]+", 3: r"[A-Za-z]+"}[turn % 4]
+    else:
+        raise ValueError(f"unsupported question type: {kind!r}")
+    return re.fullmatch(pattern, text, flags=re.IGNORECASE) is not None
 
 
-def labels(value_correct: bool, answer: str) -> dict:
-    compliant = instruction_compliant(answer)
+def labels(value_correct: bool, answer: str, *, kind: str, turn: int) -> dict:
+    compliant = instruction_compliant(answer, kind=kind, turn=turn)
     return {"value_correct": int(value_correct), "instruction_compliant": int(compliant),
             "label": int(value_correct and compliant), "labeling": LABELING}
 
@@ -135,9 +149,10 @@ def relabel(path: str) -> dict:
     candidate = Candidate(compiler, PrefixCache(compiler.descriptor.ttl_seconds), 1.0, 0.1, is_fallback=True)
     rows, replay, mismatched = [], {}, 0
     for row in saved["rows"]:
-        ctx, _ = bank.build(row["type"], row["final_turn"], row["style"], row["arm"], compiler, "calibration")
+        ctx, expected = bank.build(row["type"], row["final_turn"], row["style"], row["arm"], compiler, "calibration")
         mismatched += compiler.compile(ctx).total_tokens != row["est_tokens"]
-        row = {**row, **labels(bool(row.get("value_correct", row["label"])), row["answer"])}
+        row = {**row, **labels(bank.grade(row["type"], row["final_turn"], row["answer"], expected),
+                                row["answer"], kind=row["type"], turn=row["final_turn"])}
         rows.append((row, ctx))
         if row["jev"] is not None:
             body = build_request(ctx, candidate.model_id, model=meta["jev_model"])
@@ -169,7 +184,8 @@ def relabel(path: str) -> dict:
                "score_min": min(scores), "score_max": max(scores),
                "ece": {t: record["ece"] for t, record in records.items()},
                "passed": {t: record["passed"] for t, record in records.items()}}
-    return {"meta": {**meta, "relabeled_from": path, "labeling": LABELING,
+    return {"meta": {**meta, "relabeled_from": path, "labeling": LABELING, "labeling_spec": LABELING_SPEC,
+                     "relabel_script_sha256": hashlib.sha256(open(__file__, "rb").read()).hexdigest(),
                      "relabeled": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                      "relabel_git_sha": placement.git_sha()},
             "summary": summary, "validation": records, "rows": all_rows}
@@ -217,9 +233,11 @@ if __name__ == "__main__":
         text = "".join(getattr(b, "text", "") for b in response.content).strip()
         if meta.get("source") == "question-bank":
             return {**meta, "answer": text,
-                    **labels(bank.grade(meta["type"], meta["turn"], text, meta["expected"]), text)}
+                    **labels(bank.grade(meta["type"], meta["turn"], text, meta["expected"]), text,
+                             kind=meta["type"], turn=meta["turn"])}
         value = placement.answer_value(text, meta["turn"])
-        return {**meta, "answer": text, "value": value, **labels(value == meta["expected"].lower(), text)}
+        return {**meta, "answer": text, "value": value, **labels(value == meta["expected"].lower(), text,
+                                                                              kind="placement", turn=meta["turn"])}
 
     source = JevConfidenceSource(memoized(openrouter_transport(key)), model=JEV_MODEL)
 
@@ -243,7 +261,7 @@ if __name__ == "__main__":
     samples = [ValidationSample(ctx, candidate, row["label"], row["tail"]) for row, ctx in scored]
     records = {}
     for threshold in (0.7, 0.8, 0.9):
-        record = source.validate(samples, dataset_id=f"{args.contexts}-{args.candidate}", threshold=threshold)
+        record = source.validate(samples, dataset_id=f"{args.contexts}-{args.candidate}-{LABELING}", threshold=threshold)
         records[str(threshold)] = record.to_json()
     # Retest: fresh (unmemoized) scores for a spread of contexts.
     fresh = JevConfidenceSource(openrouter_transport(key), model=JEV_MODEL)
@@ -262,7 +280,8 @@ if __name__ == "__main__":
                                          summary["unscorable"], 3) if summary["unscorable"] else None)
     result = {
         "meta": {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
-                 "git_sha": placement.git_sha(), "candidate": args.candidate, "jev_model": JEV_MODEL,
+                 "git_sha": placement.git_sha(), "labeling": LABELING, "labeling_spec": LABELING_SPEC,
+                 "candidate": args.candidate, "jev_model": JEV_MODEL,
                  "contexts": args.contexts, "repeats": args.repeats, "turns": args.turns,
                  "route": "OpenRouter, candidate pinned to Anthropic"},
         "summary": {**summary, "label_rate": round(sum(r["label"] for r in graded) / len(graded), 3),

@@ -47,17 +47,22 @@ Secondary:
 
 ## Sample size
 
-Cost differences in the synthetic runs were 1.6x or larger against the tuned layout, so a few hundred conversations
-per arm settle cost. Quality needs more. Detecting an error-rate change from 5% to 3% on record lookups at 80% power
+The recorded input-plus-output reductions against tuned front were 14.5% on GPT and 36.6-38.0% on Claude
+(about 1.17-1.61x). They used assumed prices. Estimate cost variability from representative conversations, choose a
+minimum worthwhile saving, and calculate the required conversation count before starting; a fixed few hundred
+conversations is not guaranteed to settle cost. Quality needs its own sample-size calculation. Detecting an error-rate change from 5% to 3% on record lookups at 80% power
 (two-sided α = 0.05) takes about 1,500 checked answers per arm. For non-inferiority with a 1-point margin, plan for
-several thousand. Set the margin with the assistant's owner before starting.
+several thousand independent observations. Answers within a conversation are correlated: account for clustering
+when sizing and analyzing the pilot. Set the margin, analysis method and sample size with the assistant's owner
+before starting.
 
 ## Stop and ship rules
 
 - **Stop early** if the treatment's checked error rate exceeds the baseline's by more than the margin at any weekly
   look, or if p90 latency rises by more than an agreed amount.
-- **Ship** if billed cost per conversation falls by at least the agreed amount, quality is non-inferior within the
-  margin, and latency is no worse.
+- **Ship** at the prespecified final analysis if billed cost per conversation falls by at least the agreed amount,
+  quality is non-inferior within the margin using a conversation-level confidence interval, and latency is no
+  worse. Weekly checks are harm-monitoring rules, not repeated opportunities to declare success.
 - **Report either way**, with the raw per-conversation usage and the quality sample, as for the synthetic runs.
 
 ## Known risks to check

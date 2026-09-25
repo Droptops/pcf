@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import json
+from pathlib import Path
 import sys
 from types import SimpleNamespace
 
@@ -55,3 +57,45 @@ def test_offline_sessions_place_memory_as_each_layout_says():
     assert all(set(r["tail"]) == everything for r in rows["tail"])
     assert "reference" not in rows["placed"][-1]["tail"] and "balance" in rows["placed"][-1]["tail"]
     assert [r["expected"] for r in rows["front"]] == [r["expected"] for r in rows["placed"]]
+
+
+RESULTS = Path(SCRIPTS).parent / "results/2026-09-25"
+CLAUDE_RUNS = [str(RESULTS / name) for name in
+               ("domain-claude-sonnet-5.json", "domain-claude-sonnet-5-replication.json")]
+
+
+def test_analyze_pools_both_committed_claude_runs():
+    result = domain.analyze(CLAUDE_RUNS)["claude-sonnet-5"]
+    assert set(result["repeats_by_scenario"].values()) == {6}
+    totals = result["totals_all_repeats"]
+    assert totals["placed"]["correct"] == "864/864"
+    assert totals["front-tuned"]["correct"] == "824/864"
+    assert totals["placed"]["billed_total_units"] == 1764201
+    assert result["pairs"]["front-tuned vs placed"]["all"]["only_second_correct"] == 40
+    assert result["pairs"]["front-tuned vs placed"]["all"]["only_first_correct"] == 0
+    assert result["totals_of_scenario_means"]["placed"]["latency_s"]["n"] == 432
+    assert domain.analyze(list(reversed(CLAUDE_RUNS)))["claude-sonnet-5"]["totals_all_repeats"] == totals
+
+
+@pytest.mark.parametrize("field,value", [("read_multiplier", .5), ("thinking", "disabled"), ("turns", 12)])
+def test_analyze_rejects_incompatible_runs(tmp_path, field, value):
+    saved = json.loads(Path(CLAUDE_RUNS[1]).read_text())
+    saved["meta"][field] = value
+    path = tmp_path / "different.json"
+    path.write_text(json.dumps(saved))
+    with pytest.raises(ValueError, match="incompatible runs"):
+        domain.analyze([CLAUDE_RUNS[0], str(path)])
+
+
+def test_analyze_rejects_duplicate_input():
+    with pytest.raises(ValueError, match="duplicate input"):
+        domain.analyze([CLAUDE_RUNS[0], CLAUDE_RUNS[0]])
+
+
+def test_analyze_rejects_unpaired_observations(tmp_path):
+    saved = json.loads(Path(CLAUDE_RUNS[0]).read_text())
+    saved["scenarios"]["claims"][0]["placed"][0]["turn"] = 99
+    path = tmp_path / "unpaired.json"
+    path.write_text(json.dumps(saved))
+    with pytest.raises(ValueError, match="unpaired observations"):
+        domain.analyze([str(path)])

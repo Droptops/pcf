@@ -63,9 +63,36 @@ def test_calibration_labels_separate_value_from_instruction_compliance():
         "jev_calibration", os.path.join(os.path.dirname(__file__), "..", "scripts", "live_jev_calibration.py"))
     jev = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(jev)
-    assert jev.labels(True, "email") == {"value_correct": 1, "instruction_compliant": 1, "label": 1,
-                                         "labeling": "acceptance-v2"}
+    assert jev.labels(True, "email", kind="conflict", turn=0) == {"value_correct": 1, "instruction_compliant": 1, "label": 1,
+                                         "labeling": "acceptance-v3"}
     copied = "email. " + " ".join(f"Order {9000 + k} is on schedule." for k in range(10))
-    assert jev.labels(True, copied)["label"] == 0 and jev.labels(True, copied)["value_correct"] == 1
-    assert jev.labels(True, "x" * 400)["instruction_compliant"] == 0
-    assert jev.labels(False, "phone")["label"] == 0
+    assert jev.labels(True, copied, kind="conflict", turn=0)["label"] == 0 and jev.labels(True, copied, kind="conflict", turn=0)["value_correct"] == 1
+    assert jev.labels(True, "x " * 200, kind="conflict", turn=0)["instruction_compliant"] == 0
+    assert jev.labels(False, "phone", kind="conflict", turn=0)["label"] == 0
+
+
+@pytest.mark.parametrize("kind,turn,answer,compliant", [
+    ("conflict", 0, "email", True), ("conflict", 0, " **SMS**. ", True),
+    ("conflict", 0, "The answer is email.", False),
+    ("conflict", 0, "email. I updated your preference.", False),
+    ("cross", 0, "12, Unlimited Plus", True), ("cross", 0, "12, Basic. Extra", False),
+    ("cross", 0, "12 Basic", False), ("cross", 0, "12, Basic\n12, Basic", False),
+    ("far", 0, "12", True), ("far", 0, "12 tickets", False),
+    ("far", 1, "Unlimited Plus", True), ("far", 1, "The answer is Basic.", False),
+    ("far", 2, "SMS", True), ("far", 3, "Spanish", True),
+    ("placement", 0, "", False), ("placement", 3, "Spanish [T-4119]", False),
+])
+def test_calibration_enforces_question_specific_answer_format(kind, turn, answer, compliant):
+    sys.path.insert(0, str(SCRIPT.parent))
+    import live_jev_calibration as jev
+    assert jev.instruction_compliant(answer, kind=kind, turn=turn) is compliant
+
+
+def test_saved_one_word_violations_are_rejected_by_current_labels():
+    sys.path.insert(0, str(SCRIPT.parent))
+    import live_jev_calibration as jev
+    path = SCRIPT.parent.parent / "results/2026-09-25/jev-calibration-haiku-4-5-question-bank-acceptance-v2.json"
+    rows = json.loads(path.read_text())["rows"]
+    wrong = [r for r in rows if r["type"] == "conflict" and r["label"] and len(r["answer"].split()) > 1]
+    assert len(wrong) == 21
+    assert all(not jev.labels(True, r["answer"], kind=r["type"], turn=r["turn"])["label"] for r in wrong)
