@@ -7,11 +7,22 @@ the prompt stays identical from one request to the next. Most assistants put mem
 account state) near the top of the prompt, so every memory update invalidates the cache for the whole conversation
 after it, and the provider bills that history again on every turn.
 
-PCF describes a conversation once, in a provider-neutral format, and compiles it into native OpenAI or Anthropic
-requests with cache markers placed deliberately. It accounts for what each request will cost, including cache
-writes and reads, decides where each memory module should sit, and routes to a cheaper model only when a
-confidence scorer has passed a held-out calibration gate. It is a Python reference implementation and an
-offline-tested prototype.
+**The durable finding is a prompt convention:** keep stable text first, and put the memory that changes after the
+conversation history. Both vendors already advise stable-first; this repository measures what the second half is
+worth, and where it is not worth anything. A team can apply it by ordering blocks and setting cache markers in the
+provider SDK. What the repository adds:
+
+- **Evidence**, live on gpt-5.6 and claude-sonnet-5, with the raw results and the harnesses that produced them.
+- **A small layout helper**, `MemoryPlacer` in Python and [TypeScript](ts/), which decides per module from its change
+  rate and the cache prices, and sets cache markers. Its marker logic has had several bugs found only by running the
+  providers (see the changelog); treat it as a tested helper, not a guarantee.
+- **A cache audit** ([`scripts/cache_audit.py`](docs/CACHE_AUDIT.md)) that reads an assistant's existing request logs
+  and names the fields whose changes cost the most cache.
+
+Two parts are experiments, not products. The portable context format has one writer and no other reader; segment
+hashes are not provider cache keys and do not transfer cache state. The model router has one empirical result: the
+only scorer tested ranked rejected answers above accepted ones (AUC 0.328), so the gate has never admitted a
+cheaper model and always falls back.
 
 ## Headline result
 
@@ -31,10 +42,15 @@ the naive one:
   fixes found by the fleet test and the cache audit; the run before them gave 0.49 and 0.53, with 703 and 652 correct
   for tuned front and 720 and 719 for placed. Two of placed's three misses answered a negative balance as "a credit
   of $145.47", which the grader counts wrong.
-- **The saving comes from long, warm sessions.** It grows with conversation length and disappears when turns arrive
-  after the cache lifetime: in a Claude run with every turn past the 5-minute lifetime, no turn read the cache.
+- **When it does not pay.** Turns that arrive after the cache lifetime (5 minutes on Claude's default) read nothing:
+  in a Claude run with every turn past it, no turn read the cache, so casework with pauses between turns keeps
+  little of the 60-turn figure. At 24 turns the input saving is 12-14%. Structured outputs or tool calls will not
+  reproduce the shorter replies seen on Claude, so quote input cost, not total. Tail memory that changes between
+  turns conflicts with replaying extended-thinking blocks bound to the earlier prefix. Sessions that share a prefix
+  were tested with synchronized users only.
 - **Front layouts gave out-of-date values.** Most of their wrong answers repeated an older value instead of the
-  current record; placed memory sits next to the question. The exception is a small model with a record
+  current record; placed memory sits next to the question. The scripted replies state old values in the history on
+  purpose, so this measures recency against a planted stale value, not answer quality in general. The exception is a small model with a record
   that was not updated: see [Limits](#limits-of-the-evidence).
 - **Against the naive front layout** (every module cacheable), the domain workloads cost 3.7-4.1x more than placed
   memory at 24 turns (input plus output). That comparison flatters the method; the tuned numbers above are the ones to quote.
@@ -198,7 +214,7 @@ gpt-5.6 (`results/2026-09-25/domain-gpt-5.6.json`), same sessions:
 - `domain-gpt-5.6-run1.json` is an earlier gpt-5.6 run whose answers are confounded (a third asked for identity
   verification before the scenarios recorded it); its input costs match this run's.
 
-## Routing safety: the calibration gate
+## Routing safety: the calibration gate (experimental; has never routed)
 
 PCF routes a request to a cheaper model only when an external confidence scorer, validated on held-out contexts,
 says the cheaper model will answer well. We tested the third-party scorer Jev (`typesafe/jev-1.13-20260917` via
