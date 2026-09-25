@@ -126,7 +126,10 @@ class ConfidenceSource(ABC):
 
 
 class Router:
-    def __init__(self, candidates, confidence: ConfidenceSource, threshold=.8):
+    def __init__(self, candidates, confidence: ConfidenceSource, threshold=.8, *, score_unvalidated: bool = False):
+        """``score_unvalidated=True`` also queries the scorer for candidates without a passing validation record
+        (the score is reported but never used to route), e.g. to collect calibration data; by default those
+        candidates are not scored, since a paid confidence call cannot change the decision."""
         candidates = tuple(candidates)
         if not candidates or any(not isinstance(c, Candidate) for c in candidates):
             raise ValueError("router requires Candidate entries")
@@ -139,6 +142,9 @@ class Router:
         self.candidates = candidates
         self.confidence = confidence
         self.threshold = number(threshold, "threshold", maximum=1)
+        if type(score_unvalidated) is not bool:
+            raise ValueError("score_unvalidated must be boolean")
+        self.score_unvalidated = score_unvalidated
 
     def route(self, ctx: Context, now: float, request_id=None) -> RouteDecision:
         number(now, "now")
@@ -155,11 +161,12 @@ class Router:
             cost = (w.uncached_tokens * cand.input_price_per_mtok + w.cache_creation_tokens * cand.write_price
                     + w.warm_tokens * cand.cache_read_price_per_mtok) / 1e6
             record = self.confidence.validation_for(cand, self.threshold)
-            try:
-                score = number(self.confidence.p_sufficient(ctx, cand), "p_sufficient", maximum=1)
-                error = None
-            except ConfidenceUnavailable as exc:
-                score, record, error = None, None, str(exc)
+            score, error = None, None
+            if record is not None or self.score_unvalidated:
+                try:
+                    score = number(self.confidence.p_sufficient(ctx, cand), "p_sufficient", maximum=1)
+                except ConfidenceUnavailable as exc:
+                    record, error = None, str(exc)
             p = score if record is not None else None
             d = cand.compiler.descriptor
             report = CandidateReport(d.family, d.model_id, d.compat_key, w.warm_prefix_segments,

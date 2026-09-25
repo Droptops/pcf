@@ -116,7 +116,7 @@ def test_confidence_transport_never_follows_redirects(monkeypatch, status, targe
                         lambda *handlers: build_opener(OfflineServer(), *handlers))
     monkeypatch.setattr(urllib.request, "urlopen", build_opener(OfflineServer()).open)
     source = JevConfidenceSource(http_transport(api_key="DUMMY-REVIEW-KEY"), model="jev-1.13.0")
-    decision = Router([_candidates()[0]], source).route(_context("redirect"), now=0)
+    decision = Router([_candidates()[0]], source, score_unvalidated=True).route(_context("redirect"), now=0)
     assert decision.escalate and decision.candidates[0].confidence_error == "confidence transport unavailable"
     assert len(requests) == 1
     assert requests[0].get_header("Authorization") == "Bearer DUMMY-REVIEW-KEY"

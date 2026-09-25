@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Fixes from coding reviews. Portable segment hashes and PCF document wire format remain unchanged; compiler cache keys, simulated billing counts, candidate fingerprints and calibration record identities change as described below.
+Fixes from coding reviews. Portable segment hashes remain unchanged. Document acceptance changes: tool results require `is_error`, memory may follow history (tail memory), and 0.1-style `tool_use` blocks are rejected, so a 0.2.0 reader rejects some documents this version writes (see SPEC "Validation and compatibility"). Compiler cache keys, simulated billing counts, candidate fingerprints and calibration record identities change as described below.
 
 - Jev's HTTPS transport rejects all redirects so bearer credentials cannot follow a different origin or an HTTP downgrade. Redirects trigger confidence fallback.
 - Held-out validation rejects repeated context hashes and requires enough selected tail examples even when no tail score reaches the threshold. All sample minimums are included in validation record identity. Existing scorers with only below-threshold tail evidence now fall back.
@@ -30,6 +30,12 @@ Fixes from coding reviews. Portable segment hashes and PCF document wire format 
 - OpenAI write estimates stop at the history marker: `ContextCompiler.covered_tokens()` reports how much of the
   prefix a marker caches, and the OpenAI adapter excludes assistant turns after a history segment's last user/tool
   item, so `warmth()` and router cost no longer count them as written.
+- `Router(..., score_unvalidated=False)`: candidates without a passing validation record are no longer scored by
+  default (a paid confidence call that cannot change the decision); their report carries `score=None`. Pass
+  `score_unvalidated=True` to collect scores anyway. SPEC documents closed-provider router costs as cold
+  estimates, the breakpoint and OpenAI marker rules, `covered_tokens`, and the compatibility change.
+- `CLAUDE.md` records the repository rules for agents: no private session links or session trailers, run the CI
+  checks before pushing, paid live runs only on request, raw results under `results/`.
 - `scripts/live_memory_placement.py` grades strictly (the reply's lead value must equal the expected value; the old
   substring check passed copied templates whose order numbers contained the count), records output tokens (and
   OpenAI reasoning tokens / Anthropic thinking blocks), prices output with `--output-multiplier`, flags format

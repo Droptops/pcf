@@ -149,7 +149,7 @@ def test_malformed_confidence_responses_fall_back():
     for transport in (lambda body: {}, lambda body: [], _raising(json.JSONDecodeError("bad", "", 0)),
                       _raising(http.client.IncompleteRead(b"")),
                       lambda body: {"answers": {"sufficient": {"type": "noul", "noul": 10 ** 400}}}):
-        d = Router(cands, JevConfidenceSource(transport)).route(ctx, now=0)
+        d = Router(cands, JevConfidenceSource(transport), score_unvalidated=True).route(ctx, now=0)
         assert d.escalate and d.chosen == "sim-a-large" and all(c.confidence_error for c in d.candidates)
 
 
@@ -397,3 +397,19 @@ def test_every_prefill_rejecting_model_has_a_cache_profile():
     assert PREFILL_REJECTED <= MIN_CACHEABLE.keys()
     for model in PREFILL_REJECTED:
         AnthropicCompiler(model)  # no "unknown cache profile"
+
+
+def test_router_does_not_pay_for_scores_that_cannot_route():
+    calls = []
+
+    def transport(body):
+        calls.append(body)
+        return {"model": "jev-1.13.0", "answers": {"sufficient": {"type": "noul", "noul": 0.9}}}
+
+    ctx = Context([Segment("s", "system", "x"), Segment("u", "user", "hi", stable=False)])
+    cands = [Candidate(family_a().compiler, family_a().cache, 1.0, 0.1, is_fallback=True)]
+    source = JevConfidenceSource(transport, model="jev-1.13.0")
+    report = Router(cands, source).route(ctx, now=0).candidates[0]
+    assert calls == [] and report.score is None and not report.calibration_valid
+    report = Router(cands, source, score_unvalidated=True).route(ctx, now=0).candidates[0]
+    assert len(calls) == 1 and report.score == 0.9 and report.p_sufficient is None

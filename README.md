@@ -17,6 +17,11 @@ python scripts/live_smoke.py       # offline request-shape check
 python scripts/live_smoke.py --run # paid calls only when keys are set
 ```
 
+Live scripts need the provider SDKs: `python -m pip install -e '.[live]'`. `scripts/live_memory_placement.py` is
+offline by default; `--run --provider openai` reads `OPENAI_API_KEY`, and `--run --provider anthropic` reads
+`OPENROUTER_API_KEY` and sends the Anthropic adapter's request to OpenRouter's Anthropic-compatible endpoint,
+pinned to Anthropic upstream.
+
 Schemas live under `pcf.schemas`. Hashes use RFC 8785 JCS and tagged SHA-256 domains. PCF 0.2 is a breaking wire/hash change from 0.1; see `CHANGELOG.md`.
 
 External documents remain data, tool IDs/arguments are preserved, cache inspection is read-only, costs include write premiums, and unknown provider models require an explicit profile.
@@ -25,7 +30,7 @@ Cache identity and cumulative token counts use the same rendered input. Simulate
 
 ## Memory placement
 
-Memory that changes between turns should follow history (tail memory), not precede it: a change to front memory re-bills every history token after it. `MemoryPlacer` decides per module: stable modules stay in front (cached), a module moves to the tail once p·(w−r)·(m+H) > (1−r)·m, with prices from `MemoryPlacer.for_candidate(candidate)`.
+Memory that changes between turns should follow history (tail memory), not precede it: a change to front memory re-bills every history token after it. Tail memory never takes a breakpoint. Front memory that changes should be marked `stable=False`, or its marker is rewritten every turn (and on OpenAI, whose budget keeps three history endpoints, it can take the system prompt's slot). `MemoryPlacer` decides per module: stable modules stay in front (cached), a module moves to the tail once p·(w−r)·(m+H) > (1−r)·m, with prices from `MemoryPlacer.for_candidate(candidate)`. H counts history and the front modules after it, so list modules stable-first; memory with instruction authority never moves. Pass `split(..., cold=True)` when the provider cache has expired, predicted from time (`now - last_request >= descriptor.ttl_seconds`), not from a zero cache read: by the time usage shows a miss, that request has already rewritten the cache in the old layout.
 
 Measured live with `scripts/live_memory_placement.py --run` (four modules changing never / every 6th / every 3rd /
 every turn; input cost in uncached-token units, cache write 1.25×, read assumed 0.1×; each cell is one scripted

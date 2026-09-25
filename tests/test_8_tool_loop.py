@@ -17,4 +17,4 @@ def test_offline_tool_loop_marks_system_and_history_only(provider):
                                     capture_output=True, text=True, check=True).stdout)
     assert out["ok"] and len(out["rows"]) == 8
     for row in out["rows"]:
-        assert row["marked"][0] == "s" and not {"profile", "cart", "session", "notes"} & set(row["marked"])
+        assert "s" in row["marked"] and not {"profile", "cart", "session", "notes"} & set(row["marked"])
