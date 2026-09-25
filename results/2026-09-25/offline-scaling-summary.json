@@ -1,0 +1,270 @@
+{
+  "meta": {
+    "mode": "offline-simulation",
+    "paid_calls": 0,
+    "source_git_sha": "a5d09db18d2a15c1d03b1412240fd5b40ac82235",
+    "script_sha256": "5fd3cf95ad9529bb87811bf4b3cac1275fce957e13232764a15e2ad7b5920fc2",
+    "units": "canonical native JSON heuristic token units; read 0.1x; profile-specific writes",
+    "scope": "Scripted short histories, virtual time, deterministic local prefix store. No answer generation, live cache behavior, actual tokenization, real latency, or dollars verified.",
+    "expiry": "30-second normal intervals; declared long-gap schedules; placer receives cold=True when gap >= profile TTL; expiry is modeled, not inferred from a miss-rate multiplier.",
+    "fleet": "Sequential synthetic first requests in one ideal cache store; shared content is reference-only. No cross-workspace sharing or live provider hit guarantee."
+  },
+  "summary": [
+    {
+      "profile": "anthropic-1h",
+      "schedule": "600s-every-4",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 1493235.9,
+        "placed": 437209.1
+      },
+      "placed_saving_fraction": 0.7072069456674595
+    },
+    {
+      "profile": "anthropic-1h",
+      "schedule": "warm",
+      "turns": 24,
+      "summed_scenario_costs": {
+        "front-tuned": 354891.3,
+        "placed": 217059.20000000004
+      },
+      "placed_saving_fraction": 0.38837835697860146
+    },
+    {
+      "profile": "anthropic-1h",
+      "schedule": "warm",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 1493235.9,
+        "placed": 437209.1
+      },
+      "placed_saving_fraction": 0.7072069456674595
+    },
+    {
+      "profile": "anthropic-1h",
+      "schedule": "warm",
+      "turns": 120,
+      "summed_scenario_costs": {
+        "front-tuned": 5179544.9,
+        "placed": 894101.5000000001
+      },
+      "placed_saving_fraction": 0.8273783667750423
+    },
+    {
+      "profile": "anthropic-5m",
+      "schedule": "600s-every-4",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 1371745.0,
+        "placed": 918508.25
+      },
+      "placed_saving_fraction": 0.3304088952392755
+    },
+    {
+      "profile": "anthropic-5m",
+      "schedule": "expired-every-1",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 2600341.75,
+        "placed": 2576461.0
+      },
+      "placed_saving_fraction": 0.009183696719863854
+    },
+    {
+      "profile": "anthropic-5m",
+      "schedule": "expired-every-10",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 1126025.65,
+        "placed": 579234.55
+      },
+      "placed_saving_fraction": 0.4855938228405364
+    },
+    {
+      "profile": "anthropic-5m",
+      "schedule": "expired-every-2",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 1781277.25,
+        "placed": 1481446.75
+      },
+      "placed_saving_fraction": 0.16832331968535497
+    },
+    {
+      "profile": "anthropic-5m",
+      "schedule": "expired-every-4",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 1371745.0,
+        "placed": 918508.25
+      },
+      "placed_saving_fraction": 0.3304088952392755
+    },
+    {
+      "profile": "anthropic-5m",
+      "schedule": "warm",
+      "turns": 24,
+      "summed_scenario_costs": {
+        "front-tuned": 244140.3,
+        "placed": 179500.35
+      },
+      "placed_saving_fraction": 0.26476558765595026
+    },
+    {
+      "profile": "anthropic-5m",
+      "schedule": "warm",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 989514.9,
+        "placed": 391270.5
+      },
+      "placed_saving_fraction": 0.6045835186514119
+    },
+    {
+      "profile": "anthropic-5m",
+      "schedule": "warm",
+      "turns": 120,
+      "summed_scenario_costs": {
+        "front-tuned": 3349973.9,
+        "placed": 834193.4
+      },
+      "placed_saving_fraction": 0.7509851046899201
+    },
+    {
+      "profile": "openai-30m",
+      "schedule": "600s-every-4",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 940308.7,
+        "placed": 406950.49999999994
+      },
+      "placed_saving_fraction": 0.5672160642563449
+    },
+    {
+      "profile": "openai-30m",
+      "schedule": "expired-every-1",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 2557717.0,
+        "placed": 2531735.75
+      },
+      "placed_saving_fraction": 0.01015798464020845
+    },
+    {
+      "profile": "openai-30m",
+      "schedule": "expired-every-10",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 1077377.2,
+        "placed": 590167.3500000001
+      },
+      "placed_saving_fraction": 0.4522184523674716
+    },
+    {
+      "profile": "openai-30m",
+      "schedule": "expired-every-2",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 1735306.0,
+        "placed": 1464545.0
+      },
+      "placed_saving_fraction": 0.15603069429829663
+    },
+    {
+      "profile": "openai-30m",
+      "schedule": "expired-every-4",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 1324100.5,
+        "placed": 920999.25
+      },
+      "placed_saving_fraction": 0.3044340289879809
+    },
+    {
+      "profile": "openai-30m",
+      "schedule": "warm",
+      "turns": 24,
+      "summed_scenario_costs": {
+        "front-tuned": 239912.65,
+        "placed": 189912.3
+      },
+      "placed_saving_fraction": 0.20841064445747237
+    },
+    {
+      "profile": "openai-30m",
+      "schedule": "warm",
+      "turns": 60,
+      "summed_scenario_costs": {
+        "front-tuned": 940308.7,
+        "placed": 406950.49999999994
+      },
+      "placed_saving_fraction": 0.5672160642563449
+    },
+    {
+      "profile": "openai-30m",
+      "schedule": "warm",
+      "turns": 120,
+      "summed_scenario_costs": {
+        "front-tuned": 3123216.95,
+        "placed": 850469.6499999999
+      },
+      "placed_saving_fraction": 0.7276943409262684
+    }
+  ],
+  "fleet": [
+    {
+      "profile": "openai-30m",
+      "mode": "unique-system",
+      "sessions": 20,
+      "input_cost_units": 92607.5
+    },
+    {
+      "profile": "openai-30m",
+      "mode": "isolated-namespace",
+      "sessions": 20,
+      "input_cost_units": 92543.0
+    },
+    {
+      "profile": "openai-30m",
+      "mode": "shared-prefix",
+      "sessions": 20,
+      "input_cost_units": 12637.55
+    },
+    {
+      "profile": "anthropic-5m",
+      "mode": "unique-system",
+      "sessions": 20,
+      "input_cost_units": 92078.0
+    },
+    {
+      "profile": "anthropic-5m",
+      "mode": "isolated-namespace",
+      "sessions": 20,
+      "input_cost_units": 92005.0
+    },
+    {
+      "profile": "anthropic-5m",
+      "mode": "shared-prefix",
+      "sessions": 20,
+      "input_cost_units": 12274.35
+    },
+    {
+      "profile": "anthropic-1h",
+      "mode": "unique-system",
+      "sessions": 20,
+      "input_cost_units": 146858.0
+    },
+    {
+      "profile": "anthropic-1h",
+      "mode": "isolated-namespace",
+      "sessions": 20,
+      "input_cost_units": 146740.0
+    },
+    {
+      "profile": "anthropic-1h",
+      "mode": "shared-prefix",
+      "sessions": 20,
+      "input_cost_units": 15011.1
+    }
+  ]
+}
