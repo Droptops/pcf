@@ -24,14 +24,25 @@ PREFILL_REJECTED = {"claude-fable-5-1", "claude-fable-5", "claude-mythos-5-1", "
                     "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6"}
 
 
+THINKING_BLOCKS = {"thinking", "redacted_thinking"}
+
+
 def history_from_response(response: Any) -> list[dict]:
-    """Normalize supported Anthropic assistant content blocks without data loss."""
+    """Normalize supported Anthropic assistant content blocks without data loss.
+
+    Thinking and redacted_thinking blocks are kept verbatim as ``provider_blocks`` so they can be replayed to the
+    model that produced them; they must precede the turn's text and tool_use blocks.
+    """
     blocks = response.get("content", []) if isinstance(response, dict) else getattr(response, "content", [])
-    text, calls = [], []
+    text, calls, kept = [], [], []
     for block in blocks:
-        block = block if isinstance(block, dict) else block.model_dump()
+        block = block if isinstance(block, dict) else block.model_dump(exclude_none=True)
         typ = block.get("type")
-        if typ == "text":
+        if typ in THINKING_BLOCKS:
+            if text or calls:  # rendering replays provider blocks first
+                raise ValueError("Anthropic thinking after text or tool_use is not representable")
+            kept.append({"provider": "anthropic", "block": block})
+        elif typ == "text":
             if (calls and block.get("text")) or block.get("citations"):  # would reorder text or drop citations
                 raise ValueError("Anthropic text after tool_use or with citations is not representable")
             text.append(block.get("text", ""))
@@ -40,7 +51,10 @@ def history_from_response(response: Any) -> list[dict]:
         else:
             raise ValueError(f"unsupported Anthropic response block: {typ!r}")
     if text or calls:
-        return [{"role": "assistant", "content": "".join(text), **({"tool_calls": calls} if calls else {})}]
+        return [{"role": "assistant", "content": "".join(text), **({"tool_calls": calls} if calls else {}),
+                 **({"provider_blocks": kept} if kept else {})}]
+    if kept:
+        raise ValueError("Anthropic thinking without text or tool_use is not representable")
     return []
 
 
@@ -69,10 +83,20 @@ class AnthropicCompiler(ContextCompiler):
     compiler_id = "pcf.anthropic.messages:0.2"
     cache_mode = "explicit"
 
-    def __init__(self, model_id: str, *, ttl="5m", tokenizer=None, max_tokens=1024, min_cacheable_tokens=None):
+    def __init__(self, model_id: str, *, ttl="5m", tokenizer=None, max_tokens=1024, min_cacheable_tokens=None,
+                 thinking: dict | None = None, thinking_blocks: str = "replay"):
+        """``thinking`` is sent as the request's thinking configuration (omitted when None). ``thinking_blocks``
+        chooses what happens to thinking blocks kept in history: "replay" sends them back unchanged (required
+        within a tool round on thinking models), "drop" strips every one. A replayed block is bound to the exact
+        prefix that produced it; see SPEC for tail memory."""
         self.descriptor = anthropic_descriptor(model_id, ttl=ttl, min_cacheable_tokens=min_cacheable_tokens)
         self.tokenizer = tokenizer if tokenizer is not None else HeuristicTokenizer()
         self.ttl, self.max_tokens = ttl, integer(max_tokens, "max_tokens", minimum=1)
+        if thinking is not None and (not isinstance(thinking, dict) or not isinstance(thinking.get("type"), str)):
+            raise ValueError("thinking must be an object with a string type")
+        if thinking_blocks not in {"replay", "drop"}:
+            raise ValueError("thinking_blocks must be replay or drop")
+        self.thinking, self.thinking_blocks = (dict(thinking) if thinking else None), thinking_blocks
 
     def _mark(self):
         return {"type": "ephemeral", **({"ttl": "1h"} if self.ttl == "1h" else {})}
@@ -101,7 +125,8 @@ class AnthropicCompiler(ContextCompiler):
                                 "content": text_content(turn["content"]), "is_error": turn["is_error"]}
                         message("user", [last])
                     else:
-                        blocks = []
+                        blocks = [dict(b["block"]) for b in turn.get("provider_blocks", [])
+                                  if b["provider"] == "anthropic" and self.thinking_blocks == "replay"]
                         if turn["content"]:
                             blocks.append({"type": "text", "text": text_content(turn["content"])})
                         for call in turn.get("tool_calls", []):
@@ -114,6 +139,8 @@ class AnthropicCompiler(ContextCompiler):
             if i in marks and last is not None:
                 last["cache_control"] = self._mark()
         result = {"model": self.descriptor.model_id, "max_tokens": self.max_tokens, "messages": messages}
+        if self.thinking is not None:
+            result["thinking"] = dict(self.thinking)
         if tools:
             result["tools"] = tools
         if system:

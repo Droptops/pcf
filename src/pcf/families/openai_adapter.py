@@ -12,13 +12,27 @@ from .capabilities import OpenAICapabilities, openai_profile
 
 
 def history_from_response(response: Any) -> list[dict]:
-    """Losslessly normalize supported Responses output items into PCF history."""
+    """Losslessly normalize supported Responses output items into PCF history.
+
+    Reasoning items are kept verbatim as ``provider_blocks`` on the assistant turn they precede, so they can be
+    replayed (replaying needs the item stored server-side, or requested with encrypted content).
+    """
     raw = response.get("output", []) if isinstance(response, dict) else getattr(response, "output", [])
     turns: list[dict] = []
+    pending: list[dict] = []  # reasoning items waiting for the assistant turn they precede
+
+    def take_pending(turn: dict) -> dict:
+        if pending:
+            turn.setdefault("provider_blocks", []).extend(pending)
+            pending.clear()
+        return turn
+
     for item in raw:
-        item = item if isinstance(item, dict) else item.model_dump()
+        item = item if isinstance(item, dict) else item.model_dump(exclude_none=True)
         typ = item.get("type")
-        if typ == "message":
+        if typ == "reasoning":
+            pending.append({"provider": "openai", "block": item})
+        elif typ == "message":
             blocks = item.get("content", [])
             unsupported = [b.get("type") for b in blocks
                            if b.get("type") not in {"output_text", "text"} or b.get("annotations")]
@@ -26,7 +40,7 @@ def history_from_response(response: Any) -> list[dict]:
                 raise ValueError(f"unsupported Responses content blocks: {unsupported}")
             text = "".join(b.get("text", "") for b in blocks)
             if text:
-                turns.append({"role": "assistant", "content": text})
+                turns.append(take_pending({"role": "assistant", "content": text}))
         elif typ == "function_call":
             import json
             try:
@@ -36,11 +50,15 @@ def history_from_response(response: Any) -> list[dict]:
             if not isinstance(args, dict):
                 raise ValueError("function_call arguments must be an object")
             call = {"id": item["call_id"], "name": item["name"], "arguments": args}
-            if turns and turns[-1]["role"] == "assistant":  # parallel calls form one assistant turn
+            if turns and turns[-1]["role"] == "assistant":  # parallel calls (or calls after text) form one turn
+                if pending:  # rendering replays provider blocks before the turn's text and calls
+                    raise ValueError("reasoning between output items of one turn is not representable")
                 turns[-1].setdefault("tool_calls", []).append(call)
             else:
-                turns.append({"role": "assistant", "content": "", "tool_calls": [call]})
+                turns.append(take_pending({"role": "assistant", "content": "", "tool_calls": [call]}))
         elif typ == "function_call_output":
+            if pending:
+                raise ValueError("reasoning before a tool output is not representable")
             output = item.get("output", "")
             if isinstance(output, list):
                 unsupported = [x.get("type") for x in output if x.get("type") != "input_text"]
@@ -52,6 +70,8 @@ def history_from_response(response: Any) -> list[dict]:
             turns.append({"role": "tool", "call_id": item["call_id"], "content": output, "is_error": False})
         else:
             raise ValueError(f"unsupported Responses output item: {typ!r}")
+    if pending:
+        raise ValueError("reasoning without a following message or call is not representable")
     return turns
 
 
@@ -70,7 +90,13 @@ class OpenAICompiler(ContextCompiler):
     # (e.g. [user, call] then [tool]) must still name the endpoint the previous request wrote.
     history_slots = 3
 
-    def __init__(self, model_id: str, *, tokenizer=None, capabilities: OpenAICapabilities | None = None):
+    def __init__(self, model_id: str, *, tokenizer=None, capabilities: OpenAICapabilities | None = None,
+                 reasoning_items: str = "replay"):
+        """``reasoning_items`` chooses what happens to reasoning items kept in history: "replay" sends them before
+        the assistant turn they preceded, "drop" strips them."""
+        if reasoning_items not in {"replay", "drop"}:
+            raise ValueError("reasoning_items must be replay or drop")
+        self.reasoning_items = reasoning_items
         self.profile = openai_profile(model_id, capabilities)
         self.descriptor = openai_descriptor(model_id, capabilities=self.profile)
         self.tokenizer = tokenizer if tokenizer is not None else HeuristicTokenizer()
@@ -120,6 +146,9 @@ class OpenAICompiler(ContextCompiler):
                         last = {"type": "input_text", "text": text_content(output)}
                         inputs.append({"type": "function_call_output", "call_id": turn["call_id"], "output": [last]})
                     else:
+                        if self.reasoning_items == "replay":
+                            inputs.extend(dict(b["block"]) for b in turn.get("provider_blocks", [])
+                                          if b["provider"] == "openai")
                         if turn["content"] and turn["role"] == "user":
                             last = {"type": "input_text", "text": text_content(turn["content"])}
                             inputs.append({"role": "user", "content": [last]})

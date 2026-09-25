@@ -189,6 +189,37 @@
                               "additionalProperties": false
                             },
                             "minItems": 1
+                          },
+                          "provider_blocks": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "provider": {
+                                  "enum": [
+                                    "anthropic",
+                                    "openai"
+                                  ]
+                                },
+                                "block": {
+                                  "type": "object",
+                                  "required": [
+                                    "type"
+                                  ],
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              },
+                              "required": [
+                                "provider",
+                                "block"
+                              ],
+                              "additionalProperties": false
+                            }
                           }
                         },
                         "required": [

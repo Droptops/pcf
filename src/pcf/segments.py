@@ -12,6 +12,7 @@ from .validation import ID_PATTERN, nonempty
 
 PCF_VERSION = "0.2"
 KIND_RANK = {"tools": 0, "system": 1, "memory": 2, "document": 2, "history": 3, "user": 4}
+PROVIDER_BLOCK_OWNERS = {"anthropic", "openai"}
 
 
 def canonical_bytes(content: Any) -> bytes:
@@ -62,9 +63,20 @@ def normalize_history(turns: Any) -> list[dict]:
             result.append({"role": "tool", "call_id": call_id, "content": content,
                            "is_error": turn.get("is_error", False)})
             continue
-        _fields(turn, {"role", "content", "tool_calls"}, {"role"})
+        _fields(turn, {"role", "content", "tool_calls", "provider_blocks"}, {"role"})
         content = turn.get("content", "")
         calls = turn.get("tool_calls", [])
+        blocks = turn.get("provider_blocks", [])
+        if blocks and role != "assistant":
+            raise ValueError("only assistant entries can carry provider blocks")
+        if not isinstance(blocks, list):
+            raise ValueError("provider_blocks must be an array")
+        for block in blocks:  # opaque provider state (e.g. thinking, reasoning), replayed only by its provider
+            _fields(block, {"provider", "block"}, {"provider", "block"})
+            if block["provider"] not in PROVIDER_BLOCK_OWNERS:
+                raise ValueError(f"unknown provider block owner {block['provider']!r}")
+            if not isinstance(block["block"], dict) or not isinstance(block["block"].get("type"), str):
+                raise ValueError("a provider block must be an object with a string type")
         if isinstance(content, dict) and content.get("type") == "tool_use":
             if calls or role != "assistant":
                 raise ValueError("tool_use must be a standalone assistant call")
@@ -90,6 +102,8 @@ def normalize_history(turns: Any) -> list[dict]:
         item = {"role": role, "content": content}
         if clean_calls:
             item["tool_calls"] = clean_calls
+        if blocks:
+            item["provider_blocks"] = [{"provider": b["provider"], "block": dict(b["block"])} for b in blocks]
         result.append(item)
     return result
 

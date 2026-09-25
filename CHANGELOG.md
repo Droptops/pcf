@@ -62,6 +62,12 @@ Fixes from coding reviews. Portable segment hashes remain unchanged. Document ac
 - `scripts/live_tool_loop.py`: a scripted tool loop ([user, call] and [tool] segments, four tail memory modules)
   that checks each request reads back the previous request's cached prefix. Live on 2026-09-25 every request
   after the first read back 100% on gpt-5.6 and on claude-sonnet-5 via OpenRouter (`results/2026-09-25/`).
+- Provider reasoning state in history: assistant turns may carry `provider_blocks` (Anthropic thinking and
+  redacted_thinking blocks, OpenAI reasoning items), which `history_from_response` now keeps instead of rejecting.
+  The matching adapter replays them unchanged before the turn's text and calls (`AnthropicCompiler(thinking_blocks=)`,
+  `OpenAICompiler(reasoning_items=)`, "replay" or "drop"); other adapters never send them. `AnthropicCompiler(thinking=)`
+  sets the request's thinking configuration. Checked live 2026-09-25 on claude-sonnet-5 (via OpenRouter) and gpt-5.6:
+  a tool round replays the captured block and completes, in both modes. Documents without the field hash as before.
 - Tail memory (memory after history) never takes a breakpoint, whatever its `stable` flag: an entry there would be
   rewritten every turn and never read, and several tail modules could crowd history out of the budget.
 - `MemoryPlacer.split`: memory with instruction authority always stays in front, and tail copies keep their
