@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Calibration error and Brier score use correctly rounded summation (`math.fsum`), so metrics and the validation
+  IDs hashed from them no longer differ between Python 3.11 and 3.12+. Records computed on 3.11 can change in the
+  last digits and get new validation IDs; regenerate them.
 - Treat invalid raw probabilities from a fitted Platt scorer as per-request confidence unavailability, allowing
   routing to fall back. Scorer programming errors and invalid calibration coefficients remain visible.
 - Replace the Jev acceptance-v2 filler/length proxy with question-specific full-answer formats (acceptance-v3),

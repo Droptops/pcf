@@ -24,12 +24,14 @@ def expected_calibration_error(probs, labels, n_bins=10):
     bins = [[] for _ in range(n_bins)]
     for p, y in zip(probs, labels):
         bins[min(int(p * n_bins), n_bins - 1)].append((p, y))
-    return sum(abs(sum(y - p for p, y in group)) for group in bins) / len(probs)
+    # math.fsum is correctly rounded, so metrics (and the validation IDs hashed from them) match on every Python
+    # version; the built-in sum of floats changed in 3.12.
+    return math.fsum(abs(math.fsum(y - p for p, y in group)) for group in bins) / len(probs)
 
 
 def brier_score(probs, labels):
     probs, labels = checked_outcomes(probs, labels)
-    return sum((p - y) ** 2 for p, y in zip(probs, labels)) / len(probs)
+    return math.fsum((p - y) ** 2 for p, y in zip(probs, labels)) / len(probs)
 
 
 def _sigmoid(x):

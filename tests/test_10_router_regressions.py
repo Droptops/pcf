@@ -208,3 +208,24 @@ def test_platt_preserves_configuration_and_programming_errors():
         raise ValueError("scorer programming error")
     with pytest.raises(ValueError, match="scorer programming error"):
         PlattScaledSource(broken).p_sufficient(_context("test"), candidate)
+
+
+def test_calibration_metrics_are_correctly_rounded_on_every_python_version():
+    import math
+    from fractions import Fraction
+
+    from pcf.router.calibration import brier_score, expected_calibration_error
+    probs = [0.0, 0.54, 0.79, 0.33, 0.6, 0.8, 0.64, 0.55, 0.18, 0.09, 0.55, 0.85]
+    labels = [1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0]
+    terms = [(p - y) ** 2 for p, y in zip(probs, labels)]
+    naive = 0.0
+    for t in terms:
+        naive += t
+    exact = float(sum(Fraction(t) for t in terms))
+    assert naive != exact  # left-to-right addition (Python < 3.12 sum) rounds differently here
+    assert brier_score(probs, labels) == exact / len(probs) == math.fsum(terms) / len(probs)
+    groups = {}
+    for p, y in zip(probs, labels):
+        groups.setdefault(min(int(p * 10), 9), []).append(y - p)
+    ece = float(sum(abs(sum(Fraction(v) for v in g)) for g in groups.values())) / len(probs)
+    assert expected_calibration_error(probs, labels) == ece

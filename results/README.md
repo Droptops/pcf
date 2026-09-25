@@ -79,4 +79,5 @@ python scripts/live_jev_calibration.py --relabel \
 ```
 
 The v3 artifact records its normalization policy and the relabel script's SHA-256. Relabel timestamps may differ;
-answers, Jev scores, labels, metrics and validation records are reproducible from the original file.
+answers, Jev scores, labels, metrics and validation records are reproducible from the original file on any supported
+Python version (the metrics use correctly rounded summation).
