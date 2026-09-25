@@ -8,7 +8,7 @@ Runs the six scenarios in scripts/domain_scenarios.py (healthcare, government, e
   placed      - MemoryPlacer picks front or tail per module from observed change rates and cache prices
 Replies are graded by the first value asserted from the question's answer set. Costs use the same units as
 scripts/live_memory_placement.py. --analyze FILE... prints per-scenario totals and exact McNemar tests pairing
-each turn across layouts.
+each turn across layouts; --regrade FILE re-grades a saved run with the current grader, offline.
 """
 from __future__ import annotations
 
@@ -93,6 +93,28 @@ def session(key: str, arm: str, nonce: str, cfg, client=None) -> list[dict]:
     return rows
 
 
+def regrade(path: str) -> dict:
+    """Re-grade every row of a saved run with the current grader; summaries and aggregates are recomputed."""
+    saved = json.load(open(path))
+    meta = saved["meta"]
+    prices = argparse.Namespace(read_multiplier=meta["read_multiplier"], output_multiplier=meta["output_multiplier"])
+    changes = []
+    for key, runs in saved["scenarios"].items():
+        scenario = SCENARIOS[key]
+        for i, run in enumerate(runs):
+            for arm in meta["arms"]:
+                for row in run[arm]:
+                    ask, expected = scenario.question(row["turn"])
+                    old = row["correct"]
+                    row.update(grade(ask, row["answer"], expected, row["stale"], meta["violation_tokens"]))
+                    if old != row["correct"]:
+                        changes.append({"scenario": key, "run": i, "arm": arm, "turn": row["turn"], "now": row["correct"]})
+            run["summary"] = {arm: placement.summarize(run[arm], prices, meta["write_multiplier"]) for arm in meta["arms"]}
+        saved["aggregate"][key] = placement.aggregate(runs, meta["arms"])
+    saved["meta"] = {**meta, "regraded": True, "regrade_changes": changes}
+    return saved
+
+
 def mcnemar(b: int, c: int) -> float:
     """Exact two-sided McNemar p-value for b and c discordant pairs."""
     n = b + c
@@ -166,7 +188,11 @@ if __name__ == "__main__":
     parser.add_argument("--violation-tokens", type=int, default=80)
     parser.add_argument("--workers", type=int, default=1, help="sessions run concurrently (paid runs only)")
     parser.add_argument("--analyze", nargs="+", metavar="FILE", help="summarize saved runs and exit")
+    parser.add_argument("--regrade", metavar="FILE", help="re-grade a saved run offline and print it")
     cfg = parser.parse_args()
+    if cfg.regrade:
+        print(json.dumps(regrade(cfg.regrade), indent=2))
+        raise SystemExit
     if cfg.analyze:
         print(json.dumps(analyze(cfg.analyze), indent=2))
         raise SystemExit
@@ -186,10 +212,18 @@ if __name__ == "__main__":
     repeats = cfg.repeats if client else 1
     nonces = {(k, i): uuid.uuid4().hex[:12] if client else "offline" for k in cfg.scenarios for i in range(repeats)}
     jobs = [(k, i, arm) for k in cfg.scenarios for i in range(repeats) for arm in cfg.arms]
+    def attempt(job):
+        try:
+            return session(job[0], job[2], nonces[(job[0], job[1])], cfg, client)
+        except Exception as exc:  # e.g. quota exhausted: keep the sessions that finished
+            return {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
+
     with ThreadPoolExecutor(max(1, cfg.workers if client else 1)) as pool:
-        done = dict(zip(jobs, pool.map(lambda j: session(j[0], j[2], nonces[(j[0], j[1])], cfg, client), jobs)))
+        done = dict(zip(jobs, pool.map(attempt, jobs)))
+    failed = {j: r["error"] for j, r in done.items() if isinstance(r, dict)}
+    complete = [k for k in cfg.scenarios if not any(j[0] == k for j in failed)]
     scenarios, aggregate = {}, {}
-    for k in cfg.scenarios:
+    for k in complete:
         runs = []
         for i in range(repeats):
             run = {arm: done[(k, i, arm)] for arm in cfg.arms}
@@ -202,5 +236,9 @@ if __name__ == "__main__":
             "repeats": repeats, "arms": cfg.arms, "scenarios": cfg.scenarios, "thinking": cfg.thinking,
             "effort": cfg.effort, "write_multiplier": writes, "read_multiplier": cfg.read_multiplier,
             "output_multiplier": cfg.output_multiplier, "violation_tokens": cfg.violation_tokens,
-            "paid": client is not None, "data": "synthetic; see scripts/domain_scenarios.py"}
+            "paid": client is not None, "data": "synthetic; see scripts/domain_scenarios.py",
+            "failed_sessions": [{"scenario": j[0], "repeat": j[1], "arm": j[2], "error": e} for j, e in failed.items()],
+            "scenarios_complete": complete}
     print(json.dumps({"meta": meta, "scenarios": scenarios, "aggregate": aggregate}, indent=2))
+    if failed:
+        raise SystemExit(f"{len(failed)} sessions failed; scenarios with a failed session are left out")

@@ -514,7 +514,6 @@ SCENARIOS = {s.key: s for s in (CLINICAL, CLAIMS, BENEFITS, TAX, HELPDESK, CRM)}
 NUMBER = re.compile(r"(?<![\w$.,:/-])(\d{1,3}(?:\.\d)?)(?![\w:/]|[.,]\d)")
 MONEY = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{2})?)")
 DATE = re.compile(r"\b(" + "|".join(MONTHS) + r")[a-z]*\.?\s+(\d{1,2})\b", re.I)
-BOLD = re.compile(r"\*\*(.+?)\*\*", re.S)
 ALIASES = {"text message": ("text", "texts", "SMS"), "member portal": ("portal",), "postal mail": ("mail",),
            "noncompliant": ("non-compliant", "not compliant"),
            "in grace period": ("grace period",), "more information requested": ("more information",
@@ -552,8 +551,8 @@ def _first(ask: Ask, text: str) -> str:
 
 
 def answer_value(ask: Ask, text: str) -> str:
-    """The first value the reply asserts from the question's answer set; a bolded value wins."""
-    for span in BOLD.findall(text):
-        if value := _first(ask, span):
-            return value
-    return _first(ask, text)
+    """The first value the reply asserts from the question's answer set.
+
+    The system prompt asks the model to lead with the value, so position decides; a later bolded value (for
+    example a recap of corrected figures) does not override the value the reply opens with."""
+    return _first(ask, text.replace("**", ""))

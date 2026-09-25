@@ -131,6 +131,35 @@ question did not override the conversation.
 
 </details>
 
+## Synthetic domain workloads
+
+`scripts/live_domain_sessions.py` runs six synthetic assistant sessions closer to production prompts
+(`scripts/domain_scenarios.py`; every record is invented): an inpatient nurse copilot and health plan member services
+(healthcare), benefits casework and taxpayer assistance (government), and an IT service desk and sales CRM copilot
+(enterprise). Each prompt carries a policy, a large stable reference module (formulary, benefit grid, program rules,
+knowledge base) and four records changing never / every 6th turn / every 3rd / every turn: about 4-6k tokens before
+history, 24 turns per session, 3 repeats. Four layouts: memory in front with every module `stable` (naive), memory in
+front with the changing modules marked `stable=False` (tuned), all memory after history (tail), and `MemoryPlacer`.
+
+claude-sonnet-5 (`results/2026-09-25/domain-claude-sonnet-5.json`), totals over the six scenarios:
+
+| Layout | Input | Input + output | Correct | Stale-history checks |
+|---|---|---|---|---|
+| Front, naive | 882.5k | 1,097.8k | 409/432 | 215/234 |
+| Front, tuned | 250.7k | 463.2k | 408/432 | 213/234 |
+| Tail | 842.1k | 916.5k | 432/432 | 234/234 |
+| `MemoryPlacer` | 219.9k | 293.9k | 432/432 | 234/234 |
+
+- `MemoryPlacer` answered every question and was cheapest in every scenario: 3.7x below the naive front layout and
+  1.6x below the tuned one, counting output. Paired by turn, it was right where front memory was wrong 23 times and
+  never the reverse (exact McNemar p < 1e-6); the tuned front layout did no better than the naive one on accuracy.
+- All-tail was as accurate but cost 3.1x more than `MemoryPlacer`: with a large stable reference module, moving it
+  after history bills it uncached every turn. Keep stable memory in front and move only what changes.
+- gpt-5.6, input only (`results/2026-09-25/domain-gpt-5.6-run1.json`): naive front 712.3k, tuned front 186.3k,
+  tail 590.5k, `MemoryPlacer` 160.2k (cheapest overall, though tuned front was 6% cheaper in the clinical scenario).
+  That run's answers are not a placement result (a third asked for identity verification first, before the
+  scenarios recorded it), and the corrected rerun stopped when the OpenAI account ran out of credits.
+
 ## Routing safety: the calibration gate
 
 PCF routes a request to a cheaper model only when an external confidence scorer, validated on held-out contexts,

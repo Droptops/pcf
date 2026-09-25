@@ -117,7 +117,9 @@ validation records.
   Rows carry `value_correct`, `instruction_compliant` and `label` (both, `acceptance-v2`), matching the rubric Jev
   is asked about; `--relabel FILE` relabels a saved question-bank run and re-validates from its recorded scores.
 - `scripts/live_domain_sessions.py` runs synthetic healthcare, government and enterprise assistant sessions
-  (`scripts/domain_scenarios.py`) under front, tuned-front, tail and `MemoryPlacer` layouts.
+  (`scripts/domain_scenarios.py`) under front, tuned-front, tail and `MemoryPlacer` layouts; `--analyze` pairs
+  layouts per turn with an exact McNemar test, `--regrade` re-grades offline, and a failed session no longer loses
+  the completed ones.
 - Raw results of every run quoted in the README are under `results/`; README summarizes them.
 - CI covers Python 3.11-3.14, lint, offline smoke checks, wheel installation, and a private-session-link check on
   tracked text, new commits and the pull request title and description (re-run when the description is edited).
