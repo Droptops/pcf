@@ -81,8 +81,12 @@ Fixes from coding reviews. Portable segment hashes remain unchanged. Document ac
   `OpenAICompiler(reasoning_items=)`, "replay" or "drop"); other adapters never send them. `AnthropicCompiler(thinking=)`
   sets the request's thinking configuration. Checked live 2026-09-25 on claude-sonnet-5 (via OpenRouter) and gpt-5.6:
   a tool round replays the captured block and completes, in both modes. Documents without the field hash as before.
-- Tail memory (memory after history) never takes a breakpoint, whatever its `stable` flag: an entry there would be
-  rewritten every turn and never read, and several tail modules could crowd history out of the budget.
+- Tail memory (memory after history) never takes a breakpoint, whatever its `stable` flag: a conversation rebuilds
+  it every turn, so its entry is reused only by a retry on identical history, and several tail modules could crowd
+  history out of the budget. Stable user turns after history remain candidates.
+- A history boundary that leaves a tool call waiting for its result takes no breakpoint slot: it can never end a
+  request. This keeps OpenAI tool loops flat when parallel results arrive in separate segments (which otherwise
+  re-billed all history every request), and fixes a budget of 2 returning every candidate.
 - `MemoryPlacer.split`: memory with instruction authority always stays in front, and tail copies keep their
   authority. A change to a front module is priced against everything behind it (later front modules plus
   history), not history alone; list modules stable-first.

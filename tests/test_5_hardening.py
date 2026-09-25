@@ -442,3 +442,33 @@ def test_openai_keeps_the_system_anchor_while_history_is_short():
     hist = Segment("h0", "history", [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}])
     ctx = Context([Segment("s", "system", "sys " * 600), *modules, hist, Segment("u", "user", "next", stable=False)])
     assert [ctx.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(ctx).breakpoints] == ["s", "m2", "m3", "h0"]
+
+
+def test_openai_parallel_tool_results_in_separate_segments_keep_cost_flat():
+    from pcf.families.sim import SimEngine
+    base = [Segment("s", "system", "policy " * 1500), Segment("p", "memory", "profile " * 600, provenance="p")]
+    hist, contexts = [], []
+    for k in range(6):
+        contexts.append(Context([*base, *hist, Segment("u", "user", f"question {k} " * 40, stable=False)]))
+        calls = [{"id": f"c{k}{j}", "name": "f", "arguments": {"k": k, "j": j}} for j in range(2)]
+        hist += [Segment(f"u{k}", "history", [{"role": "user", "content": f"question {k} " * 40}]),
+                 Segment(f"c{k}", "history", [{"role": "assistant", "content": "", "tool_calls": calls}])]
+        hist += [Segment(f"r{k}{j}", "history", [{"role": "tool", "call_id": f"c{k}{j}", "content": f"result {k} " * 200,
+                                                   "is_error": False}]) for j in range(2)]
+        contexts.append(Context([*base, *hist]))
+        hist.append(Segment(f"a{k}", "history", [{"role": "assistant", "content": f"answer {k} " * 40}]))
+    compiler = OpenAICompiler("gpt-5.6")
+    engine = SimEngine(compiler, PrefixCache(compiler.descriptor.ttl_seconds))
+    cold = [engine.run(ctx, 10.0 * (t + 1))[0].cold_tokens for t, ctx in enumerate(contexts)]
+    per_round = cold[3::2]
+    assert max(per_round) - min(per_round) <= 2, cold
+    # A boundary between the two results leaves a call pending: it can never end a request, so it is not marked.
+    marked = [contexts[-1].segments[i].id for i in compiler.compile(contexts[-1]).breakpoints]
+    assert not any(m.startswith("r") and m.endswith("0") for m in marked), marked
+
+
+def test_budget_of_two_never_returns_more_than_two():
+    ctx = Context([Segment("t", "tools", [{"name": "f", "parameters": {}}]), Segment("s", "system", "sys"),
+                   Segment("m", "memory", "mem"), Segment("u", "user", "hi", stable=True)])
+    for slots in (0, 1, 2, 3):
+        assert len(choose_breakpoints(ctx, 2, history_slots=slots)) <= 2

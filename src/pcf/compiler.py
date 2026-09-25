@@ -99,13 +99,16 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     indices rejected by ``supported``, have no native marker location and do not
     consume budget. Memory segments sharing a ``provenance`` form one module with its
     own anchor, so a change to a later module keeps earlier modules warm; memory without
-    provenance shares the document anchor. Tail memory (after history) is re-sent every
-    turn and never takes a breakpoint. Stability is a hint, not a cache guarantee.
+    provenance shares the document anchor. Tail memory (after history) is rebuilt every turn
+    in a conversation, so an entry there is reused only by a request that repeats the same
+    history (a retry); it never takes a breakpoint. A history boundary that leaves a tool call
+    waiting for its result can never end a request, so it takes no slot either. Stability is
+    a hint, not a cache guarantee.
 
     Over budget, the last anchor is kept, then the last anchor of the leading tools/system
     run when ``history_slots`` endpoints (or every history candidate, if fewer) still fit
-    beside both anchors, so one mislabelled
-    volatile module cannot take the system prompt out of cache. ``history_slots`` is how
+    beside both anchors, so one mislabelled volatile module cannot take the system prompt out
+    of cache. ``history_slots`` is how
     many history endpoints a compiler needs for the next request to name the endpoint this
     request writes: providers that read only at markers present in the request need one
     per markable segment a request can append.
@@ -113,14 +116,25 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     integer(max_breakpoints, "max_breakpoints")
     integer(history_slots, "history_slots")
     first_history = next((i for i, seg in enumerate(ctx.segments) if seg.kind == "history"), len(ctx.segments))
+    pending, settled = set(), set()  # history indices whose end leaves no tool call waiting for its result
+    for i, seg in enumerate(ctx.segments):
+        if seg.kind == "history":
+            for turn in seg.content:
+                if turn["role"] == "tool":
+                    pending.discard(turn["call_id"])
+                else:
+                    pending.update(call["id"] for call in turn.get("tool_calls", []))
+            if not pending:
+                settled.add(i)
     groups, history = {}, []
     for i, seg in enumerate(ctx.segments):
         if not seg.stable or not seg.content or (supported is not None and not supported(i)):
             continue
         if seg.kind == "history":
-            history.append(i)
+            if i in settled:
+                history.append(i)
         elif i > first_history and seg.kind in {"memory", "document"}:
-            continue  # tail memory: a cache entry here would be rewritten every turn and never read
+            continue  # tail memory: rebuilt every turn, so an entry here is rewritten, not read
         elif seg.kind == "memory" and seg.provenance is not None:
             groups[("memory", seg.provenance)] = i
         else:
@@ -138,7 +152,8 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     lead = [i for i in anchors if ctx.segments[i].kind in {"tools", "system"}]
     if lead and lead[-1] != anchor and max_breakpoints - 2 >= min(history_slots, len(history)):
         keep.add(lead[-1])
-    return sorted({*keep, *[i for i in candidates if i not in keep][-(max_breakpoints - len(keep)):]})
+    rest = max_breakpoints - len(keep)
+    return sorted({*keep, *([i for i in candidates if i not in keep][-rest:] if rest else [])})
 
 
 class ContextCompiler(ABC):
