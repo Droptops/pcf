@@ -57,10 +57,11 @@ class MemoryPlacer:
         instruction authority never move (instructions precede data). Tail copies are unstable so they
         get no breakpoint.
 
-        On a warm turn where a module moves, the prefix after the first front module changes, and the only
-        earlier cache entry left to read ends at that module (written by the conversation's first request).
-        Providers that read only at markers present in the request need a marker there, so on that turn the
-        front modules after the first are returned unstable: the first module takes the anchor.
+        On a warm turn where the front changes, providers that read only at markers present in the request need a
+        marker at an entry written earlier. When modules were only appended, the previous last front module's entry
+        still holds, and the appended modules are returned unstable so it keeps the anchor. Otherwise the prefix
+        changes after the first front module, whose entry the conversation's first request wrote, and the front
+        modules after the first are returned unstable.
         """
         if any(seg.kind != "memory" for seg in memory):
             raise ValueError("only memory segments can be placed")
@@ -87,10 +88,12 @@ class MemoryPlacer:
                 behind += m
         front = [seg for seg, in_tail in zip(memory, placed) if not in_tail]
         ids = tuple(seg.id for seg in front)
-        moved, self._front = self._front is not None and ids != self._front and not cold, ids
+        self._previous, self._front = self._front or (), ids
+        moved = bool(self._previous) and ids != self._previous and not cold
         if moved:
-            front = front[:1] + [Segment(seg.id, "memory", seg.content, False, authority=seg.authority,
-                                         provenance=seg.provenance) for seg in front[1:]]
+            previous = len(self._previous) if ids[:len(self._previous)] == self._previous else 1
+            front = front[:previous] + [Segment(seg.id, "memory", seg.content, False, authority=seg.authority,
+                                                provenance=seg.provenance) for seg in front[previous:]]
         tail = [Segment(seg.id, "memory", seg.content, False, authority=seg.authority, provenance=seg.provenance)
                 for seg, in_tail in zip(memory, placed) if in_tail]
         return front, tail

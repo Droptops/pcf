@@ -72,9 +72,10 @@ export class MemoryPlacer {
    * Place this turn's modules; call once per turn. `historyTokens` is the size of the conversation so far.
    * Pass `cold: true` when the provider cache has expired, predicted from the time since the last request.
    *
-   * On a warm turn where a module moves, the front modules after the first are returned unstable, so the first
-   * front module carries the cache marker: it is the only earlier cache entry left to read, and some providers
-   * read only at markers present in the request.
+   * On a warm turn where the front changes, some providers read only at markers present in the request, so a
+   * marker must sit at an entry written earlier. When modules were only appended, the appended ones are returned
+   * unstable and the previous last front module keeps the marker; otherwise the front modules after the first
+   * are returned unstable and the first front module carries it.
    */
   split(memory: MemoryModule[], historyTokens: number, { cold = false } = {}): Placement {
     let behind = historyTokens;
@@ -106,10 +107,14 @@ export class MemoryPlacer {
     let front: PlacedModule[] = memory.filter((_, i) => !inTail[i]).map((m) => ({ ...m, stable: true }));
     const tail: PlacedModule[] = memory.filter((_, i) => inTail[i]).map((m) => ({ ...m, stable: false }));
     const ids = front.map((m) => m.id);
-    const previous = this.previousFront;
+    const previous = this.previousFront ?? [];
     this.previousFront = ids;
-    const moved = previous !== null && !cold && (previous.length !== ids.length || previous.some((id, i) => id !== ids[i]));
-    if (moved) front = front.map((m, i) => (i === 0 ? m : { ...m, stable: false }));
+    const moved = previous.length > 0 && !cold && (previous.length !== ids.length || previous.some((id, i) => id !== ids[i]));
+    if (moved) {
+      const appended = previous.every((id, i) => ids[i] === id);
+      const keep = appended ? previous.length : 1;
+      front = front.map((m, i) => (i < keep ? m : { ...m, stable: false }));
+    }
     return { front, tail };
   }
 

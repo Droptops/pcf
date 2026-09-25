@@ -438,11 +438,32 @@ def test_scaled_tokenizer_is_deterministic_monotonic_and_has_its_own_identity():
             ScaledTokenizer(base, bad)
 
 
-def test_openai_keeps_the_system_anchor_while_history_is_short():
+def test_openai_keeps_the_system_prompt_covered_while_history_is_short():
     modules = [Segment(f"m{k}", "memory", f"module {k}", provenance=f"m{k}") for k in range(4)]
     hist = Segment("h0", "history", [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}])
     ctx = Context([Segment("s", "system", "sys " * 600), *modules, hist, Segment("u", "user", "next", stable=False)])
-    assert [ctx.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(ctx).breakpoints] == ["s", "m2", "m3", "h0"]
+    # the module right after the system prompt takes its slot and covers it, as on the first request
+    assert [ctx.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(ctx).breakpoints] == ["m0", "m2", "m3", "h0"]
+    first = Context([Segment("s", "system", "sys " * 600), *modules, Segment("u", "user", "q", stable=False)])
+    assert [first.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(first).breakpoints][0] == "m0"
+
+
+def test_openai_reads_the_first_requests_entry_when_a_later_module_changes():
+    from pcf.families.sim import SimEngine
+    compiler = OpenAICompiler("gpt-5.6")
+    engine = SimEngine(compiler, PrefixCache(compiler.descriptor.ttl_seconds))
+
+    def ctx(turn, version):
+        modules = [Segment(f"m{k}", "memory", f"module {k} v{version if k == 2 else 0} " * 60, provenance=f"m{k}")
+                   for k in range(5)]
+        history = [Segment(f"h{t}", "history", [{"role": "user", "content": f"q{t}"},
+                                                {"role": "assistant", "content": f"a{t}"}]) for t in range(turn)]
+        return Context([Segment("s", "system", "policy " * 3000), *modules, *history,
+                        Segment("u", "user", "q", stable=False)])
+    engine.run(ctx(0, 0), 0)
+    engine.run(ctx(1, 0), 1)
+    usage, _ = engine.run(ctx(2, 1), 2)
+    assert usage.cache_read_input_tokens > 3000
 
 
 

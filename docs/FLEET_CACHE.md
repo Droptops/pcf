@@ -140,7 +140,7 @@ What the fleet adds, and what it does not:
   0.19 (gpt-5.6) and 0.18 (Claude) as much, and its first 12 turns about 0.75. Over 60 turns the saving is 3-4%:
   once a conversation is warm, its own history dominates. Fleets of short conversations gain most.
 - **Placement is the long-session saving,** and it holds with a shared prefix: 0.53 and 0.50 of the tuned-shared
-  bill, close to the private-prefix domain runs (0.49 and 0.53).
+  bill, close to the private-prefix domain runs (0.49 and 0.53 before the marker fixes; 0.46 and 0.49 after).
 - **Idle gaps remove it.** With every turn after the 5-minute lifetime, no cold turn read anything (48/48), and
   12 cold turns cost 5.8x the warm tuned-shared turns.
 

@@ -25,42 +25,42 @@ import argparse
 import json
 import math
 import os
-import re
 import sys
 
 PREFIX_KEYS = ("tools", "system", "instructions", "messages", "input")
 IGNORED = {"cache_control", "prompt_cache_breakpoint"}
 
 
-def leaves(value, path=""):
-    """(path, text) for every scalar in document order; a string holding JSON is opened and walked too."""
+def leaves(value, path=()):
+    """(key path, text) for every scalar in document order; a string holding JSON is opened and walked too.
+
+    A key path is a tuple of dict keys, list indexes and "#", which marks the step into a JSON string."""
     if isinstance(value, dict):
         for key, item in value.items():
             if key not in IGNORED:
-                yield from leaves(item, f"{path}.{key}" if path else key)
+                yield from leaves(item, (*path, key))
     elif isinstance(value, list):
         for i, item in enumerate(value):
-            yield from leaves(item, f"{path}[{i}]")
+            yield from leaves(item, (*path, i))
     elif isinstance(value, str) and value[:1] in "{[":
         try:
-            inner = json.loads(value)
+            inner = list(leaves(json.loads(value), (*path, "#")))
         except ValueError:
-            yield path, value
-        else:
-            yield from leaves(inner, f"{path}#")
+            inner = []
+        yield from inner or [(path, value)]  # an empty or invalid document is one leaf
     else:
         yield path, value if isinstance(value, str) else json.dumps(value)
 
 
-def flatten(request: dict) -> list[tuple[str, str]]:
-    return [leaf for key in PREFIX_KEYS if key in request for leaf in leaves(request[key], key)]
+def flatten(request: dict) -> list[tuple[tuple, str]]:
+    return [leaf for key in PREFIX_KEYS if key in request for leaf in leaves(request[key], (key,))]
 
 
 def size(text: str) -> int:
     return len(text.encode())
 
 
-def common_prefix(a: list[tuple[str, str]], b: list[tuple[str, str]]) -> tuple[int, int]:
+def common_prefix(a: list[tuple[tuple, str]], b: list[tuple[tuple, str]]) -> tuple[int, int]:
     """(bytes shared, index of the first differing leaf)."""
     shared = 0
     for i, ((pa, ta), (pb, tb)) in enumerate(zip(a, b)):
@@ -72,29 +72,32 @@ def common_prefix(a: list[tuple[str, str]], b: list[tuple[str, str]]) -> tuple[i
     return shared, min(len(a), len(b))
 
 
-def label(request: dict, path: str) -> str:
+def _field(keys) -> str:
+    return ".".join("[]" if isinstance(k, int) else str(k) for k in keys).replace(".[]", "[]")
+
+
+def label(request: dict, path: tuple) -> str:
     """A name a person recognizes for the leaf at `path`."""
     if "#" in path:
-        outer, inner = path.split("#", 1)
+        cut = path.index("#")
         node = request
-        for part in re.findall(r"[^.\[\]]+|\[\d+\]", outer):
-            node = node[int(part[1:-1])] if part.startswith("[") else node[part]
+        for key in path[:cut]:
+            node = node[key]
         doc = json.loads(node)
         name = doc.get("source") if isinstance(doc, dict) else None
-        field = re.sub(r"\[\d+\]", "[]", inner.lstrip(".")) or "(document)"
+        field = _field(path[cut + 1:]) or "(document)"
         if name:
             return f"memory '{name}' {field.removeprefix('data.')}"
         return f"JSON field {field}"
-    head = path.split(".")[0].split("[")[0]
+    head = path[0]
     if head in ("system", "instructions"):
         return "system prompt"
     if head == "tools":
         return "tool definitions"
-    match = re.match(r"(messages|input)\[(\d+)\]", path)
-    if match:
-        message = request[match.group(1)][int(match.group(2))]
-        return f"{message.get('role', 'item')} message"
-    return path
+    if head in ("messages", "input") and len(path) > 1 and isinstance(path[1], int):
+        message = request[head][path[1]]
+        return f"{message.get('role', 'item')} message" if isinstance(message, dict) else "item"
+    return _field(path)
 
 
 def audit(rows: list[dict], ttl: float | None = None, write: float = 1.25, read: float = 0.1,
@@ -201,6 +204,8 @@ def from_fleet(path: str, arm: str) -> list[dict]:
     saved = json.load(open(path))
     meta, rows, clock = saved["meta"], [], 0.0
     for key, arms in saved["cells"].items():
+        if arm not in arms:
+            raise SystemExit(f"{path}: scenario {key} has no arm {arm!r}; it has {', '.join(arms)}")
         cell = arms[arm]
         sessions = cell["warmup"] + cell["measured"]
         cfg = SimpleNamespace(provider=meta["provider"], model=meta["model"], turns=len(sessions[0]),

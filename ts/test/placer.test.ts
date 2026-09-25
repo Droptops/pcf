@@ -24,3 +24,13 @@ for (const session of fixture.sessions) {
 test("rejects prices that make caching pointless", () => {
   assert.throws(() => new MemoryPlacer({ countTokens: () => 1, writeMultiplier: 0.1, readMultiplier: 0.1 }), RangeError);
 });
+
+test("keeps the last front module's marker when modules are only appended", () => {
+  const placer = new MemoryPlacer({ countTokens: (text) => text.length, writeMultiplier: 1.25, readMultiplier: 0.1 });
+  const base = [{ id: "ref", content: "reference ".repeat(800) }, { id: "plan", content: "plan basic" }];
+  placer.split(base, 0);
+  const grown = [...base, { id: "new", content: "new module" }];
+  assert.deepEqual(placer.split(grown, 0).front.map((m) => [m.id, m.stable]),
+                   [["ref", true], ["plan", true], ["new", false]]);
+  assert.ok(placer.split(grown, 0).front.every((m) => m.stable));
+});

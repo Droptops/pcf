@@ -13,15 +13,19 @@ export interface AnthropicRequest {
   [key: string]: unknown;
 }
 
+/** A copy without cache markers, including markers nested in content (for example inside a tool result). */
+const unmarked = ({ cache_control: _, ...block }: Block): Block =>
+  Array.isArray(block.content) ? { ...block, content: (block.content as Block[]).map(unmarked) } : { ...block };
 const blocks = (content: string | Block[]): Block[] =>
-  typeof content === "string" ? [{ type: "text", text: content }] : content.map(({ cache_control: _, ...b }) => ({ ...b }));
+  typeof content === "string" ? [{ type: "text", text: content }] : content.map(unmarked);
 const text = (m: PlacedModule): Block => ({ type: "text", text: m.content });
 
 /**
  * An Anthropic Messages request with memory placed and cache markers set. `request.messages` is the history
- * followed by the new user message. Existing cache markers are replaced; at most three are set:
- * the first front module (or the end of the system prompt when nothing is in front), the last stable front
- * module, and the end of the last history message, which the next request reads.
+ * followed by the new user message. Existing cache markers, in tools, system and messages, are removed; at most
+ * three are set: the first front module (or the end of the system prompt when nothing is in front), the last
+ * stable front module, and the end of the newest history message with content, which the next request reads.
+ * Tail memory follows any tool results that open the new user message, as the API requires.
  */
 export function layoutAnthropic(request: AnthropicRequest, placement: Placement,
                                 { ttl }: { ttl?: "5m" | "1h" } = {}): AnthropicRequest {
@@ -34,7 +38,11 @@ export function layoutAnthropic(request: AnthropicRequest, placement: Placement,
   const front = placement.front.map(text);
   const history = messages.slice(0, -1).map((m) => ({ role: m.role, content: blocks(m.content) }));
   const last = messages[messages.length - 1];
-  const question = { role: "user" as const, content: [...placement.tail.map(text), ...blocks(last.content)] };
+  const asked = blocks(last.content);
+  const results = asked.findIndex((b) => b.type !== "tool_result");
+  const split = results === -1 ? asked.length : results;
+  const question = { role: "user" as const,
+                     content: [...asked.slice(0, split), ...placement.tail.map(text), ...asked.slice(split)] };
 
   if (front.length) {
     front[0].cache_control = marker;
@@ -43,12 +51,13 @@ export function layoutAnthropic(request: AnthropicRequest, placement: Placement,
   } else if (system?.length) {
     system[system.length - 1].cache_control = marker;
   }
-  const lastHistory = history[history.length - 1];
+  const lastHistory = history.findLast((m) => m.content.length > 0);
   if (lastHistory) lastHistory.content[lastHistory.content.length - 1].cache_control = marker;
 
   const out: AnthropicRequest = { ...request, messages: [...(front.length ? [{ role: "user" as const, content: front }] : []),
                                                         ...history, question] };
   if (system !== undefined) out.system = system;
+  if (Array.isArray(request.tools)) out.tools = (request.tools as Block[]).map(unmarked);
   return out;
 }
 

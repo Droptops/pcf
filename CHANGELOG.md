@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Rerun the 60-turn domain comparison on the current library: placed input is 0.46 (gpt-5.6) and 0.49 (Claude) of
+  tuned front, from 0.49 and 0.53 before the marker fixes. The README headline uses the new runs.
+- Breakpoints: every request, not only the first, gives a memory or document anchor directly after the system run
+  the system anchor's slot. Before, a second request marked the system prompt, where no entry had been written, and
+  on OpenAI read nothing when a later module changed. Cache markers change for requests with short history.
+- `MemoryPlacer`: when front modules were only appended, the previous last front module keeps its marker on that
+  turn, since its entry still holds; the appended modules are returned unstable.
+- TypeScript `layoutAnthropic`: tail memory follows tool results that open the new user message; the history marker
+  skips messages with empty content; cache markers in tools and inside tool results are removed, so a request never
+  exceeds four. `cache_audit.py`: keys containing dots, empty JSON documents and a missing fleet arm are handled.
 - Add `ts/`, a TypeScript port of `MemoryPlacer` with Anthropic and OpenAI chat layouts, tested for decision parity
   against the Python placer (`scripts/export_placer_fixture.py` writes the fixture).
 - `MemoryPlacer`: on a warm turn where a module moves between front and tail, the front modules after the first are
