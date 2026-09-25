@@ -83,3 +83,10 @@ python scripts/live_jev_calibration.py --relabel \
 The v3 artifact records its normalization policy and the relabel script's SHA-256. Relabel timestamps may differ;
 answers, Jev scores, labels, metrics and validation records are reproducible from the original file on any supported
 Python version (the metrics use correctly rounded summation).
+
+## Offline scaling experiment
+
+`2026-09-25/offline-scaling-validation.json.gz` contains 168 deterministic simulated sessions plus 180 fleet
+first requests; `offline-scaling-summary.json` is the compact summary. These are not live provider observations.
+See [`docs/SCALING_VALIDATION.md`](../docs/SCALING_VALIDATION.md) for controls, reproduction, the mismatch with
+the recorded 24-turn live savings and the live 60-turn check.
