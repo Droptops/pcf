@@ -15,15 +15,25 @@ offline-tested prototype.
 
 ## Headline result
 
-Measured live on gpt-5.6 and claude-sonnet-5 (raw data in [`results/`](results/)):
+Measured live on gpt-5.6 and claude-sonnet-5 on synthetic sessions, with assumed cache prices (raw data in
+[`results/`](results/)). The baseline is the best front layout, with the changing modules marked uncacheable, not
+the naive one:
 
-- **Memory placed after the conversation history cuts input cost 1.4-3.9x** against the usual layout with memory in
-  front, and the gap grows with conversation length (5.3x at 60 turns on gpt-5.6).
-- **It also answers better.** With memory in front and varied history, models sometimes repeated an older value
-  stated earlier in the conversation: 6 of 55 such questions on gpt-5.6 and 12 of 55 on Claude. With memory after
-  the history, none.
-  In long sessions (60-100 turns), Claude recalled facts 42/50 times with memory in front and 50/50 after the
-  history (exact McNemar p = 0.008).
+| Placed memory against the tuned front layout | gpt-5.6 | claude-sonnet-5 |
+| --- | ---: | ---: |
+| Input cost, 24 turns (six scenarios) | 0.86 | 0.88 |
+| Input cost, 60 turns (six scenarios) | **0.49** | **0.53** |
+| Input cost, 60 turns, prefix shared across users | **0.53** | **0.50** |
+| Correct at 60 turns, tuned front → placed | 703 → 720 of 720 | 652 → 719 of 720 |
+| Median latency at 60 turns, tuned front → placed | 1.98 s → 1.92 s | 5.90 s → 3.48 s |
+
+- **The saving comes from long, warm sessions.** It grows with conversation length and disappears when turns arrive
+  after the cache lifetime: in a Claude run with every turn past the 5-minute lifetime, no turn read the cache.
+- **Front layouts gave out-of-date values.** Most of their wrong answers repeated an older value instead of the
+  current record; placed memory sits next to the question. The exception is a small model with a record
+  that was not updated: see [Limits](#limits-of-the-evidence).
+- **Against the naive front layout** (every module cacheable), the domain workloads cost 3.7-4.1x more than placed
+  memory at 24 turns (input plus output). That comparison flatters the method; the tuned numbers above are the ones to quote.
 - **Multi-step tool loops reuse 100% of the previous request's cache** on both providers.
 
 Recommended starting point: keep large stable reference modules in front and let `MemoryPlacer` place changing
@@ -257,6 +267,14 @@ Front memory that changes should be marked `stable=False`, or its marker is rewr
 whose budget keeps three history endpoints, it can take the system prompt's slot). Pass `split(..., cold=True)`
 when the provider cache has expired, predicted from time (`now - last_request >= descriptor.ttl_seconds`), not from
 a zero cache read: by the time usage shows a miss, that request has already rewritten the cache in the old layout.
+
+## Auditing an existing assistant
+
+`scripts/cache_audit.py` reads the requests an assistant already sends, with the usage each response returned, and
+names the fields whose changes cost the most cache: for example, on the tuned front layout at 60 turns,
+`memory 'claims' amount_owed` re-billed the history behind it on 80 requests. It needs no PCF types. On PCF's own
+logs it found the first-request anchor bug and a rewrite that remains on OpenAI when `MemoryPlacer` moves a module;
+see [`docs/CACHE_AUDIT.md`](docs/CACHE_AUDIT.md).
 
 ## Limits of the evidence
 

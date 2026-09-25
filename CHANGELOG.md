@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `scripts/cache_audit.py`, a prototype that attributes cache misses in provider request logs to the field
+  that changed, an unread prefix or an expired gap (`docs/CACHE_AUDIT.md`). The session harnesses accept a `sink`
+  that receives each compiled request.
+- The README headline now compares against the tuned front layout rather than the naive one.
 - Breakpoints: on a request with no history, a memory or document anchor directly after the system run takes the
   system anchor's place when the budget is exceeded. The first request of a conversation now writes the shared
   reference as its own cache entry, so other conversations read it; before, placed layouts with many stable
