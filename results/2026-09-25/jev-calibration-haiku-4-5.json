@@ -6,7 +6,8 @@
   "jev_model": "typesafe/jev-1.13-20260917",
   "repeats": 2,
   "turns": 20,
-  "route": "OpenRouter, candidate pinned to Anthropic"
+  "route": "OpenRouter, candidate pinned to Anthropic",
+  "note": "Superseded by jev-calibration-haiku-4-5-question-bank.json. Contexts here carried a per-session tag, so repeated scripted contexts passed validate_source's uniqueness check: only 117 of 240 are distinct (23 of 46 tail), below min_tail_samples. The script now drops the tag and deduplicates."
  },
  "summary": {
   "contexts": 240,

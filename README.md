@@ -65,12 +65,13 @@ What this shows, for this scripted workload:
   placed; `results/2026-09-24/`).
 - It also answers better. With varied history, front memory missed 6 (gpt-5.6) and 13 (Claude) of 55 stale-history
   traps; tail memory missed none.
-- A paired question bank (`scripts/live_question_bank.py`, 50 items per type asked under each arm) points the same
-  way. When an earlier history turn asks to switch contact channel and memory still holds the old one, every arm
-  followed the request (50/50 on both models): memory placed next to the question did not override the
-  conversation. Far-memory lookups at the end of 60-100 turn sessions: Claude answered 43/50 with front memory
-  and 50/50 with tail or placed memory (exact McNemar p = 0.016); gpt-5.6 49/50 against 50/50. Cross-module
-  questions: Claude front 48/50, all else 50/50. Every miss took a stale or wrong value from history.
+- A paired question bank (`scripts/live_question_bank.py`, 50 distinct items per type asked under each arm) points
+  the same way. When an earlier history turn asks to switch contact channel and memory still holds the old one,
+  every arm followed the request (50/50 on both models): memory placed next to the question did not override the
+  conversation. Far-memory lookups at the end of 60-100 turn sessions: Claude answered 42/50 with front memory and
+  50/50 with tail or placed memory (exact McNemar p = 0.008); gpt-5.6 48/50 against 50/50. Cross-module questions:
+  Claude front 48/50, all else 50/50. Every far-memory miss repeated a value stated earlier in the history; the two
+  cross-module misses gave wrong ticket counts.
 - On gpt-5.6, `MemoryPlacer` saves a further 7% of input over all-tail (7-12% counting output). On Claude it saves
   6-22% of input, but Claude copies the history's reply pattern more when little sits between the last reply and
   the question, and thinks more (35-79 thinking blocks per 100 turns against 18 for all-tail). Counting output,
@@ -91,14 +92,20 @@ What this shows, for this scripted workload:
 
 ## Jev confidence, measured
 
-`scripts/live_jev_calibration.py` validates Jev (`typesafe/jev-1.13-20260917` via OpenRouter) for one candidate.
-With claude-haiku-4-5 on 240 placement contexts and 450 question-bank contexts (`results/2026-09-25/`), the
-candidate answered 99-100% correctly while Jev scored those contexts 0.16-0.68 (mean 0.31-0.33). No context reaches
-0.7, calibration error is about 0.67, and the few failures scored no lower than successes, so the validation gate
-fails at every threshold and a Jev-gated router falls back. Jev rejects requests above about 32.8k of its input
-tokens (`max_tokens_exceeded`, about 18.7k tokens of compiled Anthropic prompt here); the router treats that as
-confidence unavailable. Score noise is small (retest SD about 0.012, no decision flips at 0.8). Treat Jev as
-unvalidated for this workload until a dataset with real failures shows it discriminates.
+`scripts/live_jev_calibration.py` validates Jev (`typesafe/jev-1.13-20260917` via OpenRouter) for one candidate on
+450 distinct question-bank contexts (`results/2026-09-25/`). claude-haiku-4-5 answered 439/450 (97.6%) correctly;
+Jev scored the 369 contexts it could score 0.19-0.55 (mean 0.30), and its 11 failures 0.28-0.38, no lower than its
+successes (AUC 0.33). No context reaches 0.7 and calibration error is about 0.67, so the validation gate fails at
+every threshold and a Jev-gated router falls back. Jev rejects requests above about 32.8k of its input tokens
+(`max_tokens_exceeded`; here, compiled prompts above about 18.7k estimated tokens, 81 of 450), which the router
+treats as confidence unavailable. Score noise is small (retest SD about 0.011, no decision flips at 0.8). Treat Jev
+as unvalidated for this workload until a dataset with real failures shows it discriminates.
+
+The same run gives a caveat for smaller models: on the conflict items, haiku-4-5 followed the customer's request
+50/50 with front memory but 43/50 with `MemoryPlacer` and 49/50 with all-tail (placed against front: exact McNemar
+p = 0.016); every miss gave the stale record's value. Memory next to the question protected claude-sonnet-5 from
+far-memory errors but pulled a smaller model toward a stale record over an in-conversation request. Where users
+change preferences in conversation, update the memory record, or keep that module in front, for small models.
 
 The Jev transport requires a direct HTTPS endpoint and rejects redirects. CI runs offline tests, lint, examples, a wheel installation check, and a private-session-link check on tracked text and new commit messages. The metadata check does not remove links from existing Git history or GitHub PR descriptions.
 
