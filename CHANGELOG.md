@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Fixes from coding reviews. Portable segment hashes remain unchanged. Document acceptance changes: tool results require `is_error`, memory may follow history (tail memory), and 0.1-style `tool_use` blocks are rejected, so a 0.2.0 reader rejects some documents this version writes (see SPEC "Validation and compatibility"). Compiler cache keys, simulated billing counts, candidate fingerprints and calibration record identities change as described below.
+Fixes from coding reviews. Portable segment hashes remain unchanged. Document acceptance changes: tool results require `is_error`, memory may follow history (tail memory), assistant turns may carry `provider_blocks`, and 0.1-style `tool_use` blocks are rejected, so a 0.2.0 reader rejects some documents this version writes (see SPEC "Validation and compatibility"). Compiler cache keys, simulated billing counts, candidate fingerprints and calibration record identities change as described below.
 
 - Jev's HTTPS transport rejects all redirects so bearer credentials cannot follow a different origin or an HTTP downgrade. Redirects trigger confidence fallback.
 - Held-out validation rejects repeated context hashes and requires enough selected tail examples even when no tail score reaches the threshold. All sample minimums are included in validation record identity. Existing scorers with only below-threshold tail evidence now fall back.
@@ -55,8 +55,10 @@ Fixes from coding reviews. Portable segment hashes remain unchanged. Document ac
 - Breakpoints over budget keep the last anchor, plus the last anchor of the leading tools/system run when the
   compiler's `history_slots` endpoints still fit beside both (Anthropic and sim: 2 of 4). OpenAI needs 3 history
   endpoints (reads only hit markers present in the request, and a tool round appends two markable segments), so
-  it keeps the last anchor and 3 endpoints and does not protect the system prompt from a volatile module left
-  `stable`; mark such modules `stable=False` or place them after history. This replaces an interim rule that kept
+  once a request carries 3 or more history candidates it keeps the last anchor and 3 endpoints and does not
+  protect the system prompt from a volatile module left `stable`; mark such modules `stable=False` or place them
+  after history. History endpoints are reserved before a newer stable user segment, which is counted before the
+  lead anchor is added. This replaces an interim rule that kept
   the first anchor, which on Anthropic protected `tools` instead of `system` and on OpenAI made per-message tool
   loops re-bill all history every request.
 - `scripts/live_tool_loop.py`: a scripted tool loop ([user, call] and [tool] segments, four tail memory modules)
@@ -95,8 +97,9 @@ Fixes from coding reviews. Portable segment hashes remain unchanged. Document ac
 - Anthropic profiles: `claude-fable-5`, `claude-mythos-5`, `claude-mythos-5-1` (512) and `claude-mythos-preview`
   (2048) gain minimum cacheable lengths; `claude-mythos-5` rejects prefill. Every prefill-rejecting model now has a
   cache profile.
-- `scripts/live_memory_placement.py`: low reasoning effort and 512 output tokens (64 returned empty answers), and a
-  `billed_input_units` summary under the write multiplier and an assumed `--read-multiplier`.
+- `scripts/live_memory_placement.py`: low reasoning effort and a 4096-token output limit (64 returned empty answers,
+  and 512 ended adaptive-thinking turns with no text), and a `billed_input_units` summary under the write
+  multiplier and an assumed `--read-multiplier`.
 - Response normalization rejects what it cannot represent instead of dropping it: Anthropic text after `tool_use`
   or with citations, OpenAI `output_text` annotations and non-text `function_call_output` parts.
 - Held-out validation fails when no sample reaches the threshold; `fit_platt` stops on the Newton decrement instead

@@ -53,7 +53,7 @@ the history's filler or run long.
 | Front, template | 115.9k | 126.4k | 100/100 (55/55) | 17 |
 | Tail, template | 38.7k | 43.3k | 100/100 (55/55) | 10 |
 | `MemoryPlacer`, template | 36.3k | 54.6k | 100/100 (55/55) | 46 |
-| `MemoryPlacer` + 200-token spacer, template | 43.3k | 48.3k | 100/100 (55/55) | 9 |
+| `MemoryPlacer` + spacer, template | 43.3k | 48.3k | 100/100 (55/55) | 9 |
 | Front, varied | 34.4k | 46.5k | 86/100 (42/55) | 50 |
 | Tail, varied | 24.7k | 26.9k | 100/100 (55/55) | 16 |
 | `MemoryPlacer`, varied | 19.1k | 26.4k | 98/100 (53/55) | 41 |
@@ -75,11 +75,14 @@ What this shows, for this scripted workload:
   6-22% of input, but Claude copies the history's reply pattern more when little sits between the last reply and
   the question, and thinks more (35-79 thinking blocks per 100 turns against 18 for all-tail). Counting output,
   all-tail is cheapest with template history (43.3k against 54.6k) and the two are level with varied history
-  (26.9k, 26.4k). A ~200-token neutral spacer after tail memory removes most of the copying but costs more input
-  than it saves. All-tail is the safer default for Claude; `MemoryPlacer` for gpt-5.6.
-- The front rows keep every module `stable`, as a naive layout would. On gpt-5.6 the breakpoint budget then spends
-  no marker on the system prompt (see Breakpoints in SPEC), which is why front costs more than in the 2026-09-24
-  runs (80.2k).
+  (26.9k, 26.4k). A neutral spacer after tail memory (about 280 estimated tokens, 354 billed on Claude) removes
+  most of the copying: with template history it lowers placed cost from 54.6k to 48.3k, still above all-tail
+  (43.3k), and with varied history it raises cost. All-tail is the safer default for Claude; `MemoryPlacer` for
+  gpt-5.6.
+- The front rows keep every module `stable`, as a naive layout would. Under the rule these runs used (commit
+  c95184f), gpt-5.6's budget then spent no marker on the system prompt, which is why front costs more than in the
+  2026-09-24 runs (80.2k); the current rule also marks it while a request has fewer than 3 history candidates (see
+  Breakpoints in SPEC).
 - The input advantage depends on the read price: at reads of 0.1x-0.5x, tail costs 0.26-0.52 of front (gpt-5.6,
   template), and the placer's input edge over all-tail falls from 7% to 2%. Runs were back to back, so no cache
   entry expired between turns; with idle gaps past the TTL the placer's edge shrinks further. The E1 runs capped

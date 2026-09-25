@@ -10,227 +10,258 @@
     "s"
    ],
    "est_tokens": 2081,
+   "est_covered": 1956,
    "cached": 0,
    "written": 2853,
-   "uncached": 205
+   "uncached": 205,
+   "reaches_marker": true
   },
   {
    "request": "r0",
    "marked": [
     "t",
     "s",
-    "q0",
     "r0"
    ],
    "est_tokens": 2300,
+   "est_covered": 2198,
    "cached": 2853,
    "written": 416,
    "uncached": 127,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "q1",
    "marked": [
+    "t",
     "s",
-    "q0",
     "r0",
     "a0"
    ],
    "est_tokens": 2343,
+   "est_covered": 2222,
    "cached": 3269,
    "written": 19,
    "uncached": 135,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "r1",
    "marked": [
     "s",
+    "r0",
     "a0",
-    "q1",
     "r1"
    ],
    "est_tokens": 2563,
+   "est_covered": 2460,
    "cached": 3288,
    "written": 346,
    "uncached": 127,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "q2",
    "marked": [
     "s",
-    "q1",
+    "a0",
     "r1",
     "a1"
    ],
    "est_tokens": 2605,
+   "est_covered": 2484,
    "cached": 3634,
    "written": 19,
    "uncached": 135,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "r2",
    "marked": [
     "s",
+    "r1",
     "a1",
-    "q2",
     "r2"
    ],
    "est_tokens": 2825,
+   "est_covered": 2723,
    "cached": 3653,
    "written": 346,
    "uncached": 127,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "q3",
    "marked": [
     "s",
-    "q2",
+    "a1",
     "r2",
     "a2"
    ],
    "est_tokens": 2867,
+   "est_covered": 2746,
    "cached": 3999,
    "written": 19,
    "uncached": 135,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "r3",
    "marked": [
     "s",
+    "r2",
     "a2",
-    "q3",
     "r3"
    ],
    "est_tokens": 3087,
+   "est_covered": 2985,
    "cached": 4018,
    "written": 346,
    "uncached": 127,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "q4",
    "marked": [
     "s",
-    "q3",
+    "a2",
     "r3",
     "a3"
    ],
    "est_tokens": 3130,
+   "est_covered": 3009,
    "cached": 4364,
    "written": 19,
    "uncached": 135,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "r4",
    "marked": [
     "s",
+    "r3",
     "a3",
-    "q4",
     "r4"
    ],
    "est_tokens": 3350,
+   "est_covered": 3247,
    "cached": 4383,
    "written": 346,
    "uncached": 127,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "q5",
    "marked": [
     "s",
-    "q4",
+    "a3",
     "r4",
     "a4"
    ],
    "est_tokens": 3392,
+   "est_covered": 3271,
    "cached": 4729,
    "written": 19,
    "uncached": 135,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "r5",
    "marked": [
     "s",
+    "r4",
     "a4",
-    "q5",
     "r5"
    ],
    "est_tokens": 3612,
+   "est_covered": 3509,
    "cached": 4748,
    "written": 346,
    "uncached": 127,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "q6",
    "marked": [
     "s",
-    "q5",
+    "a4",
     "r5",
     "a5"
    ],
    "est_tokens": 3655,
+   "est_covered": 3533,
    "cached": 5094,
    "written": 19,
    "uncached": 135,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "r6",
    "marked": [
     "s",
+    "r5",
     "a5",
-    "q6",
     "r6"
    ],
    "est_tokens": 3874,
+   "est_covered": 3772,
    "cached": 5113,
    "written": 346,
    "uncached": 127,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "q7",
    "marked": [
     "s",
-    "q6",
+    "a5",
     "r6",
     "a6"
    ],
    "est_tokens": 3917,
+   "est_covered": 3795,
    "cached": 5459,
    "written": 19,
    "uncached": 135,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   },
   {
    "request": "r7",
    "marked": [
     "s",
+    "r6",
     "a6",
-    "q7",
     "r7"
    ],
    "est_tokens": 4137,
+   "est_covered": 4034,
    "cached": 5478,
    "written": 346,
    "uncached": 127,
-   "reuse": 1.0
+   "reuse": 1.0,
+   "reaches_marker": true
   }
  ],
  "ok": true,
  "meta": {
   "date": "2026-09-25",
   "script": "scripts/live_tool_loop.py",
-  "script_commit": "f30c59a + script",
   "iterations": 8,
+  "checks": "reuse of the previous request's cache >= 0.95; cached + written >= 0.7 x estimated prefix to the last marker",
   "thinking": "disabled",
   "route": "OpenRouter /api/v1/messages pinned to Anthropic"
  }
