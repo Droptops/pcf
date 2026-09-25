@@ -54,7 +54,7 @@ the history's filler or run long.
 | Tail, template | 38.7k | 43.3k | 100/100 (55/55) | 10 |
 | `MemoryPlacer`, template | 36.3k | 54.6k | 100/100 (55/55) | 46 |
 | `MemoryPlacer` + spacer, template | 43.3k | 48.3k | 100/100 (55/55) | 9 |
-| Front, varied | 34.4k | 46.5k | 86/100 (42/55) | 50 |
+| Front, varied | 34.4k | 46.5k | 87/100 (43/55) | 50 |
 | Tail, varied | 24.7k | 26.9k | 100/100 (55/55) | 16 |
 | `MemoryPlacer`, varied | 19.1k | 26.4k | 98/100 (53/55) | 41 |
 
@@ -63,7 +63,7 @@ What this shows, for this scripted workload:
 - Memory after history cuts input cost against the front layout: 3.0-3.9x with template history, 1.4-3.8x with
   the shorter varied history, and more as history grows (a 60-turn gpt-5.6 run: 640k front, 121k tail, 112k
   placed; `results/2026-09-24/`).
-- It also answers better. With varied history, front memory missed 6 (gpt-5.6) and 13 (Claude) of 55 stale-history
+- It also answers better. With varied history, front memory missed 6 (gpt-5.6) and 12 (Claude) of 55 stale-history
   traps; tail memory missed none.
 - A paired question bank (`scripts/live_question_bank.py`, 50 distinct items per type asked under each arm) points
   the same way. When an earlier history turn asks to switch contact channel and memory still holds the old one,
