@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Breakpoints: on a request with no history, a memory or document anchor directly after the system run takes the
+  system anchor's place when the budget is exceeded. The first request of a conversation now writes the shared
+  reference as its own cache entry, so other conversations read it; before, placed layouts with many stable
+  modules dropped it. Cache markers, and therefore cache keys, change for such first requests only.
+- Add `scripts/live_fleet_sessions.py`, the harness for `docs/FLEET_CACHE.md`.
 - The domain grader reads negative numbers and amounts (`-3`, `-$605.63`, `$-605.63`), which the scenarios produce
   only after turn 24; 24-turn results are unchanged. Add live 60-turn runs on both providers.
 - Add an offline scaling simulation (`scripts/offline_scaling_validation.py`, `docs/SCALING_VALIDATION.md`) for
