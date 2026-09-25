@@ -4,6 +4,9 @@
 
 - The domain grader reads negative numbers and amounts (`-3`, `-$605.63`, `$-605.63`), which the scenarios produce
   only after turn 24; 24-turn results are unchanged. Add live 60-turn runs on both providers.
+- Add an offline scaling simulation (`scripts/offline_scaling_validation.py`, `docs/SCALING_VALIDATION.md`) for
+  long sessions, cache expiry and shared prefixes, checked against the live 60-turn runs; it overpredicts savings.
+- Add the fleet cache test protocol (`docs/FLEET_CACHE.md`): shared prefixes, 60-turn sessions and idle gaps.
 - Calibration error and Brier score use correctly rounded summation (`math.fsum`), so metrics and the validation
   IDs hashed from them no longer differ between Python 3.11 and 3.12+. Records computed on 3.11 can change in the
   last digits and get new validation IDs; regenerate them.
