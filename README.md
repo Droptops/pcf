@@ -86,6 +86,17 @@ What this shows, for this scripted workload:
   output at 512 tokens, which ended 2 placed Claude turns inside thinking (now 4096). Questions are simple lookups
   graded by value, so this is a cost and regression check, not a general quality evaluation.
 
+## Jev confidence, measured
+
+`scripts/live_jev_calibration.py` validates Jev (`typesafe/jev-1.13-20260917` via OpenRouter) for one candidate.
+With claude-haiku-4-5 on 240 placement contexts and 450 question-bank contexts (`results/2026-09-25/`), the
+candidate answered 99-100% correctly while Jev scored those contexts 0.16-0.68 (mean 0.31-0.33). No context reaches
+0.7, calibration error is about 0.67, and the few failures scored no lower than successes, so the validation gate
+fails at every threshold and a Jev-gated router falls back. Jev rejects requests above about 32.8k of its input
+tokens (`max_tokens_exceeded`, about 18.7k tokens of compiled Anthropic prompt here); the router treats that as
+confidence unavailable. Score noise is small (retest SD about 0.012, no decision flips at 0.8). Treat Jev as
+unvalidated for this workload until a dataset with real failures shows it discriminates.
+
 The Jev transport requires a direct HTTPS endpoint and rejects redirects. CI runs offline tests, lint, examples, a wheel installation check, and a private-session-link check on tracked text and new commit messages. The metadata check does not remove links from existing Git history or GitHub PR descriptions.
 
 See `spec/SPEC.md` and `spec/REMEDIATION.md`.

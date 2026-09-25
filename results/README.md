@@ -29,3 +29,4 @@ The E1 runs used a 512-token output limit (now 4096) and were re-graded with the
 | `2026-09-25/jev-calibration-haiku-4-5.json` | Jev (`typesafe/jev-1.13-20260917`) scoring claude-haiku-4-5 | 240 contexts + 60 × 5 retest | `scripts/live_jev_calibration.py` |
 | `2026-09-25/question-bank-gpt-5.6.json` | OpenAI gpt-5.6 | 150 items × 3 arms | `scripts/live_question_bank.py`: conflict, cross-module, far-memory |
 | `2026-09-25/question-bank-claude-sonnet-5.json` | claude-sonnet-5 via OpenRouter | 150 items × 3 arms | same items |
+| `2026-09-25/jev-calibration-haiku-4-5-question-bank.json` | Jev scoring claude-haiku-4-5 on question-bank items | 450 contexts (363 scorable) + 60 × 5 retest | conflict items as tail |

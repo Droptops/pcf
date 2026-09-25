@@ -67,7 +67,9 @@ Fixes from coding reviews. Portable segment hashes remain unchanged. Document ac
   retests score noise. First run (claude-haiku-4-5, 240 contexts): the candidate answered all 240 correctly, Jev
   scored them 0.16-0.68 (mean 0.33), so no threshold from 0.7 up selects anything and the gate fails; retest noise
   is small (SD 0.013, max 0.029, no decision flips at 0.8). Calibration needs contexts the candidate sometimes
-  fails. `scripts/live_question_bank.py` adds paired conflict, cross-module and far-memory items per arm with an
+  fails; on 450 harder question-bank contexts haiku-4-5 was still 99.2% correct, Jev scored 0.19-0.58 with no
+  separation of the 3 scorable failures, and 87 long contexts exceeded Jev's input limit (about 32.8k tokens,
+  `max_tokens_exceeded`), which the router treats as confidence unavailable. `scripts/live_question_bank.py` adds paired conflict, cross-module and far-memory items per arm with an
   exact McNemar test. Live scripts map Anthropic ids to OpenRouter names (`claude-haiku-4-5` ->
   `anthropic/claude-haiku-4.5`).
 - `ScaledTokenizer(base, factor)` (in `pcf.families.anthropic_adapter`): a deterministic fixed-factor correction of a
