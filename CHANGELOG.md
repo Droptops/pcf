@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `MemoryPlacer`: on a warm turn where a module moves between front and tail, the front modules after the first are
+  returned unstable, so the first front module (typically the shared reference) carries the cache marker. OpenAI
+  reads only at markers present in the request and had rewritten the whole prefix on those turns. Cache markers
+  change on move turns only.
 - Add `scripts/cache_audit.py`, a prototype that attributes cache misses in provider request logs to the field
   that changed, an unread prefix or an expired gap (`docs/CACHE_AUDIT.md`). The session harnesses accept a `sink`
   that receives each compiled request.

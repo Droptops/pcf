@@ -48,13 +48,16 @@ gpt-5.6 is similar: 73% and 0.82M units for tuned front, and 90% and 0.22M for p
   had never been written. The first-request anchor fix writes the reference's breakpoint on turn 0. In the
   post-fix Claude fleet run (1,080 requests) the audit finds no unread prefix, which explains most of the
   anchor fix's in-session saving on Claude.
-- **The same rewrite remains on OpenAI.** In the post-fix gpt-5.6 fleet run, placed sessions still show 2 unread
-  prefixes each (36 in all, about 3.2k tokens each), about 176k units or 16% of the run's billed input. OpenAI reads
-  only at markers present in the request. Once history exists, the budget of 4 goes to the last module anchor and
-  3 history endpoints, so no request after the first carries the reference's marker. Keeping the system slot for
-  the reference on later requests does not help, because that slot is not used either. A fix needs a design
-  decision: give up a history endpoint, or add the reference marker on the turn a module moves (which only the
-  placer knows). Not changed yet.
+- **The same rewrite on OpenAI, now fixed.** In the post-fix gpt-5.6 fleet run, placed sessions still showed 2
+  unread prefixes each (36 in all, about 3.2k tokens each), about 176k units or 16% of the run's billed input.
+  OpenAI reads only at markers present in the request. Once history exists, the budget of 4 goes to the last
+  module anchor and 3 history endpoints, so no request after the first carried the reference's marker.
+  `MemoryPlacer` now returns the front modules after the first one unstable on a warm turn where a module moves, so
+  the first front module takes the anchor on that turn. In simulation the 60-turn placed cost on gpt-5.6 falls 7%
+  and Claude is unchanged. A paid gpt-5.6 check (6 scenarios, 12 turns, `move-turn-gpt-5.6.json`) read the reference
+  prefix on all 18 move turns, 3,022-4,092 tokens, and wrote 182-642. One request, `clinical` turn 3, read
+  nothing on a turn without a move. Every other scenario read on that turn, and the audit cannot explain it from
+  the request; it is most likely a provider-side miss.
 
 ## Limits
 

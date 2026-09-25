@@ -273,8 +273,8 @@ a zero cache read: by the time usage shows a miss, that request has already rewr
 `scripts/cache_audit.py` reads the requests an assistant already sends, with the usage each response returned, and
 names the fields whose changes cost the most cache: for example, on the tuned front layout at 60 turns,
 `memory 'claims' amount_owed` re-billed the history behind it on 80 requests. It needs no PCF types. On PCF's own
-logs it found the first-request anchor bug and a rewrite that remains on OpenAI when `MemoryPlacer` moves a module;
-see [`docs/CACHE_AUDIT.md`](docs/CACHE_AUDIT.md).
+logs it found the first-request anchor bug and a full prefix rewrite on OpenAI whenever `MemoryPlacer` moved a
+module, both now fixed; see [`docs/CACHE_AUDIT.md`](docs/CACHE_AUDIT.md).
 
 ## Limits of the evidence
 
