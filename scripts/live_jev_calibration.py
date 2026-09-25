@@ -25,7 +25,8 @@ from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from pcf.cache import PrefixCache  # noqa: E402
 from pcf.families.anthropic_adapter import AnthropicCompiler  # noqa: E402
-from pcf.router import Candidate, JevConfidenceSource, ValidationSample, openrouter_transport  # noqa: E402
+from pcf.router import (Candidate, ConfidenceUnavailable, JevConfidenceSource, ValidationSample,  # noqa: E402
+                        openrouter_transport)
 from pcf.segments import Context, Segment, canonical_bytes  # noqa: E402
 
 def _load(name: str, file: str):
@@ -141,27 +142,34 @@ if __name__ == "__main__":
     source = JevConfidenceSource(memoized(openrouter_transport(key)), model=JEV_MODEL)
 
     def score(item):
-        return source.p_sufficient(item[1], candidate)
+        try:
+            return source.p_sufficient(item[1], candidate)
+        except ConfidenceUnavailable:  # e.g. Jev's max_tokens_exceeded above ~32.8k of its input tokens
+            return None
 
     with ThreadPoolExecutor(args.workers) as pool:
         graded = list(pool.map(answer, rows))
         scores = list(pool.map(score, rows))
     for row, s in zip(graded, scores):
         row["jev"] = s
-    samples = [ValidationSample(ctx, candidate, row["label"], row["tail"]) for row, (_, ctx) in zip(graded, rows)]
+    scored = [(row, ctx) for row, (_, ctx) in zip(graded, rows) if row["jev"] is not None]
+    samples = [ValidationSample(ctx, candidate, row["label"], row["tail"]) for row, ctx in scored]
     records = {}
     for threshold in (0.7, 0.8, 0.9):
         record = source.validate(samples, dataset_id=f"{args.contexts}-{args.candidate}", threshold=threshold)
         records[str(threshold)] = record.to_json()
     # Retest: fresh (unmemoized) scores for a spread of contexts.
     fresh = JevConfidenceSource(openrouter_transport(key), model=JEV_MODEL)
-    picks = rows[:: max(1, len(rows) // args.retest)][: args.retest]
+    scorable = [item for item, row in zip(rows, graded) if row["jev"] is not None]
+    picks = scorable[:: max(1, len(scorable) // args.retest)][: args.retest]
     with ThreadPoolExecutor(args.workers) as pool:
         retest = [list(pool.map(lambda item: fresh.p_sufficient(item[1], candidate), [p] * args.retest_repeats))
                   for p in picks]
     sds = [statistics.pstdev(r) for r in retest]
     flips = sum(min(r) < 0.8 <= max(r) for r in retest)
-    labels = [r["label"] for r in graded]
+    labels = [r["label"] for r, _ in scored]
+    scores = [r["jev"] for r, _ in scored]
+    summary["unscorable"] = len(graded) - len(scored)
     result = {
         "meta": {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                  "git_sha": placement.git_sha(), "candidate": args.candidate, "jev_model": JEV_MODEL,

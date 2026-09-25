@@ -65,6 +65,12 @@ What this shows, for this scripted workload:
   placed; `results/2026-09-24/`).
 - It also answers better. With varied history, front memory missed 6 (gpt-5.6) and 13 (Claude) of 55 stale-history
   traps; tail memory missed none.
+- A paired question bank (`scripts/live_question_bank.py`, 50 items per type asked under each arm) points the same
+  way. When an earlier history turn asks to switch contact channel and memory still holds the old one, every arm
+  followed the request (50/50 on both models): memory placed next to the question did not override the
+  conversation. Far-memory lookups at the end of 60-100 turn sessions: Claude answered 43/50 with front memory
+  and 50/50 with tail or placed memory (exact McNemar p = 0.016); gpt-5.6 49/50 against 50/50. Cross-module
+  questions: Claude front 48/50, all else 50/50. Every miss took a stale or wrong value from history.
 - On gpt-5.6, `MemoryPlacer` saves a further 7% of input over all-tail (7-12% counting output). On Claude it saves
   6-22% of input, but Claude copies the history's reply pattern more when little sits between the last reply and
   the question, and thinks more (35-79 thinking blocks per 100 turns against 18 for all-tail). Counting output,
