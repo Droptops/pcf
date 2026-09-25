@@ -31,16 +31,26 @@ def history_from_response(response: Any) -> list[dict]:
     """Normalize supported Anthropic assistant content blocks without data loss.
 
     Thinking and redacted_thinking blocks are kept verbatim as ``provider_blocks`` so they can be replayed to the
-    model that produced them; they must precede the turn's text and tool_use blocks.
+    model that produced them. A turn replays its blocks before its text and calls, so thinking that follows text
+    starts a new assistant turn; consecutive assistant turns render as one message in the original order.
     """
     blocks = response.get("content", []) if isinstance(response, dict) else getattr(response, "content", [])
+    turns: list[dict] = []
     text, calls, kept = [], [], []
+
+    def close() -> None:
+        if text or calls:
+            turns.append({"role": "assistant", "content": "".join(text), **({"tool_calls": list(calls)} if calls else {}),
+                          **({"provider_blocks": list(kept)} if kept else {})})
+            text.clear(), calls.clear(), kept.clear()
+
     for block in blocks:
         block = block if isinstance(block, dict) else block.model_dump(exclude_none=True)
         typ = block.get("type")
         if typ in THINKING_BLOCKS:
-            if text or calls:  # rendering replays provider blocks first
-                raise ValueError("Anthropic thinking after text or tool_use is not representable")
+            if calls:  # a call's result must follow it; thinking cannot sit between them in neutral history
+                raise ValueError("Anthropic thinking after tool_use is not representable")
+            close()  # thinking after text opens the next turn
             kept.append({"provider": "anthropic", "block": block})
         elif typ == "text":
             if (calls and block.get("text")) or block.get("citations"):  # would reorder text or drop citations
@@ -50,12 +60,10 @@ def history_from_response(response: Any) -> list[dict]:
             calls.append({"id": block["id"], "name": block["name"], "arguments": block["input"]})
         else:
             raise ValueError(f"unsupported Anthropic response block: {typ!r}")
-    if text or calls:
-        return [{"role": "assistant", "content": "".join(text), **({"tool_calls": calls} if calls else {}),
-                 **({"provider_blocks": kept} if kept else {})}]
-    if kept:
+    if kept and not (text or calls):
         raise ValueError("Anthropic thinking without text or tool_use is not representable")
-    return []
+    close()
+    return turns
 
 
 @dataclass(frozen=True)
@@ -81,7 +89,7 @@ class ScaledTokenizer:
                 and factor > 0):
             raise ValueError("factor must be a positive finite number")
         self.base, self.factor = base, float(factor)
-        self.tokenizer_hash = sha256_tag(f"scaled:{factor!r}:{base.tokenizer_hash}")
+        self.tokenizer_hash = sha256_tag(f"scaled:{self.factor!r}:{base.tokenizer_hash}")  # normalized: 2 == 2.0
 
     def count(self, text: str) -> int:
         return math.ceil(self.base.count(text) * self.factor)
@@ -118,6 +126,11 @@ class AnthropicCompiler(ContextCompiler):
         if thinking_blocks not in {"replay", "drop"}:
             raise ValueError("thinking_blocks must be replay or drop")
         self.thinking, self.thinking_blocks = (dict(thinking) if thinking else None), thinking_blocks
+
+    @property
+    def generation_identity(self) -> dict:
+        return {**({"thinking": self.thinking} if self.thinking is not None else {}),
+                **({"thinking_blocks": self.thinking_blocks} if self.thinking_blocks != "replay" else {})}
 
     def _mark(self):
         return {"type": "ephemeral", **({"ttl": "1h"} if self.ttl == "1h" else {})}

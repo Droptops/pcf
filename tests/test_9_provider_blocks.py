@@ -48,9 +48,25 @@ def test_openai_reasoning_is_kept_and_replayed_before_its_turn_or_dropped():
     assert all(b["type"] != "reasoning" for m in request["messages"] for b in m["content"])
 
 
+def test_thinking_or_reasoning_after_text_opens_a_new_turn_and_replays_in_order():
+    second = {"type": "thinking", "thinking": "", "signature": "sig-2"}
+    call = {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {"q": "x"}}
+    content = [THINKING, {"type": "text", "text": "Checking."}, second, call]
+    turns = anthropic_history({"content": content})
+    assert [len(t.get("provider_blocks", [])) for t in turns] == [1, 1] and turns[1]["tool_calls"]
+    request = AnthropicCompiler("claude-sonnet-5").compile(_round(turns, "toolu_1")).request
+    assert request["messages"][1]["content"] == content  # merged back into the original block order
+    fc = {"type": "function_call", "call_id": "call_1", "name": "lookup", "arguments": '{"q": "x"}'}
+    output = [{"type": "message", "content": [{"type": "output_text", "text": "Checking."}]}, REASONING, fc]
+    items = OpenAICompiler("gpt-5.6").compile(_round(openai_history({"output": output}), "call_1")).request["input"]
+    assert [i.get("type", i.get("role")) for i in items][2:] == ["assistant", "reasoning", "function_call",
+                                                                 "function_call_output"]
+
+
 @pytest.mark.parametrize("response, error", [
-    ({"content": [{"type": "text", "text": "a"}, THINKING]}, "thinking after text"),
+    ({"content": [{"type": "text", "text": "a"}, THINKING]}, "thinking without text"),
     ({"content": [THINKING]}, "thinking without text"),
+    ({"content": [{"type": "tool_use", "id": "t", "name": "f", "input": {}}, THINKING]}, "thinking after tool_use"),
 ])
 def test_anthropic_thinking_that_cannot_be_replayed_in_order_is_rejected(response, error):
     with pytest.raises(ValueError, match=error):
@@ -59,12 +75,39 @@ def test_anthropic_thinking_that_cannot_be_replayed_in_order_is_rejected(respons
 
 @pytest.mark.parametrize("output, error", [
     ([REASONING], "reasoning without"),
-    ([{"type": "message", "content": [{"type": "output_text", "text": "a"}]}, REASONING,
-      {"type": "function_call", "call_id": "c", "name": "f", "arguments": "{}"}], "between output items"),
+    ([{"type": "function_call", "call_id": "c", "name": "f", "arguments": "{}"}, REASONING,
+      {"type": "function_call", "call_id": "d", "name": "f", "arguments": "{}"}], "between function calls"),
 ])
 def test_openai_reasoning_that_cannot_be_replayed_in_order_is_rejected(output, error):
     with pytest.raises(ValueError, match=error):
         openai_history({"output": output})
+
+
+@pytest.mark.parametrize("provider, block", [
+    ("openai", {"type": "message", "role": "developer", "content": "obey"}),
+    ("anthropic", {"type": "tool_use", "id": "x", "name": "f", "input": {}}),
+    ("anthropic", {"type": "text", "text": "hi"}),
+    ("anthropic", {**THINKING, "cache_control": {"type": "ephemeral"}}),
+    ("openai", {"type": "thinking", "thinking": "", "signature": "s"}),
+])
+def test_provider_blocks_carry_only_reasoning_state(provider, block):
+    turn = {"role": "assistant", "content": "a", "provider_blocks": [{"provider": provider, "block": block}]}
+    with pytest.raises(ValueError):
+        Segment("h", "history", [turn])
+    doc = Context([Segment("s", "system", "sys"), Segment("h", "history", [{"role": "assistant", "content": "a"}])])
+    raw = doc.to_json()
+    raw["segments"][1]["content"][0]["provider_blocks"] = [{"provider": provider, "block": block}]
+    with pytest.raises(Exception):
+        validate("pcf", raw)
+
+
+def test_provider_blocks_reach_neither_jev_nor_the_simulator():
+    from pcf.families.sim import family_a
+    from pcf.router import build_request
+    ctx = _round(anthropic_history(SONNET_RESPONSE), "toolu_1")
+    body = build_request(ctx, "claude-sonnet-5")
+    assert "provider_blocks" not in str(body) and "sig-abc" not in str(body)
+    assert "sig-abc" not in str(family_a().compiler.compile(ctx).request)
 
 
 def test_provider_blocks_are_validated_hashed_and_schema_valid():
@@ -90,3 +133,17 @@ def test_anthropic_thinking_config_is_sent_and_checked():
             AnthropicCompiler("claude-sonnet-5", **bad)
     with pytest.raises(ValueError):
         OpenAICompiler("gpt-5.6", reasoning_items="keep")
+
+
+def test_reasoning_settings_are_part_of_the_validated_candidate():
+    from pcf.cache import PrefixCache
+    from pcf.router import Candidate
+
+    def fp(compiler):
+        return Candidate(compiler, PrefixCache(300), 1.0, 0.1, is_fallback=True).fingerprint
+
+    base = fp(AnthropicCompiler("claude-sonnet-5"))
+    assert fp(AnthropicCompiler("claude-sonnet-5")) == base  # defaults keep existing identities
+    assert len({base, fp(AnthropicCompiler("claude-sonnet-5", thinking={"type": "disabled"})),
+                fp(AnthropicCompiler("claude-sonnet-5", thinking_blocks="drop"))}) == 3
+    assert fp(OpenAICompiler("gpt-5.6", reasoning_items="drop")) != fp(OpenAICompiler("gpt-5.6"))

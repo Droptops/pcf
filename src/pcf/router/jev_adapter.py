@@ -24,7 +24,7 @@ from http.client import HTTPException
 from urllib.error import HTTPError
 from typing import Any
 
-from ..segments import Context
+from ..segments import Context, Segment
 from .base import Candidate, ConfidenceSource, ConfidenceUnavailable
 from ..descriptor import sha256_tag, hash_object
 from ..validation import number
@@ -37,13 +37,23 @@ DEFAULT_MODEL = "jev-latest"  # pin a versioned id (e.g. jev-1.13.0) once thresh
 Transport = Callable[[dict[str, Any]], dict[str, Any]]
 
 
+def _prompt_only(ctx: Context) -> Context:
+    """The context without opaque provider reasoning state, which is not part of the prompt being judged."""
+    if not any(s.kind == "history" and any("provider_blocks" in t for t in s.content) for s in ctx.segments):
+        return ctx
+    segments = [Segment(s.id, s.kind, [{k: v for k, v in t.items() if k != "provider_blocks"} for t in s.content],
+                        s.stable, authority=s.authority, provenance=s.provenance) if s.kind == "history" else s
+                for s in ctx.segments]
+    return Context(segments, ctx.session_id, ctx.cache_namespace)
+
+
 def build_request(ctx: Context, candidate_model_id: str, *, model: str = DEFAULT_MODEL, rubric: str = "An acceptable answer is correct, follows the application instructions, preserves tool semantics, and satisfies the user request.") -> dict[str, Any]:
     """The exact wire body. State is the PCF document itself; Jev reads text/JSON only."""
     return {
         "model": model,
         "state": {
             "candidate_model": candidate_model_id,
-            "context": ctx.to_json(),
+            "context": _prompt_only(ctx).to_json(),
         },
         "questions": {
             "sufficient": {

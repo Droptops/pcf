@@ -50,11 +50,13 @@ def history_from_response(response: Any) -> list[dict]:
             if not isinstance(args, dict):
                 raise ValueError("function_call arguments must be an object")
             call = {"id": item["call_id"], "name": item["name"], "arguments": args}
-            if turns and turns[-1]["role"] == "assistant":  # parallel calls (or calls after text) form one turn
-                if pending:  # rendering replays provider blocks before the turn's text and calls
-                    raise ValueError("reasoning between output items of one turn is not representable")
-                turns[-1].setdefault("tool_calls", []).append(call)
-            else:
+            last = turns[-1] if turns and turns[-1]["role"] == "assistant" else None
+            if last is not None and pending and last.get("tool_calls"):
+                # reasoning between parallel calls: splitting would put a call's result after the next call
+                raise ValueError("reasoning between function calls is not representable")
+            if last is not None and not pending:  # parallel calls (or calls after text) form one turn
+                last.setdefault("tool_calls", []).append(call)
+            else:  # reasoning after the turn's text opens the next turn, in output order
                 turns.append(take_pending({"role": "assistant", "content": "", "tool_calls": [call]}))
         elif typ == "function_call_output":
             if pending:
@@ -102,6 +104,10 @@ class OpenAICompiler(ContextCompiler):
         self.tokenizer = tokenizer if tokenizer is not None else HeuristicTokenizer()
         self.explicit = self.profile.explicit
         self.cache_mode = "explicit" if self.explicit else "implicit"
+
+    @property
+    def generation_identity(self) -> dict:
+        return {"reasoning_items": self.reasoning_items} if self.reasoning_items != "replay" else {}
 
     def supports_boundary(self, ctx, index):
         seg = ctx.segments[index]

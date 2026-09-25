@@ -12,7 +12,9 @@ from .validation import ID_PATTERN, nonempty
 
 PCF_VERSION = "0.2"
 KIND_RANK = {"tools": 0, "system": 1, "memory": 2, "document": 2, "history": 3, "user": 4}
-PROVIDER_BLOCK_OWNERS = {"anthropic", "openai"}
+# Opaque reasoning state a provider accepts back in history; nothing else may ride in provider_blocks.
+PROVIDER_BLOCK_TYPES = {"anthropic": {"thinking", "redacted_thinking"}, "openai": {"reasoning"}}
+CACHE_MARKER_KEYS = {"cache_control", "prompt_cache_breakpoint"}
 
 
 def canonical_bytes(content: Any) -> bytes:
@@ -71,12 +73,15 @@ def normalize_history(turns: Any) -> list[dict]:
             raise ValueError("only assistant entries can carry provider blocks")
         if not isinstance(blocks, list):
             raise ValueError("provider_blocks must be an array")
-        for block in blocks:  # opaque provider state (e.g. thinking, reasoning), replayed only by its provider
+        for block in blocks:  # opaque provider reasoning state, replayed only by its provider
             _fields(block, {"provider", "block"}, {"provider", "block"})
-            if block["provider"] not in PROVIDER_BLOCK_OWNERS:
+            allowed = PROVIDER_BLOCK_TYPES.get(block["provider"])
+            if allowed is None:
                 raise ValueError(f"unknown provider block owner {block['provider']!r}")
-            if not isinstance(block["block"], dict) or not isinstance(block["block"].get("type"), str):
-                raise ValueError("a provider block must be an object with a string type")
+            if not isinstance(block["block"], dict) or block["block"].get("type") not in allowed:
+                raise ValueError(f"{block['provider']} provider blocks must have type {sorted(allowed)}")
+            if CACHE_MARKER_KEYS & set(block["block"]):
+                raise ValueError("provider blocks cannot carry cache markers")
         if isinstance(content, dict) and content.get("type") == "tool_use":
             if calls or role != "assistant":
                 raise ValueError("tool_use must be a standalone assistant call")

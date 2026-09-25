@@ -21,6 +21,8 @@ spec.loader.exec_module(live)
     ("Your current plan is **Premium**.", 1, "premium"), ("Unlimited Plus", 1, "unlimited plus"),
     ("You are on Unlimited.", 1, "unlimited"), ("The answer is SMS. Survey 7010 was sent.", 2, "sms"),
     ("SMS[T-4106]", 2, "sms"), ("Spanish [T-4119]", 3, "spanish"), ("Español", 3, ""), ("", 1, ""),
+    ("Earlier I said 2, 6, 10 open tickets. **Open tickets:** 14 (per record). Directly: **14**", 0, "14"),
+    ("**Premium** (you moved from Unlimited)", 1, "premium"),
 ])
 def test_answer_value(answer, turn, value):
     assert live.answer_value(answer, turn) == value

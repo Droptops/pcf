@@ -211,6 +211,20 @@
                                     "type": {
                                       "type": "string"
                                     }
+                                  },
+                                  "not": {
+                                    "anyOf": [
+                                      {
+                                        "required": [
+                                          "cache_control"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "prompt_cache_breakpoint"
+                                        ]
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -218,7 +232,54 @@
                                 "provider",
                                 "block"
                               ],
-                              "additionalProperties": false
+                              "additionalProperties": false,
+                              "allOf": [
+                                {
+                                  "if": {
+                                    "properties": {
+                                      "provider": {
+                                        "const": "anthropic"
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "properties": {
+                                      "block": {
+                                        "properties": {
+                                          "type": {
+                                            "enum": [
+                                              "thinking",
+                                              "redacted_thinking"
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "if": {
+                                    "properties": {
+                                      "provider": {
+                                        "const": "openai"
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "properties": {
+                                      "block": {
+                                        "properties": {
+                                          "type": {
+                                            "enum": [
+                                              "reasoning"
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
                             }
                           }
                         },

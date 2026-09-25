@@ -85,7 +85,7 @@ class SimCompiler(ContextCompiler):
                 system.append({"kind": seg.kind, "text": seg.content, **({"cache_mark": True} if i in marks else {})})
             elif seg.kind == "history":
                 for j, turn in enumerate(seg.content):
-                    msg = dict(turn)
+                    msg = {k: v for k, v in turn.items() if k != "provider_blocks"}  # opaque to the simulator
                     if i in marks and j == len(seg.content) - 1:
                         msg["cache_mark"] = True
                     messages.append(msg)

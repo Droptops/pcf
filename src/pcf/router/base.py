@@ -40,8 +40,10 @@ class Candidate:
 
     @property
     def fingerprint(self):
-        return hash_object("pcf:quality-candidate:0.2", {"compiler": self.compiler.candidate_fingerprint,
-                           "max_tokens": getattr(self.compiler, "max_tokens", None)})
+        identity = {"compiler": self.compiler.candidate_fingerprint,
+                    "max_tokens": getattr(self.compiler, "max_tokens", None)}
+        generation = self.compiler.generation_identity  # non-default reasoning settings change what the model does
+        return hash_object("pcf:quality-candidate:0.2", {**identity, **({"generation": generation} if generation else {})})
 
     @property
     def write_price(self):

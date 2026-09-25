@@ -105,10 +105,12 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     waiting for its result can never end a request, so it takes no slot either. Stability is
     a hint, not a cache guarantee.
 
-    Over budget, the last anchor is kept, then the last anchor of the leading tools/system
-    run when ``history_slots`` endpoints (or every history candidate, if fewer) still fit
-    beside both anchors, so one mislabelled volatile module cannot take the system prompt out
-    of cache. ``history_slots`` is how
+    Over budget (and above a budget of one, which marks the newest candidate), the last anchor
+    is kept (with no anchor, the oldest candidate stands in); then the last anchor of the
+    leading tools/system run when ``history_slots`` endpoints (or every history candidate, if
+    fewer) and the stable user group still fit beside both anchors, so one mislabelled
+    volatile module cannot take the system prompt out of cache; then the newest history
+    endpoints, up to ``history_slots``; then the newest remaining candidates. ``history_slots`` is how
     many history endpoints a compiler needs for the next request to name the endpoint this
     request writes: providers that read only at markers present in the request need one
     per markable segment a request can append.
@@ -147,13 +149,19 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     if max_breakpoints == 1:
         return [candidates[-1]]
     anchors = [i for i in candidates if ctx.segments[i].kind not in {"history", "user"}]
+    users = [i for i in candidates if ctx.segments[i].kind == "user"]
     anchor = anchors[-1] if anchors else candidates[0]
     keep = {anchor}
+    need = min(history_slots, len(history))
     lead = [i for i in anchors if ctx.segments[i].kind in {"tools", "system"}]
-    if lead and lead[-1] != anchor and max_breakpoints - 2 >= min(history_slots, len(history)):
+    if lead and lead[-1] != anchor and max_breakpoints - 2 - len(users) >= need:
         keep.add(lead[-1])
-    rest = max_breakpoints - len(keep)
-    return sorted({*keep, *([i for i in candidates if i not in keep][-rest:] if rest else [])})
+    reserve = min(need, max_breakpoints - len(keep))  # history endpoints before any newer non-history candidate
+    if reserve:
+        keep |= set([i for i in history if i not in keep][-reserve:])
+    room = max_breakpoints - len(keep)
+    rest = [i for i in candidates if i not in keep]
+    return sorted({*keep, *(rest[-room:] if room else [])})
 
 
 class ContextCompiler(ABC):
@@ -169,6 +177,11 @@ class ContextCompiler(ABC):
 
     def supports_boundary(self, ctx: Context, index: int) -> bool:
         return bool(ctx.segments[index].content)
+
+    @property
+    def generation_identity(self) -> dict:
+        """Non-default settings that change what the model does or sees (e.g. thinking); part of quality identity."""
+        return {}
 
     def covered_tokens(self, ctx: Context, index: int, cum_tokens: list[int]) -> int:
         """Prefix tokens a marker on segment ``index`` caches; adapters whose marker sits inside a segment trim it."""

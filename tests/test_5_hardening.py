@@ -428,6 +428,7 @@ def test_scaled_tokenizer_is_deterministic_monotonic_and_has_its_own_identity():
     scaled = ScaledTokenizer(base, 1.3)
     assert scaled.count("x" * 400) == 130 and scaled.count("") == 0
     assert scaled.tokenizer_hash not in {base.tokenizer_hash, ScaledTokenizer(base, 1.4).tokenizer_hash}
+    assert ScaledTokenizer(base, 2).tokenizer_hash == ScaledTokenizer(base, 2.0).tokenizer_hash
     ctx = Context([Segment("s", "system", "rule " * 800), Segment("u", "user", "hi", stable=False)])
     plain, corrected = AnthropicCompiler("claude-sonnet-5"), AnthropicCompiler("claude-sonnet-5", tokenizer=scaled)
     assert corrected.compile(ctx).total_tokens > plain.compile(ctx).total_tokens
@@ -472,3 +473,22 @@ def test_budget_of_two_never_returns_more_than_two():
                    Segment("m", "memory", "mem"), Segment("u", "user", "hi", stable=True)])
     for slots in (0, 1, 2, 3):
         assert len(choose_breakpoints(ctx, 2, history_slots=slots)) <= 2
+
+
+def test_openai_tool_loop_with_a_stable_trailing_reminder_stays_flat():
+    from pcf.families.sim import SimEngine
+    base = [Segment("s", "system", "policy " * 1500), Segment("p", "memory", "profile " * 600, provenance="p")]
+    reminder = Segment("rem", "user", "Reminder: cite the order id.", stable=True)
+    hist, contexts = [], []
+    for k in range(6):
+        call = {"id": f"c{k}", "name": "f", "arguments": {"k": k}}
+        hist += [Segment(f"u{k}", "history", [{"role": "user", "content": f"question {k} " * 40}]),
+                 Segment(f"c{k}", "history", [{"role": "assistant", "content": "", "tool_calls": [call]}]),
+                 Segment(f"r{k}", "history", [{"role": "tool", "call_id": f"c{k}", "content": f"result {k} " * 200,
+                                               "is_error": False}])]
+        contexts.append(Context([*base, *hist, reminder]))
+        hist.append(Segment(f"a{k}", "history", [{"role": "assistant", "content": f"answer {k} " * 40}]))
+    compiler = OpenAICompiler("gpt-5.6")
+    engine = SimEngine(compiler, PrefixCache(compiler.descriptor.ttl_seconds))
+    cold = [engine.run(ctx, 10.0 * (t + 1))[0].cold_tokens for t, ctx in enumerate(contexts)]
+    assert max(cold[1:]) - min(cold[1:]) <= 2, cold
