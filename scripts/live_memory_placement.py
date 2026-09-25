@@ -15,8 +15,8 @@ scripted and identical in every arm; each scripted reply states the value it ans
 the history holds a stale answer. --history-style template repeats one long filler pattern in every reply;
 varied uses short replies with turn-specific filler.
 
-Grading is strict: the reply's lead value (after "The answer is", else up to the first separator) must equal the
-expected value, case-insensitively. A reply is a format violation when it copies history filler or runs past
+Grading takes the first value the reply asserts from the question's answer set (numbers skip ticket and order
+ids; after "The answer is", if present) and requires it to equal the expected value, case-insensitively. A reply is a format violation when it copies history filler or runs past
 --violation-tokens (estimated from its visible text). Output tokens are recorded (and OpenAI reasoning tokens;
 Anthropic thinking is counted as blocks, since its usage folds thinking into output). Billed units price cache
 writes at the descriptor multiplier, reads at --read-multiplier and output at --output-multiplier, all relative to
@@ -109,43 +109,53 @@ def history_turn(turn: int, text: str, answer: str, style: str) -> Segment:
 SPACER = Segment("notice", "memory", {"notice": " ".join(
     f"Service notice {k}: branch hours and holiday schedules are posted on the help centre." for k in range(12))},
     False, provenance="notice")
-SEPARATORS = re.compile(r"\s+[-\u2013\u2014]\s+|[(\u2013\u2014\n.;:,!]")
+LANGUAGES = ["Spanish", "English", "French", "German", "Portuguese", "Italian"]
+NUMBER = re.compile(r"(?<![\w-])(\d{1,3})(?![\w-])")  # skips ticket/order ids such as T-4108 or 9042
 
 
-def lead_value(answer: str) -> str:
+def answer_value(answer: str, turn: int) -> str:
+    """The first value the reply asserts from the question's own answer set (after "The answer is", if any)."""
     lower = answer.lower()
     if "the answer is" in lower:
         answer = answer[lower.index("the answer is") + len("the answer is"):]
-    return SEPARATORS.split(answer.strip(), 1)[0].strip(" *\"'`").lower()
+    kind = turn % len(QUESTIONS)
+    if kind == 0:
+        match = NUMBER.search(answer)
+        return match.group(1) if match else ""
+    domain = {1: PLANS, 2: CHANNELS, 3: LANGUAGES}[kind]
+    hits = [(m.start(), -len(v), v) for v in domain for m in re.finditer(rf"(?<!\w){re.escape(v)}(?!\w)", answer, re.I)]
+    return min(hits)[2].lower() if hits else ""
 
 
-def grade(answer: str, expected: str, stale: str | None, style: str, violation_tokens: int) -> dict:
-    lead = lead_value(answer)
+def grade(answer: str, turn: int, expected: str, stale: str | None, style: str, violation_tokens: int) -> dict:
+    value = answer_value(answer, turn)
     fillers = [TEMPLATE_FILLER] if style == "template" else [f.split("{n}")[1].strip() for f in VARIED_FILLER]
     copied = any(f.lower() in answer.lower() for f in fillers)
     trap = stale is not None and stale != expected
-    return {"lead": lead, "correct": lead == expected.lower(), "gave_stale": trap and lead == stale.lower(),
+    return {"value": value, "correct": value == expected.lower(), "gave_stale": trap and value == stale.lower(),
             "violation": copied or math.ceil(len(answer) / 4) > violation_tokens}
 
 
 def make_compiler(provider: str, model: str):
-    return OpenAICompiler(model) if provider == "openai" else AnthropicCompiler(model, max_tokens=512)
+    # Room for adaptive thinking before the answer: at 512 a thinking model can stop with no visible text.
+    return OpenAICompiler(model) if provider == "openai" else AnthropicCompiler(model, max_tokens=4096)
 
 
 def call(provider: str, client, request: dict, cfg) -> tuple[object, str, dict]:
     """(response, answer text, output usage) for one compiled request."""
     if provider == "openai":
         # Low effort and room to answer: at 64 tokens reasoning models can return nothing visible.
-        response = client.responses.create(**request, max_output_tokens=512, reasoning={"effort": cfg.effort})
+        response = client.responses.create(**request, max_output_tokens=4096, reasoning={"effort": cfg.effort})
         details = getattr(response.usage, "output_tokens_details", None)
         out = {"output_tokens": response.usage.output_tokens,
-               "reasoning_tokens": getattr(details, "reasoning_tokens", 0) or 0, "served_model": response.model}
+               "reasoning_tokens": getattr(details, "reasoning_tokens", 0) or 0, "served_model": response.model,
+               "stop": getattr(response, "status", None)}
         return response, getattr(response, "output_text", "") or "", out
     extra = {"provider": {"order": ["Anthropic"], "allow_fallbacks": False}}
     thinking = {"thinking": {"type": "disabled"}} if cfg.thinking == "disabled" else {}
     response = client.messages.create(**{**request, "model": "anthropic/" + request["model"], **thinking},
                                       extra_body=extra)
-    out = {"output_tokens": response.usage.output_tokens, "served_model": response.model,
+    out = {"output_tokens": response.usage.output_tokens, "served_model": response.model, "stop": response.stop_reason,
            "thinking_blocks": sum(getattr(b, "type", "") == "thinking" for b in response.content)}
     return response, "".join(getattr(block, "text", "") for block in response.content), out
 
@@ -181,7 +191,7 @@ def session(arm: str, nonce: str, cfg, client=None) -> list[dict]:
             usage, answer = compiler.usage_from_response(response), answer.strip()
             row.update(cached=usage.cache_read_input_tokens, written=usage.cache_creation_input_tokens,
                        uncached=usage.input_tokens, answer=answer, **out,
-                       **grade(answer, expected, stale, cfg.history_style, cfg.violation_tokens))
+                       **grade(answer, turn, expected, stale, cfg.history_style, cfg.violation_tokens))
         rows.append(row)
         said[text] = expected
         history.append(history_turn(turn, text, expected, cfg.history_style))
@@ -235,7 +245,7 @@ def regrade(path: str, violation_tokens: int) -> dict:
                 text, expected = question(row["turn"])
                 old = row.get("correct")
                 row.update(expected=expected, stale=said.get(text), stale_trap=said.get(text) not in (None, expected),
-                           **grade(row["answer"], expected, said.get(text), style, violation_tokens))
+                           **grade(row["answer"], row["turn"], expected, said.get(text), style, violation_tokens))
                 if old is not None and old != row["correct"]:
                     changes.append({"run": i, "arm": arm, "turn": row["turn"], "answer": row["answer"][:80],
                                     "was": old, "now": row["correct"]})
