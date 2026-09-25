@@ -413,3 +413,10 @@ def test_router_does_not_pay_for_scores_that_cannot_route():
     assert calls == [] and report.score is None and not report.calibration_valid
     report = Router(cands, source, score_unvalidated=True).route(ctx, now=0).candidates[0]
     assert len(calls) == 1 and report.score == 0.9 and report.p_sufficient is None
+
+
+def test_a_stable_user_turn_after_history_is_still_a_candidate():
+    hist = Segment("h", "history", [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}])
+    ctx = Context([Segment("s", "system", "sys"), hist, Segment("m", "memory", "tail", False),
+                   Segment("u", "user", "same question every time", stable=True)])
+    assert [ctx.segments[i].id for i in choose_breakpoints(ctx, 4)] == ["s", "h", "u"]

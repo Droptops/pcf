@@ -118,7 +118,7 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
             continue
         if seg.kind == "history":
             history.append(i)
-        elif i > first_history:
+        elif i > first_history and seg.kind in {"memory", "document"}:
             continue  # tail memory: a cache entry here would be rewritten every turn and never read
         elif seg.kind == "memory" and seg.provenance is not None:
             groups[("memory", seg.provenance)] = i
