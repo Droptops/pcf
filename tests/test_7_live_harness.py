@@ -44,3 +44,10 @@ def test_offline_run_plans_every_arm(provider):
     assert set(run) == {*live.ARMS, "summary"} and all(len(run[arm]) == 12 for arm in live.ARMS)
     assert run["placed-spacer"][-1]["tail"][-1] == "notice" and run["front"][-1]["tail"] == []
     assert all(row["est_tokens"] > 0 for row in run["tail"])
+
+
+@pytest.mark.parametrize("model, name", [("claude-haiku-4-5", "anthropic/claude-haiku-4.5"),
+                                         ("claude-sonnet-5", "anthropic/claude-sonnet-5"),
+                                         ("claude-opus-5-5", "anthropic/claude-opus-5.5")])
+def test_openrouter_model_names(model, name):
+    assert live.openrouter_model(model) == name

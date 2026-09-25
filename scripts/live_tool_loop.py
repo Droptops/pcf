@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import uuid
 
@@ -57,7 +58,8 @@ def requests(iterations: int, nonce: str):
 def send(provider: str, client, request: dict):
     if provider == "openai":
         return client.responses.create(**request, max_output_tokens=64, reasoning={"effort": "low"})
-    return client.messages.create(**{**request, "model": "anthropic/" + request["model"], "max_tokens": 64,
+    model = "anthropic/" + re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", request["model"])  # OpenRouter's model name
+    return client.messages.create(**{**request, "model": model, "max_tokens": 64,
                                      "thinking": {"type": "disabled"}},
                                   extra_body={"provider": {"order": ["Anthropic"], "allow_fallbacks": False}})
 

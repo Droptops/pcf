@@ -62,6 +62,14 @@ Fixes from coding reviews. Portable segment hashes remain unchanged. Document ac
 - `scripts/live_tool_loop.py`: a scripted tool loop ([user, call] and [tool] segments, four tail memory modules)
   that checks each request reads back the previous request's cached prefix. Live on 2026-09-25 every request
   after the first read back 100% on gpt-5.6 and on claude-sonnet-5 via OpenRouter (`results/2026-09-25/`).
+- `scripts/live_jev_calibration.py` validates Jev for one candidate on harness contexts (scores memoized by
+  request body, so several thresholds reuse one scoring pass and the validated source keeps its fingerprint), and
+  retests score noise. First run (claude-haiku-4-5, 240 contexts): the candidate answered all 240 correctly, Jev
+  scored them 0.16-0.68 (mean 0.33), so no threshold from 0.7 up selects anything and the gate fails; retest noise
+  is small (SD 0.013, max 0.029, no decision flips at 0.8). Calibration needs contexts the candidate sometimes
+  fails. `scripts/live_question_bank.py` adds paired conflict, cross-module and far-memory items per arm with an
+  exact McNemar test. Live scripts map Anthropic ids to OpenRouter names (`claude-haiku-4-5` ->
+  `anthropic/claude-haiku-4.5`).
 - `ScaledTokenizer(base, factor)` (in `pcf.families.anthropic_adapter`): a deterministic fixed-factor correction of a
   token counter with its own identity. Measured against billed input, chars/4 undercounts claude-sonnet-5 by
   1.22-1.40x and overcounts gpt-5.6 at 0.86-0.97x depending on content; defaults are unchanged.

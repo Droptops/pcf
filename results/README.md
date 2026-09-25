@@ -26,3 +26,4 @@ expired between turns.
 
 The E1 runs used a 512-token output limit (now 4096) and were re-graded with the answer-set grader; each file's
 `meta.note` records how many grades changed.
+| `2026-09-25/jev-calibration-haiku-4-5.json` | Jev (`typesafe/jev-1.13-20260917`) scoring claude-haiku-4-5 | 240 contexts + 60 × 5 retest | `scripts/live_jev_calibration.py` |

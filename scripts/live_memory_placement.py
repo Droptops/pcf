@@ -136,6 +136,11 @@ def grade(answer: str, turn: int, expected: str, stale: str | None, style: str, 
             "violation": copied or math.ceil(len(answer) / 4) > violation_tokens}
 
 
+def openrouter_model(model_id: str) -> str:
+    """OpenRouter's name for an Anthropic model id: claude-haiku-4-5 -> anthropic/claude-haiku-4.5."""
+    return "anthropic/" + re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", model_id)
+
+
 def make_compiler(provider: str, model: str):
     # Room for adaptive thinking before the answer: at 512 a thinking model can stop with no visible text.
     return OpenAICompiler(model) if provider == "openai" else AnthropicCompiler(model, max_tokens=4096)
@@ -153,7 +158,7 @@ def call(provider: str, client, request: dict, cfg) -> tuple[object, str, dict]:
         return response, getattr(response, "output_text", "") or "", out
     extra = {"provider": {"order": ["Anthropic"], "allow_fallbacks": False}}
     thinking = {"thinking": {"type": "disabled"}} if cfg.thinking == "disabled" else {}
-    response = client.messages.create(**{**request, "model": "anthropic/" + request["model"], **thinking},
+    response = client.messages.create(**{**request, "model": openrouter_model(request["model"]), **thinking},
                                       extra_body=extra)
     out = {"output_tokens": response.usage.output_tokens, "served_model": response.model, "stop": response.stop_reason,
            "thinking_blocks": sum(getattr(b, "type", "") == "thinking" for b in response.content)}
