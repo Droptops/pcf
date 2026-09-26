@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { MemoryPlacer } from "../src/index.ts";
+import { ConcurrentPlacementUpdate, MemoryPlacer } from "../src/index.ts";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/placer.json", import.meta.url), "utf8"));
 
@@ -36,4 +36,30 @@ test("keeps the last front module's marker when modules are only appended", () =
   assert.deepEqual(placer.split(grown, 0).front.map((m) => [m.id, m.stable]),
                    [["ref", true], ["plan", true], ["new", false]]);
   assert.ok(placer.split(grown, 0).front.every((m) => m.stable));
+});
+
+test("durable turn ids are idempotent across restart", () => {
+  const options = { countTokens: (text: string) => text.length, tokenizerId: "chars-v1", expectedTurns: 20 };
+  const placer = new MemoryPlacer(options);
+  const memory = [{ id: "record", content: "v0" }];
+  const first = placer.split(memory, 100, { turnId: "request-0", expectedRevision: 0 });
+  const before = placer.exportState();
+  assert.deepEqual(placer.split(memory, 100, { turnId: "request-0", expectedRevision: 0 }), first);
+  assert.deepEqual(placer.exportState(), before);
+  const restarted = new MemoryPlacer(options);
+  restarted.restoreState(JSON.parse(JSON.stringify(before)));
+  assert.deepEqual(restarted.split(memory, 100, { turnId: "request-0" }), first);
+  assert.equal(restarted.revision, 1);
+  assert.throws(() => restarted.split([{ id: "record", content: "v1" }], 100, { turnId: "request-0" }),
+                /different inputs/);
+});
+
+test("stale concurrent revisions and configuration drift are rejected", () => {
+  const options = { countTokens: (text: string) => text.length, tokenizerId: "chars-v1" };
+  const placer = new MemoryPlacer(options);
+  placer.split([{ id: "record", content: "v0" }], 100, { turnId: "request-0", expectedRevision: 0 });
+  assert.throws(() => placer.split([{ id: "record", content: "v1" }], 100,
+                                   { turnId: "request-1", expectedRevision: 0 }), ConcurrentPlacementUpdate);
+  const other = new MemoryPlacer({ ...options, tokenizerId: "chars-v2" });
+  assert.throws(() => other.restoreState(placer.exportState()), /configuration/);
 });

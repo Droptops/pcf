@@ -4,9 +4,11 @@
 Log one JSON object per request (JSON Lines), from provider usage:
   {"conversation": "c-123", "arm": "front-tuned" | "echo-all" | "fixed-tail" | "placed",
    "cached": 0, "written": 0, "uncached": 0,
-   "output_tokens": 0, "latency_s": 1.9, "ttft_s": 0.4, "correct": true}
+   "output_tokens": 0, "latency_s": 1.9, "ttft_s": 0.4, "success": true, "correct": true,
+   "blind_acceptable": true}
 `ttft_s` and `correct` are optional; `correct` is the automatic record check where the source of truth is known
-(null or absent when it is not). Costs are in uncached-input-token units under --write/--read/--output
+(null or absent when it is not). `blind_acceptable` is the adjudicated result of an arm-hidden review and is also
+optional. Costs are in uncached-input-token units under --write/--read/--output
 multipliers; pass the provider's current price ratios, not the synthetic runs' assumptions.
 
   pilot_analysis.py --assign CONVERSATION_ID                         print the four-arm assignment
@@ -52,6 +54,10 @@ def validate_rows(rows: list[dict]) -> None:
                 raise ValueError(f"{key} must be an integer token count")
         if row.get("correct") is not None and type(row["correct"]) is not bool:
             raise ValueError("correct must be boolean or null")
+        if row.get("success") is not None and type(row["success"]) is not bool:
+            raise ValueError("success must be boolean or null")
+        if row.get("blind_acceptable") is not None and type(row["blind_acceptable"]) is not bool:
+            raise ValueError("blind_acceptable must be boolean or null")
         if row.get("request_id") is not None:
             identity = (row.get("cache_scope"), row["request_id"])
             if identity in seen:
@@ -81,11 +87,14 @@ def conversations(rows: list[dict], write: float, read: float, output: float) ->
     arms = {}
     for (arm, _), turns in grouped.items():
         checked = [t["correct"] for t in turns if t.get("correct") is not None]
+        blind = [t["blind_acceptable"] for t in turns if t.get("blind_acceptable") is not None]
         input_cost = math.fsum(t["uncached"] + write * t["written"] + read * t["cached"] for t in turns)
         arms.setdefault(arm, []).append({
             "turns": len(turns), "input_cost": input_cost,
             "total_cost": input_cost + output * math.fsum(t["output_tokens"] for t in turns),
             "checked": len(checked), "errors": sum(not c for c in checked),
+            "blind_checked": len(blind), "blind_errors": sum(not c for c in blind),
+            "failures": sum(t.get("success") is False for t in turns),
             "latency": [t["latency_s"] for t in turns if t.get("latency_s") is not None],
             "ttft": [t["ttft_s"] for t in turns if t.get("ttft_s") is not None]})
     return arms
@@ -105,6 +114,15 @@ def mean_cost(convs: list[dict], key: str) -> float:
 def error_rate(convs: list[dict]) -> float | None:
     checked = sum(c["checked"] for c in convs)
     return sum(c["errors"] for c in convs) / checked if checked else None
+
+
+def blind_error_rate(convs: list[dict]) -> float | None:
+    checked = sum(c["blind_checked"] for c in convs)
+    return sum(c["blind_errors"] for c in convs) / checked if checked else None
+
+
+def failure_rate(convs: list[dict]) -> float:
+    return sum(c["failures"] for c in convs) / sum(c["turns"] for c in convs)
 
 
 def bootstrap(base: list[dict], treat: list[dict], stat, samples: int, seed: int) -> list[float] | None:
@@ -137,6 +155,8 @@ def _analyze_pair(rows: list[dict], write: float = 1.25, read: float = 0.1, outp
             "input_cost_per_conversation": round(mean_cost(convs, "input_cost"), 1),
             "total_cost_per_conversation": round(mean_cost(convs, "total_cost"), 1),
             "checked_answers": sum(c["checked"] for c in convs), "error_rate": error_rate(convs),
+            "blind_reviewed_answers": sum(c["blind_checked"] for c in convs),
+            "blind_error_rate": blind_error_rate(convs), "failure_rate": failure_rate(convs),
             "latency_s": {"p50": quantile(turns, .5), "p90": quantile(turns, .9)},
             "ttft_s": {"p50": quantile(ttft, .5), "p90": quantile(ttft, .9)} if ttft else None}
     for key in ("input_cost", "total_cost"):
@@ -154,12 +174,26 @@ def _analyze_pair(rows: list[dict], write: float = 1.25, read: float = 0.1, outp
     report["error_rate_difference"] = {"treatment_minus_baseline": None if point is None else round(point, 4),
                                        "ci95": bootstrap(base, treat, diff, samples, seed + 1)}
 
+    def blind_diff(b, t):
+        rb, rt = blind_error_rate(b), blind_error_rate(t)
+        return None if rb is None or rt is None else rt - rb
+    point = blind_diff(base, treat)
+    report["blind_error_rate_difference"] = {
+        "treatment_minus_baseline": None if point is None else round(point, 4),
+        "ci95": bootstrap(base, treat, blind_diff, samples, seed + 2)}
+
+    def failure_diff(b, t):
+        return failure_rate(t) - failure_rate(b)
+    point = failure_diff(base, treat)
+    report["failure_rate_difference"] = {"treatment_minus_baseline": round(point, 4),
+                                         "ci95": bootstrap(base, treat, failure_diff, samples, seed + 3)}
+
     def p90(b, t):
         tb, tt = [x for c in b for x in c["latency"]], [x for c in t for x in c["latency"]]
         return quantile(tt, .9) - quantile(tb, .9) if tb and tt else None
     point = p90(base, treat)
     report["latency_p90_difference_s"] = {"treatment_minus_baseline": None if point is None else round(point, 3),
-                                          "ci95": bootstrap(base, treat, p90, samples, seed + 2)}
+                                          "ci95": bootstrap(base, treat, p90, samples, seed + 4)}
     return report
 
 

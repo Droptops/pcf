@@ -179,6 +179,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--run", action="store_true", help="make paid calls")
     parser.add_argument("--provider", choices=("openai", "anthropic"), default="openai")
+    parser.add_argument("--anthropic-route", choices=placement.ANTHROPIC_ROUTES, default="direct",
+                        help="direct: Anthropic's API (PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY); openrouter: "
+                        "OpenRouter pinned to Anthropic (OPENROUTER_API_KEY), as in the runs published up to 2026-09-26")
     parser.add_argument("--model")
     parser.add_argument("--scenarios", nargs="+", choices=sorted(SCENARIOS), default=["benefits", "clinical"])
     parser.add_argument("--arms", nargs="+", choices=ARMS, default=list(WARM))
@@ -199,15 +202,7 @@ def main():
     cfg.model = cfg.model or ("gpt-5.6" if cfg.provider == "openai" else "claude-sonnet-5")
     client = None
     if cfg.run:
-        key = "OPENAI_API_KEY" if cfg.provider == "openai" else "OPENROUTER_API_KEY"
-        if not os.environ.get(key):
-            raise SystemExit(f"--run --provider {cfg.provider} requires {key}")
-        if cfg.provider == "openai":
-            import openai
-            client = openai.OpenAI()
-        else:
-            import anthropic
-            client = anthropic.Anthropic(api_key=os.environ[key], base_url="https://openrouter.ai/api")
+        client = placement.make_client(cfg.provider, cfg.anthropic_route)
     compiler = placement.make_compiler(cfg.provider, cfg.model)
     ttl = compiler.descriptor.ttl_seconds
     run_id = uuid.uuid4().hex[:10] if client else "offline"
@@ -243,7 +238,8 @@ def main():
         else:
             cell["warmup"], cell["measured"] = result[:cfg.warmup], result[cfg.warmup:]
     meta = {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
-            "git_sha": placement.git_sha(), "provider": cfg.provider, "model": cfg.model, "run_id": run_id,
+            "git_sha": placement.git_sha(), "provider": cfg.provider, "model": cfg.model,
+            "anthropic_route": cfg.anthropic_route if cfg.provider == "anthropic" else None, "run_id": run_id,
             "ttl_seconds": ttl, "cold_gap_seconds": ttl + 30, "turns": cfg.turns,
             "cold_turns": cfg.cold_turns or cfg.turns, "sessions": cfg.sessions, "warmup": cfg.warmup,
             "arms": cfg.arms, "scenarios": cfg.scenarios, "thinking": cfg.thinking, "effort": cfg.effort,

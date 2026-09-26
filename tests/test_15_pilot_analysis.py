@@ -13,9 +13,11 @@ pilot = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pilot)
 
 
-def turn(conversation, arm, cached, written, uncached, output=10, correct=True, latency=1.0):
+def turn(conversation, arm, cached, written, uncached, output=10, correct=True, latency=1.0,
+         success=True, blind_acceptable=None):
     return {"conversation": conversation, "arm": arm, "cached": cached, "written": written, "uncached": uncached,
-            "output_tokens": output, "latency_s": latency, "correct": correct}
+            "output_tokens": output, "latency_s": latency, "correct": correct, "success": success,
+            "blind_acceptable": blind_acceptable}
 
 
 def test_assignment_is_stable_and_respects_the_share():
@@ -37,6 +39,18 @@ def test_costs_are_per_conversation_under_the_given_multipliers():
     assert report["arms"]["treatment"]["total_cost_per_conversation"] == 275
     assert report["arms"]["treatment"]["error_rate"] == .5
     assert report["error_rate_difference"]["treatment_minus_baseline"] == .5
+
+
+def test_failure_and_blind_review_rates_are_conversation_bootstrapped():
+    rows = [turn("b1", "baseline", 0, 1, 0, blind_acceptable=True),
+            turn("b2", "baseline", 0, 1, 0, blind_acceptable=True),
+            turn("t1", "treatment", 0, 1, 0, blind_acceptable=False, success=False),
+            turn("t2", "treatment", 0, 1, 0, blind_acceptable=True)]
+    report = pilot.analyze(rows, samples=50)
+    assert report["arms"]["treatment"]["blind_error_rate"] == .5
+    assert report["arms"]["treatment"]["failure_rate"] == .5
+    assert report["blind_error_rate_difference"]["treatment_minus_baseline"] == .5
+    assert report["failure_rate_difference"]["treatment_minus_baseline"] == .5
 
 
 def test_a_conversation_in_both_arms_is_rejected():

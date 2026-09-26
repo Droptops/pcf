@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Make `MemoryPlacer` state durable and retry-safe. `export_state()` / `restore_state()` provide a versioned,
+  JSON-compatible conversation snapshot; `turn_id` makes a repeated placement decision idempotent; and
+  `expected_revision` rejects concurrent new turns planned from stale state. The snapshot stores hashes and
+  decisions, not memory contents. Calls without the new arguments keep the earlier behavior. The TypeScript port
+  has the same durable/idempotent behavior through `exportState()`, `restoreState()`, `turnId` and
+  `expectedRevision`, with `tokenizerId` binding restored state to its counter.
+- `MemoryPlacer.for_candidate()` now carries the compiler's minimum cacheable length and accepts `expected_turns`,
+  matching `for_compiler()`. Previously it silently used a zero minimum and could move modules the provider was too
+  small to cache. Portable context hashes, the PCF wire format and provider compiler cache identity are unchanged.
+- Paid live calls retry 429 and 5xx responses with bounded exponential backoff, record the attempt count, and fail
+  immediately with `ProviderProtocolError` when provider SDK response/usage fields drift. Tests cover retries,
+  missing usage, SDK drift, restart recovery and concurrent placement turns.
+- Add a tag-triggered release gate. An RC or stable tag now requires protected `main`, an exact project-version
+  match, complete tests and distributions, and sanitized evidence from a passing real production pilot with actual
+  prices, blind independent review, artifact hashes and two distinct human approvals. Synthetic or pending evidence
+  cannot satisfy the gate; no production-pilot pass is claimed by this change.
+- Build metadata now uses the SPDX `MIT` expression and explicit license file under the current packaging standard.
+- Live scripts send Claude requests to Anthropic's API, reading `PCF_ANTHROPIC_API_KEY` (or
+  `ANTHROPIC_API_KEY`) with an explicit base URL. `--anthropic-route openrouter` keeps the OpenRouter route used for
+  the published Claude runs; result files record `meta.anthropic_route`.
 - Live 60-turn run with the model's own replies as history (`results/2026-09-26/`). Input against tuned front:
   gpt-5.6 0.46-0.48 for placed, echo-all and fixed-tail; Claude 0.17-0.20, confounded by tuned front's longer
   replies (0.22-0.23 per token sent). Echo-all on Claude and fixed-tail on gpt-5.6 were less accurate than placed.

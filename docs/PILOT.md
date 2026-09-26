@@ -49,13 +49,16 @@ accounting for clustering within conversations. The synthetic runs are not a sam
 One JSON line per completed provider request:
 
 ```json
-{"conversation":"c-123","request_id":"req-1","arm":"fixed-tail","cached":1200,"written":0,"uncached":200,"output_tokens":60,"latency_s":1.9,"ttft_s":0.4,"correct":true}
+{"conversation":"c-123","request_id":"req-1","arm":"fixed-tail","cached":1200,"written":0,"uncached":200,"output_tokens":60,"latency_s":1.9,"ttft_s":0.4,"success":true,"correct":true,"blind_acceptable":true}
 ```
 
 - Token buckets must be disjoint, nonnegative provider-usage counts. Record retries as separate billable requests;
   preserve failures separately so missing completions do not hide failure rates.
 - `correct` is a boolean, or null/absent when unknown. Use record checks plus blind human review for tasks where
   lookup correctness misses instruction, tool or safety failures. Record escalation and complaint rates separately.
+- `success` records operational completion; do not omit failed attempts. `blind_acceptable` is null until the
+  arm-hidden reviews are adjudicated. The analyzer reports conversation-bootstrap differences for automatic error,
+  blind-review error and operational failure rates.
 - `latency_s` is full response latency; `ttft_s` is optional. Include compilation in an additional end-to-end timing
   measurement when evaluating production latency.
 - Record model, provider, prices, deployment revision and evaluation rubric in the pilot manifest. Analyze homogeneous
@@ -125,3 +128,12 @@ artifacts rather than raw production prompts.
 Check realistic idle gaps, short sessions, record changes followed by quiet periods, changing module sizes,
 contradictory user preferences and extended-thinking/tool-loop compatibility. Keep old records current when users
 change preferences: moving stale records near a question can worsen answers, especially on smaller models.
+
+## Release handoff
+
+The public repository does not contain production prompts or review exports. After the frozen analysis and blind
+review pass, store those artifacts in the approved private evidence system and record their SHA-256 identities in
+`release/production-pilot.json`; see [`release/README.md`](../release/README.md). The release gate requires actual
+provider prices, all four arm counts, every preregistered gate, arm-hidden independent review with adjudication, and
+distinct pilot-owner and quality-reviewer approvals. A synthetic run, an unfinished pilot, or a handwritten claim
+without bound artifact identities cannot cut an RC or stable tag.
