@@ -1,7 +1,7 @@
 # Cache audit: what broke the cache, from existing logs
 
 `scripts/cache_audit.py` reads a log of provider requests, exactly as sent, with the usage each response returned. It
-reports which field's changes cost the most cache. It needs no PCF types and no change to the request path. It is
+reports which fields are suspected of disrupting cache reuse. It needs no PCF types and no change to the request path. It is
 a prototype.
 
 ```bash
@@ -10,23 +10,24 @@ python scripts/cache_audit.py LOG.jsonl --ttl 300
 
 Each line of the log is `{"conversation", "ts", "request", "usage": {"cached", "written", "uncached"}}`. For each
 request, the audit finds the longest prefix it shares with the conversation's previous request. For a
-conversation's first request it uses the best match among earlier requests. It then sorts the loss into three kinds:
+conversation's first request it uses the best earlier compatible match only within an explicit cache scope. It
+classifies diagnostic estimates into three kinds:
 
-- **changed:** a field changed, and the rest of the previous prompt after it was billed again. The field is named
+- **changed:** a field changed, potentially invalidating the previous prompt after it. The field is named
   from the request itself; a memory block written as JSON with a `source` reads as `memory 'balance' balance_due`.
-- **unread:** a prefix that could have been reused was not read, because no cache marker covered it or it was
-  below the provider minimum.
-- **expired:** the gap since the previous request was longer than `--ttl`.
+- **unread:** an estimated reusable prefix was not read. Missing markers and provider minimums are possible
+  explanations; eviction, routing and other provider behavior can also cause misses.
+- **expired:** the gap since the previous request reached `--ttl`; this is a timing hypothesis.
 
-Token counts are the provider's input total, split in proportion to bytes. The loss is priced at the write price
-minus the read price. It is an upper bound on what a better layout could save, since data that really changed has
-to be billed again anyway.
+Token positions are estimated from the provider's input total in proportion to bytes. The diagnostic opportunity
+uses write/read price differences and is capped against the request's non-read spending. It is not measured savings.
 
 ## On the committed runs
 
-The committed runs store usage but not requests. `--from-domain` and `--from-fleet` rebuild each request with the
+Older committed runs store usage but not requests. `--from-domain` and `--from-fleet` rebuild each request with the
 harness that sent it; the content is the same apart from the session nonce. They then pair each request with the
-usage the provider actually returned.
+usage the provider actually returned. New domain request captures are exported directly. The following table is
+the historical prototype output before capped attribution and scope checks; do not treat its amounts as savings.
 
 Claude, 60 turns, six scenarios, 2 repeats (`domain-claude-sonnet-5-60turn.json`):
 
@@ -64,3 +65,59 @@ gpt-5.6 is similar: 73% and 0.82M units for tuned front, and 90% and 0.22M for p
 The prototype reads Anthropic Messages and OpenAI Responses shapes. It attributes each loss to the first changed
 leaf only. Its token estimate is proportional to bytes. It has been run only on the committed synthetic logs, never
 on a production log.
+
+## Production log contract and validation workflow
+
+No production-log validation has been completed. The audit accepts captured logs now; the workflow below measures
+whether its diagnostic labels work on a particular assistant before using them to prioritize changes.
+
+```json
+{"conversation":"c-1","request_id":"req-1","cache_scope":"provider-project-route-A","ts":1800000000,"source":"production-captured","request":{"model":"model-id","instructions":"policy","input":"question"},"usage":{"cached":0,"written":0,"uncached":1200}}
+```
+
+`cache_scope` is a nonsecret identifier for the actual cache-sharing boundary (provider, account/project and route).
+Cross-conversation matching is disabled without it. Different model IDs, prompt cache keys and provider-routing
+settings are never matched. Within-conversation request order must be chronological; use chronological input overall
+for cross-conversation analysis. Missing timestamps are reported, and cannot establish expiry. The configured TTL is
+a hypothesis about retention; a gap beyond it does not prove why a provider missed. Identical prefixes may miss due
+to routing, eviction or other provider behavior.
+
+The audit validates usage as disjoint nonnegative integer token buckets, rejects duplicate request IDs and reports
+missing timestamps, scope and request identities. It includes the write premium in `billed_input_units`: this is
+observed usage priced at the ratios supplied, not an invoice total. Analyze different pricing cohorts separately.
+
+Attribution still estimates token positions from bytes. It reports every differing previous leaf in `changed_fields`
+and assigns the diagnostic estimate only once, to the first divergent field. Later changed fields are suspects,
+not additive savings. `estimated_miss_opportunity_units` is capped against measured non-read spending per request;
+it is **not recoverable savings**, a guaranteed upper bound on realizable savings, or a causal estimate. Individual
+event/cause `lost_units` is retained as a legacy field name with that same diagnostic meaning. Existing consumers
+should replace `estimated_lost_units` and `billed_input_units_approx` with the new totals fields.
+
+1. Capture representative traffic, including short sessions, tool rounds, idle gaps and shared prefixes. Keep
+   production records private and apply consistent redaction if exporting; redaction can change measured prefixes.
+2. Select an independent sample before viewing audit predictions. Have an operator or controlled instrumentation
+   label cache-miss categories using exact requests, marker configuration, timing and provider evidence. Include
+   negative examples. Leave genuinely unknown cases unannotated; report their count.
+3. Add annotations to those rows. Kinds may be `changed`, `unread`, `expired`, or an empty list for no detected
+   category. For `changed`, also supply the expected first field label:
+
+```json
+{"annotation":{"kinds":["changed"],"first_changed_field":"memory 'account' balance"}}
+```
+
+4. Run the diagnostic validation:
+
+```bash
+python scripts/cache_audit.py captured.jsonl --ttl 300 --validate-labels
+```
+
+The report gives per-class TP/FP/FN, precision/recall, first-field matches and annotation coverage. It refuses to
+claim validation when no annotations exist. Labels supplied by the same heuristic are not independent validation;
+the tool cannot authenticate annotator provenance. Predefine acceptance thresholds with the assistant owner.
+5. Test the proposed repair with the randomized [four-arm pilot](PILOT.md). That comparison measures realized cost,
+   quality and latency. Diagnostic-label agreement alone does not validate estimated dollar savings.
+
+New domain runs captured with `--capture-requests` export recorded requests and timestamps, tagged
+`captured-synthetic`. Old scripted runs are tagged `reconstructed-synthetic`; their reconstructed timing and requests
+must not establish production validity. Model-text runs without captured requests cannot be reconstructed by
+substituting scripted answers and are rejected.
