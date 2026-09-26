@@ -56,6 +56,95 @@ def test_openrouter_model_names(model, name):
     assert live.openrouter_model(model) == name
 
 
+def test_anthropic_runs_go_to_anthropic_unless_openrouter_is_asked(monkeypatch):
+    from types import SimpleNamespace
+    request = {"model": "claude-sonnet-5", "max_tokens": 10, "messages": []}
+    cfg = SimpleNamespace(thinking="default")
+    assert live.request_payload("anthropic", request, cfg) == request
+    routed = live.request_payload("anthropic", request, SimpleNamespace(thinking="disabled", anthropic_route="openrouter"))
+    assert routed["model"] == "anthropic/claude-sonnet-5" and routed["thinking"] == {"type": "disabled"}
+    assert routed["extra_body"]["provider"] == {"order": ["Anthropic"], "allow_fallbacks": False}
+
+    for name in (*live.ANTHROPIC_KEYS, "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(SystemExit, match="PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY"):
+        live.make_client("anthropic")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    with pytest.raises(SystemExit, match="PCF_ANTHROPIC_API_KEY"):
+        live.make_client("anthropic")  # an OpenRouter key never stands in for an Anthropic one
+    monkeypatch.setenv("PCF_ANTHROPIC_API_KEY", "pcf-key")
+    # CI has no provider SDKs: a stand-in records the arguments. The base URL is always passed explicitly, so an
+    # inherited ANTHROPIC_BASE_URL cannot redirect a paid run.
+    monkeypatch.setitem(sys.modules, "anthropic", SimpleNamespace(Anthropic=lambda **kwargs: kwargs))
+    assert live.make_client("anthropic") == {"api_key": "pcf-key", "base_url": "https://api.anthropic.com"}
+    assert live.make_client("anthropic", "openrouter") == {"api_key": "k", "base_url": "https://openrouter.ai/api"}
+
+
+@pytest.mark.parametrize("status", [429, 503])
+def test_live_call_retries_transient_provider_status(status):
+    from types import SimpleNamespace
+
+    class Transient(Exception):
+        status_code = status
+
+    class Responses:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise Transient("try again")
+            usage = SimpleNamespace(input_tokens=10, output_tokens=2, output_tokens_details=None)
+            return SimpleNamespace(usage=usage, model="gpt-test", output_text="ok", status="completed")
+
+    responses = Responses()
+    cfg = SimpleNamespace(effort="low", max_attempts=2, retry_base_seconds=0)
+    _, answer, out = live.call("openai", SimpleNamespace(responses=responses), {"model": "gpt-test"}, cfg)
+    assert answer == "ok" and out["attempts"] == 2 and responses.calls == 2
+
+
+def test_live_call_does_not_retry_missing_usage_or_sdk_drift():
+    from types import SimpleNamespace
+
+    class Responses:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            return SimpleNamespace(usage=None, model="gpt-test", output_text="", status="completed")
+
+    responses = Responses()
+    cfg = SimpleNamespace(effort="low", max_attempts=3, retry_base_seconds=0)
+    with pytest.raises(live.ProviderProtocolError, match="missing input/output usage"):
+        live.call("openai", SimpleNamespace(responses=responses), {"model": "gpt-test"}, cfg)
+    assert responses.calls == 1
+    with pytest.raises(live.ProviderProtocolError, match="responses.create"):
+        live.call("openai", SimpleNamespace(), {"model": "gpt-test"}, cfg)
+
+
+def test_live_call_surfaces_exhausted_server_errors():
+    from types import SimpleNamespace
+
+    class ServerError(Exception):
+        status_code = 500
+
+    class Messages:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            raise ServerError("down")
+
+    messages = Messages()
+    cfg = SimpleNamespace(thinking="default", anthropic_route="direct", max_attempts=2, retry_base_seconds=0)
+    with pytest.raises(ServerError, match="down"):
+        live.call("anthropic", SimpleNamespace(messages=messages), {"model": "claude-test"}, cfg)
+    assert messages.calls == 2
+
+
 def test_calibration_labels_separate_value_from_instruction_compliance():
     import importlib.util
     import os

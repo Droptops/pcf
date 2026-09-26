@@ -1,0 +1,48 @@
+{
+  "evidence_version": 1,
+  "pilot_id": "replace-after-a-real-production-pilot",
+  "source": "production",
+  "decision": "pending",
+  "preregistered_at": "2026-01-01T00:00:00Z",
+  "started_at": "2026-01-02T00:00:00Z",
+  "ended_at": "2026-01-03T00:00:00Z",
+  "provider": "replace",
+  "model": "replace",
+  "deployment_revision": "replace",
+  "minimum_conversations_per_arm": 1,
+  "actual_prices_per_million_tokens": {
+    "uncached_input": 1,
+    "cache_write": 1.25,
+    "cache_read": 0.1,
+    "output": 5
+  },
+  "arms": {
+    "front-tuned": {"conversations": 0, "requests": 0, "failures": 0},
+    "echo-all": {"conversations": 0, "requests": 0, "failures": 0},
+    "fixed-tail": {"conversations": 0, "requests": 0, "failures": 0},
+    "placed": {"conversations": 0, "requests": 0, "failures": 0}
+  },
+  "blind_review": {
+    "blinded": false,
+    "independent_reviewers": 0,
+    "rubric_version": "replace",
+    "minimum_reviewed_conversations_per_arm": 1,
+    "reviewed_conversations_by_arm": {"front-tuned": 0, "echo-all": 0, "fixed-tail": 0, "placed": 0},
+    "inter_rater_agreement": 0,
+    "disagreements_adjudicated": false
+  },
+  "gates": {
+    "placed_vs_fixed_tail_input_cost": {"passed": false, "estimate": 0, "limit": 0, "comparison": "replace"},
+    "placed_vs_front_tuned_input_cost": {"passed": false, "estimate": 0, "limit": 0, "comparison": "replace"},
+    "quality_noninferiority": {"passed": false, "estimate": 0, "limit": 0, "comparison": "replace"},
+    "blind_quality_noninferiority": {"passed": false, "estimate": 0, "limit": 0, "comparison": "replace"},
+    "latency": {"passed": false, "estimate": 0, "limit": 0, "comparison": "replace"},
+    "failure_rate": {"passed": false, "estimate": 0, "limit": 0, "comparison": "replace"}
+  },
+  "artifacts": {
+    "pilot_log_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "blind_review_log_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "analysis_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "approvals": []
+}

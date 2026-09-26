@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,13 +8,13 @@ version = "0.3.0a1"
 description = "Portable Context Format: provider-neutral LLM context compiled into cache-aware OpenAI and Anthropic requests"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Manny Villegas", email = "m4villegas@gmail.com" }]
 dependencies = ["rfc8785>=0.1.4,<0.2", "jsonschema>=4.23,<5"]
 keywords = ["llm", "prompt-caching", "context", "routing", "openai", "anthropic"]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",

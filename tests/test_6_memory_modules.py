@@ -199,9 +199,12 @@ def test_placer_takes_prices_from_a_router_candidate():
     from pcf.placement import MemoryPlacer
     from pcf.router import Candidate
     compiler = OpenAICompiler("gpt-5.6")
-    placer = MemoryPlacer.for_candidate(Candidate(compiler, PrefixCache(1800), 2.0, 0.2, is_fallback=True))
+    placer = MemoryPlacer.for_candidate(Candidate(compiler, PrefixCache(1800), 2.0, 0.2, is_fallback=True),
+                                        expected_turns=40)
     assert placer.tokenizer is compiler.tokenizer
     assert (placer.write_multiplier, placer.read_multiplier) == (1.25, 0.1)
+    assert placer.min_cacheable_tokens == compiler.descriptor.min_cacheable_tokens
+    assert placer.expected_turns == 40
     with pytest.raises(ValueError):
         MemoryPlacer.for_candidate(Candidate(compiler, PrefixCache(1800), 0.0, 0.0, is_fallback=True))
 
@@ -284,3 +287,69 @@ def test_placer_takes_prices_and_minimum_from_a_compiler_and_does_not_move_uncac
     history = [_history(n) for n in range(5)]
     tails = [small.split([Segment("mc", "memory", _module("c", v))], history)[1] for v in range(6)]
     assert not any(tails)  # below the minimum nothing is cached, so moving saves nothing
+
+
+def test_placement_turn_is_idempotent_and_rejects_changed_retry_inputs():
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import MemoryPlacer
+    placer = MemoryPlacer(WordTokenizer())
+    history = [_history(0)]
+    memory = [Segment("mc", "memory", _module("c", 0))]
+    first = placer.split(memory, history, turn_id="request-0", expected_revision=0)
+    state = placer.export_state()
+    assert placer.split(memory, history, turn_id="request-0", expected_revision=0) == first
+    assert placer.export_state() == state and placer.revision == 1
+    with pytest.raises(ValueError, match="different placement inputs"):
+        placer.split([Segment("mc", "memory", _module("c", 1))], history, turn_id="request-0")
+
+
+def test_placement_state_survives_json_round_trip_and_delayed_retry():
+    import json
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import MemoryPlacer
+    tokenizer, history = WordTokenizer(), [_history(n) for n in range(4)]
+    original = MemoryPlacer(tokenizer, expected_turns=30)
+    inputs = [[Segment("mc", "memory", _module("c", v))] for v in (0, 1, 2)]
+    decisions = [original.split(mem, history, turn_id=f"request-{n}", expected_revision=n)
+                 for n, mem in enumerate(inputs)]
+    saved = json.loads(json.dumps(original.export_state()))
+    restarted = MemoryPlacer.from_state(tokenizer, saved)
+    assert restarted.export_state() == saved and restarted.revision == 3
+    before = restarted.export_state()
+    assert restarted.split(inputs[0], history, turn_id="request-0") == decisions[0]
+    assert restarted.export_state() == before  # a delayed retry is not a new observation
+    next_memory = [Segment("mc", "memory", _module("c", 3))]
+    assert restarted.split(next_memory, history, turn_id="request-3", expected_revision=3) == \
+        original.split(next_memory, history, turn_id="request-3", expected_revision=3)
+    assert restarted.export_state() == original.export_state()
+
+
+def test_expected_revision_rejects_one_of_two_concurrent_turns():
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import ConcurrentPlacementUpdate, MemoryPlacer
+    placer, barrier = MemoryPlacer(WordTokenizer()), threading.Barrier(2)
+    history = [_history(0)]
+
+    def attempt(n):
+        barrier.wait()
+        try:
+            placer.split([Segment("mc", "memory", _module("c", n))], history,
+                         turn_id=f"request-{n}", expected_revision=0)
+            return "committed"
+        except ConcurrentPlacementUpdate:
+            return "conflict"
+
+    with ThreadPoolExecutor(2) as pool:
+        results = list(pool.map(attempt, (0, 1)))
+    assert sorted(results) == ["committed", "conflict"]
+    assert placer.revision == 1 and placer.export_state()["turns"] == 1
+
+
+def test_placement_state_rejects_configuration_drift():
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import MemoryPlacer
+    state = MemoryPlacer(WordTokenizer()).export_state()
+    with pytest.raises(ValueError, match="configuration"):
+        MemoryPlacer(WordTokenizer(), decay=0.5).restore_state(state)

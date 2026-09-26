@@ -1,0 +1,39 @@
+name: Release gate
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Require protected main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .protected)" = true
+      - name: Install validation and build dependencies
+        run: python -m pip install -e '.[test]' build twine
+      - name: Test
+        run: |
+          ruff check .
+          python -m pytest -q
+          python examples/demo.py
+          python scripts/live_smoke.py
+      - name: Require real production evidence and exact version tag
+        run: python scripts/check_release_gate.py release/production-pilot.json --tag "$GITHUB_REF_NAME"
+      - name: Build and inspect distributions
+        run: |
+          python -m build
+          python -m twine check dist/*

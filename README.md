@@ -317,8 +317,9 @@ python scripts/live_memory_placement.py --regrade results/2026-09-25/e1-openai-t
 
 Live runs make paid API calls and need the provider SDKs (`python -m pip install -e '.[live]'`). The live scripts
 are offline by default; `--run --provider openai` reads `OPENAI_API_KEY`, and `--run --provider anthropic` reads
-`OPENROUTER_API_KEY` and sends the Anthropic adapter's request to OpenRouter's Anthropic-compatible endpoint, pinned
-to Anthropic upstream.
+`PCF_ANTHROPIC_API_KEY` (or `ANTHROPIC_API_KEY`) and sends the Anthropic adapter's request to Anthropic's API.
+Claude results published up to 2026-09-26 went through OpenRouter, pinned to Anthropic upstream; `--anthropic-route
+openrouter` (with `OPENROUTER_API_KEY`) reproduces them. OpenRouter is otherwise used only for the Jev router.
 
 ## Repository layout
 
@@ -337,14 +338,32 @@ to Anthropic upstream.
 
 `MemoryPlacer` decides per module. Stable modules stay in front, where they stay cached. A module moves after the
 history once p·(w−r)·(m+H) > (1−r)·m, where p is its observed change rate, m its size, H the history and later
-front modules behind it, and w and r the cache write and read price multipliers. Get the prices from
-`MemoryPlacer.for_candidate(candidate)`. List modules stable-first; memory with instruction authority never moves.
+front modules behind it, and w and r are the cache write and read price multipliers. Use
+`MemoryPlacer.for_compiler(compiler)` or `MemoryPlacer.for_candidate(candidate)` so prices and the provider's
+minimum cacheable length stay together. List modules stable-first; memory with instruction authority never moves.
 Tail memory never takes a cache marker.
 
 Front memory that changes should be marked `stable=False`, or its marker is rewritten every turn (and on OpenAI,
 whose budget keeps three history endpoints, it can take the system prompt's slot). Pass `split(..., cold=True)`
 when the provider cache has expired, predicted from time (`now - last_request >= descriptor.ttl_seconds`), not from
 a zero cache read: by the time usage shows a miss, that request has already rewritten the cache in the old layout.
+
+`MemoryPlacer` is stateful. In production, give every logical turn a durable id, restore the conversation's state,
+and save the new state with a compare-and-set on its revision:
+
+```python
+placer = MemoryPlacer.for_compiler(compiler, expected_turns=40)
+if saved_state is not None:
+    placer.restore_state(saved_state)
+revision = placer.revision
+front, tail = placer.split(memory, history, turn_id=request_id, expected_revision=revision)
+state_store.compare_and_set(conversation_id, revision, placer.export_state())
+```
+
+A retry with the same `turn_id` and inputs returns the recorded decision without updating the change-rate estimate.
+Reusing the id with different inputs is rejected. Two workers planning new turns from the same revision cannot both
+commit: one receives `ConcurrentPlacementUpdate`; the state store's compare-and-set provides the same guarantee
+across processes. State documents are versioned and contain module hashes and decisions, not module contents.
 
 ## TypeScript
 

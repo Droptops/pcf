@@ -27,6 +27,12 @@ change. The decisions match the Python implementation turn for turn on the repos
 random sessions near the decision threshold (`test/placer.test.ts`; regenerate the fixture with
 `python scripts/export_placer_fixture.py`).
 
+For retries and distributed workers, pass a durable `turnId` and `expectedRevision`, save `exportState()` with a
+compare-and-set on `revision`, and call `restoreState()` after a restart. A repeated id with identical inputs returns
+the recorded decision; changed inputs are rejected. Set `tokenizerId` to a stable identifier so restores also reject
+tokenizer drift. State contains module hashes and placement decisions, not module contents; still protect it as
+conversation metadata.
+
 What this port does not include: the Python compiler's full breakpoint budgeting, OpenAI explicit cache breakpoints,
 tool definitions, usage accounting and the router. `layoutAnthropic` sets at most three markers: the first front
 module, the last stable front module, and the end of the history.
