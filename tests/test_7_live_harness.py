@@ -72,10 +72,12 @@ def test_anthropic_runs_go_to_anthropic_unless_openrouter_is_asked(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
     with pytest.raises(SystemExit, match="PCF_ANTHROPIC_API_KEY"):
         live.make_client("anthropic")  # an OpenRouter key never stands in for an Anthropic one
-    monkeypatch.setenv("PCF_ANTHROPIC_API_KEY", "k")
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://sandbox-proxy.invalid")
-    assert str(live.make_client("anthropic").base_url).startswith("https://api.anthropic.com")
-    assert str(live.make_client("anthropic", "openrouter").base_url).startswith("https://openrouter.ai/api")
+    monkeypatch.setenv("PCF_ANTHROPIC_API_KEY", "pcf-key")
+    # CI has no provider SDKs: a stand-in records the arguments. The base URL is always passed explicitly, so an
+    # inherited ANTHROPIC_BASE_URL cannot redirect a paid run.
+    monkeypatch.setitem(sys.modules, "anthropic", SimpleNamespace(Anthropic=lambda **kwargs: kwargs))
+    assert live.make_client("anthropic") == {"api_key": "pcf-key", "base_url": "https://api.anthropic.com"}
+    assert live.make_client("anthropic", "openrouter") == {"api_key": "k", "base_url": "https://openrouter.ai/api"}
 
 
 def test_calibration_labels_separate_value_from_instruction_compliance():
