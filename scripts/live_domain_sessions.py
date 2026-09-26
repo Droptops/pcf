@@ -6,6 +6,9 @@ Runs the six scenarios in scripts/domain_scenarios.py (healthcare, government, e
   front-tuned - the same order, with the modules that change marked `stable=False` (the best front layout)
   tail        - all memory after history, just before the question
   placed      - MemoryPlacer picks front or tail per module from observed change rates and cache prices
+  echo        - memory frozen in front as it was on turn 0 (the cached prefix never changes), and the current
+                version of the module the question asks about repeated before the question, marked current
+  echo-all    - the same, repeating every module that changes (an application rarely knows which one is asked)
 Replies are graded by the first value asserted from the question's answer set. Costs use the same units as
 scripts/live_memory_placement.py. --analyze FILE... prints per-scenario totals and exact McNemar tests pairing
 each turn across layouts; --regrade FILE re-grades a saved run with the current grader, offline.
@@ -36,7 +39,7 @@ spec = importlib.util.spec_from_file_location("placement", os.path.join(HERE, "l
 placement = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(placement)
 
-ARMS = ("front", "front-tuned", "tail", "placed")
+ARMS = ("front", "front-tuned", "tail", "placed", "echo", "echo-all")
 
 
 def memory(scenario, turn: int) -> list[Segment]:
@@ -71,8 +74,14 @@ def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None 
     system = Segment("s", "system", f"Session {nonce}-{key}-{arm}.\n" + scenario.system())
     history, rows, said = [], [], {}
     for turn in range(cfg.turns):
-        front, tail = arrange(arm, placer, memory(scenario, turn), history, scenario.volatile())
         ask, expected = scenario.question(turn)
+        if arm.startswith("echo"):
+            front = memory(scenario, 0)
+            wanted = scenario.volatile() if arm == "echo-all" else {ask.module} & scenario.volatile()
+            tail = [Segment(f"{s.id}-now", "memory", s.content, False, provenance=f"{s.id} (current)")
+                    for s in memory(scenario, turn) if s.id in wanted]
+        else:
+            front, tail = arrange(arm, placer, memory(scenario, turn), history, scenario.volatile())
         ctx = Context([system, *front, *history, *tail, Segment("u", "user", ask.text, stable=False)],
                       cache_namespace=f"{key}-{arm}-{nonce}")
         started = time.perf_counter()
@@ -173,7 +182,8 @@ def analyze(paths: list[str]) -> dict:
         for key, runs in per["runs"].items():
             for run in runs:
                 for a, b in (("front", "tail"), ("front", "placed"), ("front-tuned", "tail"),
-                             ("front-tuned", "placed"), ("tail", "placed")):
+                             ("front-tuned", "placed"), ("tail", "placed"), ("echo", "placed"),
+                             ("echo-all", "placed"), ("front-tuned", "echo"), ("front-tuned", "echo-all")):
                     if a not in arms or b not in arms:
                         continue
                     p = pairs.setdefault(f"{a} vs {b}", {"all": [0, 0], "stale_traps": [0, 0]})

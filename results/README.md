@@ -61,6 +61,8 @@ items.
 | `2026-09-25/domain-claude-sonnet-5-60turn.json` | claude-sonnet-5 via OpenRouter | same | same |
 | `2026-09-25/domain-gpt-5.6-60turn-after-fixes.json` | OpenAI gpt-5.6 | same | rerun on the current library, after the first-request anchor and move-turn fixes |
 | `2026-09-25/domain-claude-sonnet-5-60turn-after-fixes.json` | claude-sonnet-5 via OpenRouter | same | same; see `meta.note` for the recorded `git_sha` |
+| `2026-09-25/domain-gpt-5.6-60turn-echo.json` | OpenAI gpt-5.6 | 6 scenarios × front-tuned, placed, echo, echo-all × 2 repeats × 60 turns | the echo baseline; see `meta.note` |
+| `2026-09-25/domain-claude-sonnet-5-60turn-echo.json` | claude-sonnet-5 via OpenRouter | same | same |
 
 Domain table costs in the main README sum per-scenario means over repetitions; accuracy counts cover all
 repetitions. To pool the two compatible Claude runs, preserving all six repetitions per scenario:

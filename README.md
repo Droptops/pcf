@@ -7,11 +7,22 @@ the prompt stays identical from one request to the next. Most assistants put mem
 account state) near the top of the prompt, so every memory update invalidates the cache for the whole conversation
 after it, and the provider bills that history again on every turn.
 
-PCF describes a conversation once, in a provider-neutral format, and compiles it into native OpenAI or Anthropic
-requests with cache markers placed deliberately. It accounts for what each request will cost, including cache
-writes and reads, decides where each memory module should sit, and routes to a cheaper model only when a
-confidence scorer has passed a held-out calibration gate. It is a Python reference implementation and an
-offline-tested prototype.
+**The durable finding is a prompt convention:** keep stable text first, and put the memory that changes after the
+conversation history. Both vendors already advise stable-first; this repository measures what the second half is
+worth, and where it is not worth anything. A team can apply it by ordering blocks and setting cache markers in the
+provider SDK. What the repository adds:
+
+- **Evidence**, live on gpt-5.6 and claude-sonnet-5, with the raw results and the harnesses that produced them.
+- **A small layout helper**, `MemoryPlacer` in Python and [TypeScript](ts/), which decides per module from its change
+  rate and the cache prices, and sets cache markers. Its marker logic has had several bugs found only by running the
+  providers (see the changelog); treat it as a tested helper, not a guarantee.
+- **A cache audit** ([`scripts/cache_audit.py`](docs/CACHE_AUDIT.md)) that reads an assistant's existing request logs
+  and names the fields whose changes cost the most cache.
+
+Two parts are experiments, not products. The portable context format has one writer and no other reader; segment
+hashes are not provider cache keys and do not transfer cache state. The model router has one empirical result: the
+only scorer tested ranked rejected answers above accepted ones (AUC 0.328), so the gate has never admitted a
+cheaper model and always falls back.
 
 ## Headline result
 
@@ -26,15 +37,27 @@ the naive one:
 | Input cost, 60 turns, prefix shared across users | **0.53** | **0.50** |
 | Correct at 60 turns, tuned front → placed | 696 → 718 of 720 | 650 → 719 of 720 |
 | Median latency at 60 turns, tuned front → placed | 2.00 s → 1.91 s | 6.01 s → 3.73 s |
+| **Echo-all** at 60 turns: input cost, correct | 0.47, 719 of 720 | 0.51, 719 of 720 |
 
 - **The 60-turn rows are from the current library** (`domain-*-60turn-after-fixes.json`), after two cache-marker
   fixes found by the fleet test and the cache audit; the run before them gave 0.49 and 0.53, with 703 and 652 correct
   for tuned front and 720 and 719 for placed. Two of placed's three misses answered a negative balance as "a credit
   of $145.47", which the grader counts wrong.
-- **The saving comes from long, warm sessions.** It grows with conversation length and disappears when turns arrive
-  after the cache lifetime: in a Claude run with every turn past the 5-minute lifetime, no turn read the cache.
+- **A simpler layout does as well.** *Echo-all* leaves the memory in front unchanged all session (the cached prefix
+  never changes) and repeats every module that changes just before the question. In the same 60-turn runs it matched
+  `MemoryPlacer` within noise on cost and accuracy (placed 0.46 and 0.49, 717 and 718 correct). The accuracy gain over
+  tuned front is recency: the current value next to the question. Echoing only the field the question needs costs
+  less (0.36 and 0.38) but needs to know that field, and on Claude the stale values left in front drew replies about
+  three times longer that flagged the inconsistency. See [the echo baseline](#the-echo-baseline).
+- **When it does not pay.** Turns that arrive after the cache lifetime (5 minutes on Claude's default) read nothing:
+  in a Claude run with every turn past it, no turn read the cache, so casework with pauses between turns keeps
+  little of the 60-turn figure. At 24 turns the input saving is 12-14%. Structured outputs or tool calls will not
+  reproduce the shorter replies seen on Claude, so quote input cost, not total. Tail memory that changes between
+  turns conflicts with replaying extended-thinking blocks bound to the earlier prefix. Sessions that share a prefix
+  were tested with synchronized users only.
 - **Front layouts gave out-of-date values.** Most of their wrong answers repeated an older value instead of the
-  current record; placed memory sits next to the question. The exception is a small model with a record
+  current record; placed memory sits next to the question. The scripted replies state old values in the history on
+  purpose, so this measures recency against a planted stale value, not answer quality in general. The exception is a small model with a record
   that was not updated: see [Limits](#limits-of-the-evidence).
 - **Against the naive front layout** (every module cacheable), the domain workloads cost 3.7-4.1x more than placed
   memory at 24 turns (input plus output). That comparison flatters the method; the tuned numbers above are the ones to quote.
@@ -44,6 +67,29 @@ Recommended starting point: keep large stable reference modules in front and let
 modules. All-tail worked well on the smaller support workload below, but was substantially more expensive on the
 domain workloads with large stable references, including Claude. Compare layouts on your workload. For small
 models, see the caveat under [Limits](#limits-of-the-evidence).
+
+## The echo baseline
+
+A reviewer asked for the arm the experiments lacked: leave the cached prefix alone and repeat the current values next
+to the question. `scripts/live_domain_sessions.py` has two such arms. `echo` keeps the memory as it was on turn 0 in
+front and repeats the current version of the module the question asks about, marked current; `echo-all` repeats
+every module that changes. Six scenarios, 60 turns, 2 repeats, both providers, in the same runs as tuned front and
+`MemoryPlacer` (`results/2026-09-25/domain-*-60turn-echo.json`):
+
+| Against tuned front, 60 turns | gpt-5.6 input | total | correct | claude-sonnet-5 input | total | correct |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tuned front | 1 | 1 | 703/720 | 1 | 1 | 652/720 |
+| `MemoryPlacer` | 0.456 | 0.484 | 717/720 | 0.486 | 0.405 | 718/720 |
+| echo (the asked module) | 0.356 | 0.399 | 720/720 | 0.383 | 0.568 | 715/720 |
+| echo-all (every changing module) | 0.465 | 0.498 | 719/720 | 0.508 | 0.439 | 719/720 |
+
+Paired turn by turn, neither echo arm differs from `MemoryPlacer` in accuracy (discordant pairs 3/0, 2/0, 2/5 and
+2/1; exact McNemar p ≥ 0.25). Both beat tuned front (p < 0.001). The conclusion: put the current values next to the
+question. Moving them there and repeating them there cost about the same; repeating only what is asked costs less
+when the application knows it. Leaving stale copies in front has a cost of its own on Claude: with only the asked
+module current, Claude often noticed the contradiction ("I need to stop here and flag an issue with this session"),
+answered at about three times the length (277 against 96 output tokens), and 4 of its 5 wrong answers quoted the
+frozen record. Echo-all, with every changing value current, showed none of this.
 
 ## How it works
 
@@ -198,7 +244,7 @@ gpt-5.6 (`results/2026-09-25/domain-gpt-5.6.json`), same sessions:
 - `domain-gpt-5.6-run1.json` is an earlier gpt-5.6 run whose answers are confounded (a third asked for identity
   verification before the scenarios recorded it); its input costs match this run's.
 
-## Routing safety: the calibration gate
+## Routing safety: the calibration gate (experimental; has never routed)
 
 PCF routes a request to a cheaper model only when an external confidence scorer, validated on held-out contexts,
 says the cheaper model will answer well. We tested the third-party scorer Jev (`typesafe/jev-1.13-20260917` via

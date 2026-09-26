@@ -87,10 +87,10 @@ def test_tail_memory_renders_as_one_user_message_with_the_turn():
 
 
 def _placed_session(edits: list[int], place: bool, cold_at: tuple[int, ...] = (),
-                    report_cold: bool = True) -> tuple[int, list[str]]:
+                    report_cold: bool = True, **options) -> tuple[int, list[str]]:
     from pcf.families.sim import WordTokenizer
     from pcf.placement import MemoryPlacer
-    engine, placer, history, total, tail, now = family_a(), MemoryPlacer(WordTokenizer()), [], 0, [], 0
+    engine, placer, history, total, tail, now = family_a(), MemoryPlacer(WordTokenizer(), **options), [], 0, [], 0
     for n, version in enumerate(edits):
         now += 1000 if n in cold_at else 10  # 1000s outlives the 300s TTL
         memory = [Segment("ma", "memory", _module("a")), Segment("mc", "memory", _module("c", version))]
@@ -127,14 +127,30 @@ def test_placer_keeps_changing_memory_in_front_without_history_and_rejects_other
 BUSY_THEN_QUIET = [*range(8), *[7] * 16]
 
 
-def test_quiet_module_returns_to_front_only_when_the_cache_is_cold():
-    warm_cost, warm_tail = _placed_session(BUSY_THEN_QUIET, place=True)
-    assert warm_tail == ["mc"]  # moving back while warm would re-bill the history
-    cold_cost, cold_tail = _placed_session(BUSY_THEN_QUIET, place=True, cold_at=(8, 16))
+PLAIN = {"write_multiplier": 1.0, "read_multiplier": 0.0}  # the plain token rule
+
+
+def test_quiet_module_returns_to_front_when_the_cache_is_cold():
+    warm_cost, warm_tail = _placed_session(BUSY_THEN_QUIET, place=True, **PLAIN)
+    assert warm_tail == ["mc"]  # 16 quiet turns do not repay re-billing the history
+    cold_cost, cold_tail = _placed_session(BUSY_THEN_QUIET, place=True, cold_at=(8, 16), **PLAIN)
     assert cold_tail == []
-    unreported, unreported_tail = _placed_session(BUSY_THEN_QUIET, place=True, cold_at=(8, 16), report_cold=False)
+    unreported, unreported_tail = _placed_session(BUSY_THEN_QUIET, place=True, cold_at=(8, 16), report_cold=False,
+                                                  **PLAIN)
     assert unreported_tail == ["mc"] and cold_cost < unreported
     assert cold_cost < _placed_session(BUSY_THEN_QUIET, place=False, cold_at=(8, 16))[0]
+
+
+LONG_QUIET = [*range(8), *[7] * 60]
+
+
+def test_quiet_module_returns_while_warm_when_the_conversation_will_last():
+    sticky, sticky_tail = _placed_session(LONG_QUIET, place=True)
+    returned, returned_tail = _placed_session(LONG_QUIET, place=True, expected_turns=100)
+    assert sticky_tail == ["mc"] and returned_tail == []
+    assert returned < sticky
+    periodic = [n // 6 for n in range(60)]  # a steady period is never quiet long enough to bounce
+    assert _placed_session(periodic, place=True, expected_turns=60) == _placed_session(periodic, place=True)
 
 
 def test_decay_must_be_a_fraction():
@@ -171,7 +187,7 @@ def test_cache_prices_shift_the_placement_threshold():
         placer = MemoryPlacer(XTokenizer(), **prices)
         return [placer.split([Segment("m", "memory", "x" * 100 + v)], history)[1] != [] for v in "ab"][-1]
 
-    assert not tail_after_one_change()  # 0.5 * 190 = 95 < 100: plain token rule keeps it in front
+    assert not tail_after_one_change(**PLAIN)  # 0.5 * 190 = 95 < 100: plain token rule keeps it in front
     assert tail_after_one_change(write_multiplier=1.25, read_multiplier=0.1)  # 0.5 * 1.15 * 190 > 0.9 * 100
     with pytest.raises(ValueError):
         MemoryPlacer(XTokenizer(), write_multiplier=0.1, read_multiplier=0.1)
@@ -255,3 +271,16 @@ def test_placer_keeps_the_last_front_anchor_when_modules_are_only_appended():
     assert [(s.id, s.stable) for s in front] == [("ref", True), ("plan", True), ("new", False)]
     front, _ = placer.split([*base, Segment("new", "memory", "new module", provenance="new")], [])
     assert all(s.stable for s in front)
+
+
+def test_placer_takes_prices_and_minimum_from_a_compiler_and_does_not_move_uncacheable_memory():
+    from pcf.families.anthropic_adapter import AnthropicCompiler
+    from pcf.families.sim import WordTokenizer
+    from pcf.placement import MemoryPlacer
+    placer = MemoryPlacer.for_compiler(AnthropicCompiler("claude-sonnet-5"), expected_turns=30)
+    assert (placer.write_multiplier, placer.read_multiplier, placer.expected_turns) == (1.25, 0.1, 30)
+    assert placer.min_cacheable_tokens > 0
+    small = MemoryPlacer(WordTokenizer(), min_cacheable_tokens=10_000)
+    history = [_history(n) for n in range(5)]
+    tails = [small.split([Segment("mc", "memory", _module("c", v))], history)[1] for v in range(6)]
+    assert not any(tails)  # below the minimum nothing is cached, so moving saves nothing
