@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add actual visible-response history (`--history-mode model-text`), outbound request capture and a declared
+  `fixed-tail` baseline to domain evaluation. Keep legacy scripted runs separate; report repeated prior errors.
+- Expand the production pilot to four arms with stable conversation assignment and all six descriptive pairwise
+  comparisons. Preserve the legacy two-arm Python APIs and analysis; CLI assignment defaults to four arms
+  (`--legacy-two-arm` restores the old assignment). Validate measurements and handle zero-cost denominators.
+- Audit observed usage cost separately from heuristic attribution; include write premiums, cap diagnostic estimates,
+  list changed-field suspects, check cache scope/model compatibility, and validate independently annotated logs.
+  Replace totals `estimated_lost_units`/`billed_input_units_approx` with
+  `estimated_miss_opportunity_units`/`billed_input_units`. Event `lost_units` remains a documented legacy name.
+- No provider runs or production-log validation accompany these capabilities. Wire format, hashes and provider
+  compiler cache identity are unchanged.
+
 - Add the echo baseline (`echo`, `echo-all` arms in `live_domain_sessions.py`) and live 60-turn runs: repeating every
   changing module before the question, with the front left unchanged, matches `MemoryPlacer` on cost and accuracy.
 - `MemoryPlacer` defaults to the common cache prices (write 1.25, read 0.1) instead of the plain token rule (1, 0);

@@ -161,20 +161,26 @@ def make_compiler(provider: str, model: str):
     return OpenAICompiler(model) if provider == "openai" else AnthropicCompiler(model, max_tokens=4096)
 
 
+def request_payload(provider: str, request: dict, cfg) -> dict:
+    """The outbound SDK arguments, shared with request capture in the domain harness."""
+    if provider == "openai":
+        return {**request, "max_output_tokens": 4096, "reasoning": {"effort": cfg.effort}}
+    thinking = {"thinking": {"type": "disabled"}} if cfg.thinking == "disabled" else {}
+    return {**request, "model": openrouter_model(request["model"]), **thinking,
+            "extra_body": {"provider": {"order": ["Anthropic"], "allow_fallbacks": False}}}
+
+
 def call(provider: str, client, request: dict, cfg) -> tuple[object, str, dict]:
     """(response, answer text, output usage) for one compiled request."""
     if provider == "openai":
         # Low effort and room to answer: at 64 tokens reasoning models can return nothing visible.
-        response = client.responses.create(**request, max_output_tokens=4096, reasoning={"effort": cfg.effort})
+        response = client.responses.create(**request_payload(provider, request, cfg))
         details = getattr(response.usage, "output_tokens_details", None)
         out = {"output_tokens": response.usage.output_tokens,
                "reasoning_tokens": getattr(details, "reasoning_tokens", 0) or 0, "served_model": response.model,
                "stop": getattr(response, "status", None)}
         return response, getattr(response, "output_text", "") or "", out
-    extra = {"provider": {"order": ["Anthropic"], "allow_fallbacks": False}}
-    thinking = {"thinking": {"type": "disabled"}} if cfg.thinking == "disabled" else {}
-    response = client.messages.create(**{**request, "model": openrouter_model(request["model"]), **thinking},
-                                      extra_body=extra)
+    response = client.messages.create(**request_payload(provider, request, cfg))
     out = {"output_tokens": response.usage.output_tokens, "served_model": response.model, "stop": response.stop_reason,
            "thinking_blocks": sum(getattr(b, "type", "") == "thinking" for b in response.content)}
     return response, "".join(getattr(block, "text", "") for block in response.content), out

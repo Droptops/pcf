@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Memory placement on synthetic domain workloads. Offline by default; paid calls need --run.
 
-Runs the six scenarios in scripts/domain_scenarios.py (healthcare, government, enterprise) under four layouts:
+Runs the six scenarios in scripts/domain_scenarios.py (healthcare, government, enterprise) under seven layouts:
   front       - reference and record modules before history, stable first, all left `stable` (a naive layout)
   front-tuned - the same order, with the modules that change marked `stable=False` (the best front layout)
   tail        - all memory after history, just before the question
@@ -9,6 +9,9 @@ Runs the six scenarios in scripts/domain_scenarios.py (healthcare, government, e
   echo        - memory frozen in front as it was on turn 0 (the cached prefix never changes), and the current
                 version of the module the question asks about repeated before the question, marked current
   echo-all    - the same, repeating every module that changes (an application rarely knows which one is asked)
+  fixed-tail  - declared volatile modules after history from turn zero, stable modules in front
+--history-mode model-text replays each arm's actual visible responses instead of scripted replies. Questions and
+records remain synthetic; this mode does not replay hidden reasoning or execute tools.
 Replies are graded by the first value asserted from the question's answer set. Costs use the same units as
 scripts/live_memory_placement.py. --analyze FILE... prints per-scenario totals and exact McNemar tests pairing
 each turn across layouts; --regrade FILE re-grades a saved run with the current grader, offline.
@@ -39,7 +42,7 @@ spec = importlib.util.spec_from_file_location("placement", os.path.join(HERE, "l
 placement = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(placement)
 
-ARMS = ("front", "front-tuned", "tail", "placed", "echo", "echo-all")
+ARMS = ("front", "front-tuned", "tail", "placed", "echo", "echo-all", "fixed-tail")
 
 
 def memory(scenario, turn: int) -> list[Segment]:
@@ -48,6 +51,10 @@ def memory(scenario, turn: int) -> list[Segment]:
 
 
 def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], volatile: set[str]):
+    if arm == "fixed-tail":
+        return ([s for s in mem if s.id not in volatile],
+                [Segment(s.id, "memory", s.content, False, provenance=s.provenance)
+                 for s in mem if s.id in volatile])
     if arm == "front-tuned":
         return [Segment(s.id, "memory", s.content, s.id not in volatile, provenance=s.provenance) for s in mem], []
     if arm == "placed":
@@ -68,11 +75,16 @@ def grade(ask, answer: str, expected: str, stale: str | None, violation_tokens: 
 def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None = None) -> list[dict]:
     """One session; `sink`, when given, receives each compiled request."""
     scenario = SCENARIOS[key]
+    history_mode = getattr(cfg, "history_mode", "scripted")
+    if history_mode not in ("scripted", "model-text"):
+        raise ValueError("unknown history mode")
+    if history_mode == "model-text" and client is None:
+        raise ValueError("model-text history requires responses; use --run")
     compiler = placement.make_compiler(cfg.provider, cfg.model)
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=cfg.read_multiplier)
     system = Segment("s", "system", f"Session {nonce}-{key}-{arm}.\n" + scenario.system())
-    history, rows, said = [], [], {}
+    history, rows, said, prior = [], [], {}, {}
     for turn in range(cfg.turns):
         ask, expected = scenario.question(turn)
         if arm.startswith("echo"):
@@ -95,6 +107,10 @@ def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None 
                "stale": stale, "stale_trap": stale is not None and normalize(ask.kind, stale) !=
                normalize(ask.kind, expected), "est_tokens": compiled.total_tokens,
                "est_written": estimate.cache_creation_tokens, "compile_ms": compile_ms}
+        row["history_mode"] = history_mode
+        if getattr(cfg, "capture_requests", False):
+            row["request"] = placement.request_payload(cfg.provider, compiled.request, cfg)
+            row["request_ts"] = time.time()
         if client is not None:
             started = time.perf_counter()
             response, answer, out = placement.call(cfg.provider, client, compiled.request, cfg)
@@ -103,11 +119,17 @@ def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None 
             row.update(cached=usage.cache_read_input_tokens, written=usage.cache_creation_input_tokens,
                        uncached=usage.input_tokens, answer=answer, **out,
                        **grade(ask, answer, expected, stale, cfg.violation_tokens))
+            previous = prior.get(ask.text)
+            row["prior_error_exposed"] = bool(history_mode == "model-text" and previous and not previous[1])
+            row["repeated_prior_error"] = bool(row["prior_error_exposed"] and not row["correct"]
+                                                and row["value"] and row["value"] == previous[0])
+            prior[ask.text] = (row["value"], row["correct"])
         rows.append(row)
-        said[ask.text] = expected
+        reply = answer if history_mode == "model-text" else scenario.reply(turn, expected)
+        said[ask.text] = (answer_value(ask, reply) or None) if history_mode == "model-text" else expected
         history.append(Segment(f"h{turn}", "history", [{"role": "user", "content": ask.text},
                                                         {"role": "assistant",
-                                                         "content": scenario.reply(turn, expected)}]))
+                                                         "content": reply}]))
     return rows
 
 
@@ -121,10 +143,17 @@ def regrade(path: str) -> dict:
         scenario = SCENARIOS[key]
         for i, run in enumerate(runs):
             for arm in meta["arms"]:
+                prior = {}
                 for row in run[arm]:
                     ask, expected = scenario.question(row["turn"])
                     old = row["correct"]
                     row.update(grade(ask, row["answer"], expected, row["stale"], meta["violation_tokens"]))
+                    if meta.get("history_mode", "scripted") == "model-text":
+                        previous = prior.get(ask.text)
+                        row["prior_error_exposed"] = bool(previous and not previous[1])
+                        row["repeated_prior_error"] = bool(row["prior_error_exposed"] and not row["correct"]
+                                                           and row["value"] and row["value"] == previous[0])
+                        prior[ask.text] = (row["value"], row["correct"])
                     if old != row["correct"]:
                         changes.append({"scenario": key, "run": i, "arm": arm, "turn": row["turn"], "now": row["correct"]})
             run["summary"] = {arm: placement.summarize(run[arm], prices, meta["write_multiplier"]) for arm in meta["arms"]}
@@ -157,6 +186,7 @@ def analyze(paths: list[str]) -> dict:
         meta = saved["meta"]
         model = meta["model"]
         config = {k: meta[k] for k in fields}
+        config["history_mode"] = meta.get("history_mode", "scripted")
         config["arms"] = sorted(meta["arms"])
         per = grouped.setdefault(model, {"config": config, "runs": {}, "sources": []})
         if config != per["config"]:
@@ -183,14 +213,17 @@ def analyze(paths: list[str]) -> dict:
             for run in runs:
                 for a, b in (("front", "tail"), ("front", "placed"), ("front-tuned", "tail"),
                              ("front-tuned", "placed"), ("tail", "placed"), ("echo", "placed"),
-                             ("echo-all", "placed"), ("front-tuned", "echo"), ("front-tuned", "echo-all")):
+                             ("echo-all", "placed"), ("front-tuned", "echo"), ("front-tuned", "echo-all"),
+                             ("fixed-tail", "placed"), ("front-tuned", "fixed-tail")):
                     if a not in arms or b not in arms:
                         continue
                     p = pairs.setdefault(f"{a} vs {b}", {"all": [0, 0], "stale_traps": [0, 0]})
                     for ra, rb in zip(run[a], run[b], strict=True):
-                        if any(ra[k] != rb[k] for k in ("turn", "expected", "stale_trap")):
+                        paired = ("turn", "expected", "stale_trap") if per["config"]["history_mode"] == "scripted" \
+                            else ("turn", "expected")
+                        if any(ra[k] != rb[k] for k in paired):
                             raise ValueError(f"unpaired observations: {model}/{key}/{a}/{b}")
-                        for slot in ("all", "stale_traps") if ra["stale_trap"] else ("all",):
+                        for slot in ("all", "stale_traps") if ra["stale_trap"] and rb["stale_trap"] else ("all",):
                             if ra["correct"] and not rb["correct"]:
                                 p[slot][0] += 1
                             elif rb["correct"] and not ra["correct"]:
@@ -210,6 +243,8 @@ def analyze(paths: list[str]) -> dict:
             rows = [r for runs in per["runs"].values() for run in runs for r in run[arm]]
             all_repeats[arm] = placement.summarize(rows, prices, per["config"]["write_multiplier"])
             totals[arm]["no_value_given"] = sum(not r["value"] for r in rows)
+            totals[arm]["prior_error_exposures"] = sum(r.get("prior_error_exposed", False) for r in rows)
+            totals[arm]["repeated_prior_errors"] = sum(r.get("repeated_prior_error", False) for r in rows)
             latencies = sorted(r["latency_s"] for r in rows if "latency_s" in r)
             if latencies:
                 totals[arm]["latency_s"] = {"median": round(statistics.median(latencies), 2),
@@ -238,6 +273,9 @@ if __name__ == "__main__":
     parser.add_argument("--arms", nargs="+", choices=ARMS, default=list(ARMS))
     parser.add_argument("--turns", type=int, default=24)
     parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument("--history-mode", choices=("scripted", "model-text"), default="scripted",
+                        help="model-text feeds each arm's actual visible replies into its subsequent requests")
+    parser.add_argument("--capture-requests", action="store_true", help="save outbound requests for audit replay")
     parser.add_argument("--thinking", choices=("default", "disabled"), default="default")
     parser.add_argument("--effort", default="low", help="openai reasoning effort")
     parser.add_argument("--read-multiplier", type=float, default=0.1)
@@ -254,6 +292,8 @@ if __name__ == "__main__":
         print(json.dumps(analyze(cfg.analyze), indent=2))
         raise SystemExit
     cfg.model = cfg.model or ("gpt-5.6" if cfg.provider == "openai" else "claude-sonnet-5")
+    if cfg.history_mode == "model-text" and not cfg.run:
+        parser.error("--history-mode model-text requires --run; no responses exist in an offline dry run")
     client = None
     if cfg.run:
         key = "OPENAI_API_KEY" if cfg.provider == "openai" else "OPENROUTER_API_KEY"
@@ -268,6 +308,7 @@ if __name__ == "__main__":
     writes = placement.make_compiler(cfg.provider, cfg.model).descriptor.cache_write_multiplier
     repeats = cfg.repeats if client else 1
     nonces = {(k, i): uuid.uuid4().hex[:12] if client else "offline" for k in cfg.scenarios for i in range(repeats)}
+    run_git_sha = placement.git_sha()
     jobs = [(k, i, arm) for k in cfg.scenarios for i in range(repeats) for arm in cfg.arms]
     def attempt(job):
         try:
@@ -289,7 +330,8 @@ if __name__ == "__main__":
         scenarios[k] = runs
         aggregate[k] = placement.aggregate(runs, cfg.arms)
     meta = {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
-            "git_sha": placement.git_sha(), "provider": cfg.provider, "model": cfg.model, "turns": cfg.turns,
+            "git_sha": run_git_sha, "provider": cfg.provider, "model": cfg.model, "turns": cfg.turns,
+            "history_mode": cfg.history_mode, "capture_requests": cfg.capture_requests,
             "repeats": repeats, "arms": cfg.arms, "scenarios": cfg.scenarios, "thinking": cfg.thinking,
             "effort": cfg.effort, "write_multiplier": writes, "read_multiplier": cfg.read_multiplier,
             "output_multiplier": cfg.output_multiplier, "violation_tokens": cfg.violation_tokens,

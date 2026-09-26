@@ -346,6 +346,16 @@ module, both now fixed; see [`docs/CACHE_AUDIT.md`](docs/CACHE_AUDIT.md).
 
 ## Next step: a production pilot
 
+The evaluation kit now supports `--history-mode model-text`, which feeds each layout's actual visible replies
+into its own subsequent requests, and a `fixed-tail` baseline that places declared volatile records after history
+from turn zero. These are evaluation capabilities, not new measured results. `--capture-requests` records outbound
+SDK arguments and timestamps for auditing. The [four-arm pilot](docs/PILOT.md) compares tuned front, echo-all,
+fixed-tail and MemoryPlacer with conversation-level assignment and descriptive bootstrap comparisons.
+
+The audit separates usage-derived cost from heuristic miss attribution, checks log integrity and cache scopes,
+and can score independently annotated logs with `--validate-labels`. No production-log validation or realized
+savings claim has been added; see the [validation workflow](docs/CACHE_AUDIT.md#production-log-contract-and-validation-workflow).
+
 The evidence here is scripted or synthetic. The last synthetic test, [`docs/FLEET_CACHE.md`](docs/FLEET_CACHE.md),
 passed all its pre-registered rules on both models: at 60 turns with a prefix shared across sessions, placement
 billed 0.53 (gpt-5.6) and 0.50 (Claude) of the tuned layout's input, a shared prefix cut a conversation's first

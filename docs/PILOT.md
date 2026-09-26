@@ -1,116 +1,127 @@
-# Pilot protocol: PCF in one production assistant
+# Pilot protocol: four layouts in one production assistant
 
-The committed evidence comes from scripted and synthetic sessions with assumed cache prices. This protocol tests
-whether the advantage holds in one real assistant: billed cost, latency and answer quality against a well-configured
-baseline, on real traffic.
+The existing results are synthetic, with assumed cache prices. This protocol measures actual usage, latency and
+quality on one real assistant. It separates the value of placing current records near the question from the
+incremental value of adaptive placement. No production pilot has been completed in this repository.
 
-## Question
+## Four arms
 
-For assistant *X*, does placing memory with `MemoryPlacer` lower billed cost per conversation without lowering
-answer quality or raising latency, compared with the best configuration of the current prompt?
+| Arm | Layout | What it tests |
+| --- | --- | --- |
+| `front-tuned` | Stable system/tools/reference first; current records before history, changing records unmarked | Well-configured existing baseline |
+| `echo-all` | Freeze initial records in the front prefix; repeat all potentially changing records, marked current, before each question | Simple repetition without changing the cached prefix |
+| `fixed-tail` | Stable references and records first; all potentially changing records after history from turn zero | Simple placement without adaptive decisions or duplicate records |
+| `placed` | `MemoryPlacer` chooses front/tail from observed changes and cache prices | Incremental value of adaptation |
 
-## Arms
+Declare potentially changing modules from the application schema before assignment. Echo-all and fixed-tail use
+that declaration; do not infer it from future observations or select only the field a question needs. The synthetic
+harness uses scenario metadata for this declaration. Keep model, system instructions, record sources, tools,
+temperature and output limits fixed across arms. Each arm retains its actual responses in its own conversation
+history. Echo-all's stale initial copy is intentional; label every repeated record as current.
 
-- **Baseline:** the current prompt, tuned before the pilot starts. Stable content (system prompt, tools, reference
-  documents) comes first, provider prompt caching is on, and on Anthropic the cache markers sit on the stable
-  blocks. This is the "front, tuned" layout in the synthetic runs. A pilot against an untuned baseline would
-  overstate the saving.
-- **Treatment:** the same content as PCF segments, compiled by the provider adapter. `MemoryPlacer` places each
-  memory module per turn; reference documents are memory modules with their own `provenance`.
+## Assignment and analysis plan
 
-Content, model, temperature, tools and output limits are identical in both arms. Only order and cache markers differ.
+Assign **whole conversations**, with equal allocation across the four arms:
 
-## Assignment
+```bash
+python scripts/pilot_analysis.py --assign CONVERSATION_ID --salt PILOT_SPECIFIC_SALT
+```
 
-Assign whole conversations, never single turns: cache state belongs to a conversation, so mixing arms inside one
-destroys both. Hash the conversation id into two buckets (50/50, or 10/90 for a cautious start). Keep a
-conversation in its bucket for its whole life, including after an idle gap.
+The matching Python function is `assign_multi(conversation_id, salt)`. Keep the salt, arm mapping and assignment
+for the life of the pilot. Use one `MemoryPlacer` per placed conversation. A paused conversation stays in its arm;
+report a cold cache from elapsed time before compiling, not after a zero-read response. Keep cache namespaces
+separate across arms so one arm does not warm another. Document shared-prefix routing within an arm.
 
-## Metrics
+Before looking at results, freeze the model/provider, price ratios, eligibility rules, minimum worthwhile cost
+saving, quality non-inferiority margin, latency ceiling, sample size and end date. Predeclare these contrasts:
 
-Primary:
+1. `placed` versus `fixed-tail`: primary test of whether adaptation earns its complexity.
+2. `placed` versus `echo-all`: comparison with simple repetition.
+3. Each alternative versus `front-tuned`: benefit relative to the current tuned baseline.
 
-- **Billed input cost per conversation**, from provider usage (`usage_from_response`: cached, written and uncached
-  input tokens) priced with the current price sheet, not the assumed multipliers of the synthetic runs.
+The analyzer reports all six pairwise comparisons with **unadjusted, descriptive** 95% conversation-bootstrap
+intervals. It does not decide whether to ship. Use a prespecified multiplicity procedure for confirmatory secondary
+claims; do not pick a winning arm after inspecting six unadjusted intervals. Size quality and cost separately,
+accounting for clustering within conversations. The synthetic runs are not a sample-size justification.
 
-Secondary:
+## Log contract
 
-- **Output cost** per conversation (placement can change reply length).
-- **Latency:** time to first token and to the full response, p50 and p90, per turn.
-- **Answer quality:**
-  - Record lookups: an automatic check of each answer against the record the assistant was given, for the
-    questions where the source of truth is known.
-  - A blind human review of a random sample from both arms.
-  - Escalation, retry and complaint rates.
-- **Cache behaviour:** read share of input tokens, and requests that arrive after the cache lifetime (use
-  `split(..., cold=True)` for those, predicted from time since the last request).
+One JSON line per completed provider request:
 
-## Sample size
+```json
+{"conversation":"c-123","request_id":"req-1","arm":"fixed-tail","cached":1200,"written":0,"uncached":200,"output_tokens":60,"latency_s":1.9,"ttft_s":0.4,"correct":true}
+```
 
-The recorded input-plus-output reductions against tuned front were 14.5% on GPT and 36.6-38.0% on Claude
-(about 1.17-1.61x). They used assumed prices. Estimate cost variability from representative conversations, choose a
-minimum worthwhile saving, and calculate the required conversation count before starting; a fixed few hundred
-conversations is not guaranteed to settle cost. Quality needs its own sample-size calculation. Detecting an error-rate change from 5% to 3% on record lookups at 80% power
-(two-sided α = 0.05) takes about 1,500 checked answers per arm. For non-inferiority with a 1-point margin, plan for
-several thousand independent observations. Answers within a conversation are correlated: account for clustering
-when sizing and analyzing the pilot. Set the margin, analysis method and sample size with the assistant's owner
-before starting.
+- Token buckets must be disjoint, nonnegative provider-usage counts. Record retries as separate billable requests;
+  preserve failures separately so missing completions do not hide failure rates.
+- `correct` is a boolean, or null/absent when unknown. Use record checks plus blind human review for tasks where
+  lookup correctness misses instruction, tool or safety failures. Record escalation and complaint rates separately.
+- `latency_s` is full response latency; `ttft_s` is optional. Include compilation in an additional end-to-end timing
+  measurement when evaluating production latency.
+- Record model, provider, prices, deployment revision and evaluation rubric in the pilot manifest. Analyze homogeneous
+  pricing cohorts separately. Do not mix synthetic exports into the production dataset.
+- Keep a distinct conversation ID per assigned conversation. Duplicate request IDs, invalid counts and conversations
+  appearing in multiple arms are rejected. Preserve timestamps and exact requests in the audit log described below.
+
+```bash
+python scripts/pilot_analysis.py pilot.jsonl --write 1.25 --read 0.1 --output 5 --samples 5000
+```
+
+Replace those illustrative ratios with the actual model's prices. Costs are usage-derived uncached-input-token
+units; multiply by the actual uncached input price per token to obtain dollars. Include other billed fees separately.
+The report includes per-arm cost per conversation, error rates, p50/p90 latency, and pairwise cost ratios and
+quality/latency differences. A zero denominator produces a null ratio, not a spurious saving.
+
+Legacy `baseline`/`treatment` logs retain their old analysis. Use `--legacy-two-arm` for old CLI assignment and
+`assign()` for the old Python API. A new four-arm log must contain all four arms; missing arms are an error.
+
+## Actual-response synthetic evaluation
+
+Before production, exercise the four layouts on the same scripted question and record schedule while feeding each
+model's own visible replies into subsequent turns:
+
+```bash
+python scripts/live_domain_sessions.py --run --provider openai --model gpt-5.6 \
+  --arms front-tuned echo-all fixed-tail placed --history-mode model-text \
+  --capture-requests --turns 60 --repeats 2 > model-history.json
+python scripts/live_domain_sessions.py --analyze model-history.json
+python scripts/pilot_analysis.py --from-domain model-history.json --four-arm > synthetic-pilot.jsonl
+python scripts/pilot_analysis.py synthetic-pilot.jsonl
+```
+
+The first command makes paid calls. `model-text` requires responses; offline mode refuses to invent them. Existing
+runs default to `scripted` and retain their interpretation. Analysis refuses to pool the two history modes. Actual
+history is still a synthetic conversation with predetermined user questions and records, not a production agent
+benchmark. Visible answer text is replayed; hidden reasoning, tool execution and tool-result state are not replayed
+by this domain harness. Use the separate tool-loop harness for those provider behaviors.
+
+The report counts prior-error exposures and repeated prior errors for repeated questions. These are diagnostic
+counts, not causal proof of error propagation: a model can independently make the same mistake. Stale-history
+subsets may differ by arm; pairwise stale comparisons use only turns where both histories expose a stale value.
+Turn-level significance remains descriptive; the conversation is the inferential unit.
+
+## Audit and validation
+
+Use `--capture-requests` to preserve exact outbound SDK arguments and request timestamps. Export these with:
+
+```bash
+python scripts/cache_audit.py --from-domain model-history.json --arm placed > synthetic-audit.jsonl
+python scripts/cache_audit.py synthetic-audit.jsonl --ttl 300 --json
+```
+
+Production instrumentation should capture the actual outbound request and returned usage, with cache scope and
+request identity, using [CACHE_AUDIT.md](CACHE_AUDIT.md). Validate suspected causes against independent annotations,
+then validate realized cost improvement using randomized pilot outcomes. The audit's heuristic opportunity estimate
+must not be reported as measured savings.
 
 ## Stop and ship rules
 
-- **Stop early** if the treatment's checked error rate exceeds the baseline's by more than the margin at any weekly
-  look, or if p90 latency rises by more than an agreed amount.
-- **Ship** at the prespecified final analysis if billed cost per conversation falls by at least the agreed amount,
-  quality is non-inferior within the margin using a conversation-level confidence interval, and latency is no
-  worse. Weekly checks are harm-monitoring rules, not repeated opportunities to declare success.
-- **Report either way**, with the raw per-conversation usage and the quality sample, as for the synthetic runs.
+Monitor quality, failures and latency for harm using predeclared rules. Weekly looks are not opportunities to declare
+success. At the frozen final analysis, require worthwhile cost reduction, quality non-inferiority and acceptable
+latency under the prespecified statistical plan. Prefer a simpler layout if adaptation does not demonstrate an
+additional benefit. Publish the outcome even if no layout improves on baseline; publish only consented, sanitized
+artifacts rather than raw production prompts.
 
-## Known risks to check
-
-- **Small models and in-conversation changes.** When a user changes a preference and the record is not updated,
-  claude-haiku-4-5 followed the stale record near the question more often. Update the record when users change
-  something, or keep that module in front.
-- **Idle gaps.** Real conversations pause past the cache lifetime, which shrinks every layout's savings and
-  `MemoryPlacer`'s edge most.
-- **Tool loops.** The adapters keep tool loops flat (100% reuse in the scripted loops); confirm it on the
-  assistant's real tools.
-- **Latency of compilation.** Compiling adds local time per request (about 0.1 s at 400 history segments); measure
-  it in the pilot's environment.
-
-## Integration sketch
-
-```python
-from pcf import Context, Segment
-from pcf.families.anthropic_adapter import AnthropicCompiler
-from pcf.placement import MemoryPlacer
-
-compiler = AnthropicCompiler("claude-sonnet-5")
-placer = MemoryPlacer(compiler.tokenizer, write_multiplier=1.25, read_multiplier=0.1)  # or for_candidate()
-
-def request(system, reference, records, history, question, cold=False):
-    memory = [Segment("reference", "memory", reference, provenance="reference"),
-              *[Segment(name, "memory", data, provenance=name) for name, data in records.items()]]
-    front, tail = placer.split(memory, history, cold=cold)
-    ctx = Context([Segment("s", "system", system), *front, *history, *tail,
-                   Segment("u", "user", question, stable=False)])
-    return compiler.compile(ctx).request  # send with the existing client; log compiler.usage_from_response(...)
-```
-
-`scripts/live_domain_sessions.py` is a working example of this loop, including usage and latency recording.
-
-## Pilot kit
-
-`scripts/pilot_analysis.py` covers assignment and the analysis; the assistant only has to log usage.
-
-- **Assign** with `assign(conversation_id, treatment_share, salt)`, or `--assign ID` on the command line: a hash of
-  the conversation id, stable for the conversation's life. Use a new salt per pilot.
-- **Log** one JSON line per request: conversation id, arm, `cached`, `written` and `uncached` input tokens from
-  `usage_from_response`, `output_tokens`, `latency_s` (and `ttft_s` if streamed), and `correct` where the
-  automatic record check applies.
-- **Analyze** with `python scripts/pilot_analysis.py LOG.jsonl --write W --read R --output O`, passing the provider's
-  current price ratios. It reports cost per conversation, error rates and latency per arm, and treatment/baseline
-  ratios with 95% bootstrap intervals over conversations, never turns.
-
-Dry run on committed data: `--from-domain results/2026-09-25/domain-claude-sonnet-5-60turn.json` writes each
-60-turn session as one conversation; analyzed, the input-cost ratio is 0.53 (95% interval 0.47-0.62) on 12
-conversations per arm. A real pilot needs the sample sizes above, not 12.
+Check realistic idle gaps, short sessions, record changes followed by quiet periods, changing module sizes,
+contradictory user preferences and extended-thinking/tool-loop compatibility. Keep old records current when users
+change preferences: moving stale records near a question can worsen answers, especially on smaller models.
