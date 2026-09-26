@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Live scripts send Claude requests to Anthropic's API, reading `PCF_ANTHROPIC_API_KEY` (or
+  `ANTHROPIC_API_KEY`) with an explicit base URL. `--anthropic-route openrouter` keeps the OpenRouter route used for
+  the published Claude runs; result files record `meta.anthropic_route`.
 - Live 60-turn run with the model's own replies as history (`results/2026-09-26/`). Input against tuned front:
   gpt-5.6 0.46-0.48 for placed, echo-all and fixed-tail; Claude 0.17-0.20, confounded by tuned front's longer
   replies (0.22-0.23 per token sent). Echo-all on Claude and fixed-tail on gpt-5.6 were less accurate than placed.

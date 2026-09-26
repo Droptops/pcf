@@ -317,8 +317,9 @@ python scripts/live_memory_placement.py --regrade results/2026-09-25/e1-openai-t
 
 Live runs make paid API calls and need the provider SDKs (`python -m pip install -e '.[live]'`). The live scripts
 are offline by default; `--run --provider openai` reads `OPENAI_API_KEY`, and `--run --provider anthropic` reads
-`OPENROUTER_API_KEY` and sends the Anthropic adapter's request to OpenRouter's Anthropic-compatible endpoint, pinned
-to Anthropic upstream.
+`PCF_ANTHROPIC_API_KEY` (or `ANTHROPIC_API_KEY`) and sends the Anthropic adapter's request to Anthropic's API.
+Claude results published up to 2026-09-26 went through OpenRouter, pinned to Anthropic upstream; `--anthropic-route
+openrouter` (with `OPENROUTER_API_KEY`) reproduces them. OpenRouter is otherwise used only for the Jev router.
 
 ## Repository layout
 

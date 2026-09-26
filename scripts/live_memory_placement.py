@@ -2,8 +2,8 @@
 """Live comparison of memory placement. Offline by default; paid calls need --run.
 
 --provider openai uses the OpenAI Responses API. --provider anthropic sends the Anthropic adapter's Messages
-request unchanged to OpenRouter's Anthropic-compatible endpoint, pinned to Anthropic as the upstream provider
-(no fallbacks) so prompt caching is Anthropic's own.
+request unchanged to Anthropic's API. --anthropic-route openrouter sends it to OpenRouter's Anthropic-compatible
+endpoint instead, pinned to Anthropic with no fallbacks, as in the runs published up to 2026-09-26.
 
 One scripted support session is run per arm, each in its own cache namespace, --repeats times:
   front         - all memory before history, most volatile module last (the best hand ordering)
@@ -156,6 +156,36 @@ def openrouter_model(model_id: str) -> str:
     return "anthropic/" + re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", model_id)
 
 
+ANTHROPIC_ROUTES = ("direct", "openrouter")
+ANTHROPIC_KEYS = ("PCF_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY")
+
+
+def anthropic_payload(request: dict, route: str) -> dict:
+    """Messages arguments for a route: Anthropic's API as compiled, or OpenRouter pinned to Anthropic."""
+    if route == "direct":
+        return request
+    return {**request, "model": openrouter_model(request["model"]),
+            "extra_body": {"provider": {"order": ["Anthropic"], "allow_fallbacks": False}}}
+
+
+def make_client(provider: str, route: str = "direct"):
+    """A client for paid runs. Claude is called on Anthropic's API; route "openrouter" reproduces earlier runs."""
+    if provider == "openai":
+        names = ("OPENAI_API_KEY",)
+    else:
+        names = ANTHROPIC_KEYS if route == "direct" else ("OPENROUTER_API_KEY",)
+    key = next((os.environ[n] for n in names if os.environ.get(n)), None)
+    if not key:
+        raise SystemExit(f"--run --provider {provider} requires {' or '.join(names)}")
+    if provider == "openai":
+        import openai
+        return openai.OpenAI()
+    import anthropic
+    # An explicit base URL: an inherited ANTHROPIC_BASE_URL (set in some agent sandboxes) must not redirect paid runs.
+    return anthropic.Anthropic(api_key=key, base_url="https://api.anthropic.com" if route == "direct"
+                               else "https://openrouter.ai/api")
+
+
 def make_compiler(provider: str, model: str):
     # Room for adaptive thinking before the answer: at 512 a thinking model can stop with no visible text.
     return OpenAICompiler(model) if provider == "openai" else AnthropicCompiler(model, max_tokens=4096)
@@ -166,8 +196,7 @@ def request_payload(provider: str, request: dict, cfg) -> dict:
     if provider == "openai":
         return {**request, "max_output_tokens": 4096, "reasoning": {"effort": cfg.effort}}
     thinking = {"thinking": {"type": "disabled"}} if cfg.thinking == "disabled" else {}
-    return {**request, "model": openrouter_model(request["model"]), **thinking,
-            "extra_body": {"provider": {"order": ["Anthropic"], "allow_fallbacks": False}}}
+    return anthropic_payload({**request, **thinking}, getattr(cfg, "anthropic_route", "direct"))
 
 
 def call(provider: str, client, request: dict, cfg) -> tuple[object, str, dict]:
@@ -305,9 +334,12 @@ def git_sha() -> str:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run", action="store_true", help="make paid calls (needs OPENAI_API_KEY or "
-                        "OPENROUTER_API_KEY; any value works when a proxy injects the real key)")
+    parser.add_argument("--run", action="store_true", help="make paid calls (needs OPENAI_API_KEY or an Anthropic "
+                        "key, see --anthropic-route; any value works when a proxy injects the real key)")
     parser.add_argument("--provider", choices=("openai", "anthropic"), default="openai")
+    parser.add_argument("--anthropic-route", choices=ANTHROPIC_ROUTES, default="direct",
+                        help="direct: Anthropic's API (PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY); openrouter: "
+                        "OpenRouter pinned to Anthropic (OPENROUTER_API_KEY), as in the runs published up to 2026-09-26")
     parser.add_argument("--turns", type=int, default=20)
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--arms", nargs="+", choices=ARMS, default=list(DEFAULT_ARMS))
@@ -330,15 +362,7 @@ if __name__ == "__main__":
     cfg.model = cfg.model or ("gpt-5.6" if cfg.provider == "openai" else "claude-sonnet-5")
     client = None
     if cfg.run:
-        key = "OPENAI_API_KEY" if cfg.provider == "openai" else "OPENROUTER_API_KEY"
-        if not os.environ.get(key):
-            raise SystemExit(f"--run --provider {cfg.provider} requires {key}")
-        if cfg.provider == "openai":
-            import openai
-            client = openai.OpenAI()
-        else:
-            import anthropic
-            client = anthropic.Anthropic(api_key=os.environ[key], base_url="https://openrouter.ai/api")
+        client = make_client(cfg.provider, cfg.anthropic_route)
     writes = make_compiler(cfg.provider, cfg.model).descriptor.cache_write_multiplier
     nonces = [uuid.uuid4().hex[:12] if client else "offline" for _ in range(cfg.repeats if client else 1)]
     jobs = [(i, arm) for i in range(len(nonces)) for arm in cfg.arms]  # fresh prefix per repeat: arms start cold
@@ -350,7 +374,8 @@ if __name__ == "__main__":
         run["summary"] = {arm: summarize(run[arm], cfg, writes) for arm in cfg.arms}
         runs.append(run)
     meta = {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "git_sha": git_sha(),
-            "provider": cfg.provider, "model": cfg.model, "turns": cfg.turns, "repeats": len(nonces),
+            "provider": cfg.provider, "model": cfg.model,
+            "anthropic_route": cfg.anthropic_route if cfg.provider == "anthropic" else None, "turns": cfg.turns, "repeats": len(nonces),
             "arms": cfg.arms, "history_style": cfg.history_style, "thinking": cfg.thinking, "effort": cfg.effort,
             "write_multiplier": writes, "read_multiplier": cfg.read_multiplier,
             "output_multiplier": cfg.output_multiplier, "paid": client is not None}

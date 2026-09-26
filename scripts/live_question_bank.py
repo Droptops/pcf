@@ -111,6 +111,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run", action="store_true")
     parser.add_argument("--provider", choices=("openai", "anthropic"), default="openai")
+    parser.add_argument("--anthropic-route", choices=placement.ANTHROPIC_ROUTES, default="direct",
+                        help="direct: Anthropic's API (PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY); openrouter: "
+                        "OpenRouter pinned to Anthropic (OPENROUTER_API_KEY), as in the runs published up to 2026-09-26")
     parser.add_argument("--model")
     parser.add_argument("--per-type", type=int, default=50)
     parser.add_argument("--workers", type=int, default=8)
@@ -125,18 +128,10 @@ if __name__ == "__main__":
         print(json.dumps({"offline": True, "items": len(jobs) // len(ARMS), "calls": len(jobs),
                           "est_tokens_mean": round(sum(sizes) / len(sizes)), "est_tokens_max": max(sizes)}, indent=1))
         raise SystemExit
-    key = "OPENAI_API_KEY" if args.provider == "openai" else "OPENROUTER_API_KEY"
-    if not os.environ.get(key):
-        raise SystemExit(f"--run --provider {args.provider} requires {key}")
-    if args.provider == "openai":
-        import openai
-        client = openai.OpenAI()
-    else:
-        import anthropic
-        client = anthropic.Anthropic(api_key=os.environ[key], base_url="https://openrouter.ai/api")
+    client = placement.make_client(args.provider, args.anthropic_route)
 
     class Cfg:
-        effort, thinking = "low", "default"
+        effort, thinking, anthropic_route = "low", "default", args.anthropic_route
 
     def ask(job):
         i, kind, final, style, arm = job

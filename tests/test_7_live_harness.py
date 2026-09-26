@@ -56,6 +56,28 @@ def test_openrouter_model_names(model, name):
     assert live.openrouter_model(model) == name
 
 
+def test_anthropic_runs_go_to_anthropic_unless_openrouter_is_asked(monkeypatch):
+    from types import SimpleNamespace
+    request = {"model": "claude-sonnet-5", "max_tokens": 10, "messages": []}
+    cfg = SimpleNamespace(thinking="default")
+    assert live.request_payload("anthropic", request, cfg) == request
+    routed = live.request_payload("anthropic", request, SimpleNamespace(thinking="disabled", anthropic_route="openrouter"))
+    assert routed["model"] == "anthropic/claude-sonnet-5" and routed["thinking"] == {"type": "disabled"}
+    assert routed["extra_body"]["provider"] == {"order": ["Anthropic"], "allow_fallbacks": False}
+
+    for name in (*live.ANTHROPIC_KEYS, "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(SystemExit, match="PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY"):
+        live.make_client("anthropic")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    with pytest.raises(SystemExit, match="PCF_ANTHROPIC_API_KEY"):
+        live.make_client("anthropic")  # an OpenRouter key never stands in for an Anthropic one
+    monkeypatch.setenv("PCF_ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://sandbox-proxy.invalid")
+    assert str(live.make_client("anthropic").base_url).startswith("https://api.anthropic.com")
+    assert str(live.make_client("anthropic", "openrouter").base_url).startswith("https://openrouter.ai/api")
+
+
 def test_calibration_labels_separate_value_from_instruction_compliance():
     import importlib.util
     import os

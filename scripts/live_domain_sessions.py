@@ -265,9 +265,12 @@ def _sum_frac(values) -> str:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run", action="store_true", help="make paid calls (needs OPENAI_API_KEY or "
-                        "OPENROUTER_API_KEY; any value works when a proxy injects the real key)")
+    parser.add_argument("--run", action="store_true", help="make paid calls (needs OPENAI_API_KEY or an Anthropic "
+                        "key, see --anthropic-route; any value works when a proxy injects the real key)")
     parser.add_argument("--provider", choices=("openai", "anthropic"), default="openai")
+    parser.add_argument("--anthropic-route", choices=placement.ANTHROPIC_ROUTES, default="direct",
+                        help="direct: Anthropic's API (PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY); openrouter: "
+                        "OpenRouter pinned to Anthropic (OPENROUTER_API_KEY), as in the runs published up to 2026-09-26")
     parser.add_argument("--model", help="default: gpt-5.6 (openai) or claude-sonnet-5 (anthropic)")
     parser.add_argument("--scenarios", nargs="+", choices=sorted(SCENARIOS), default=sorted(SCENARIOS))
     parser.add_argument("--arms", nargs="+", choices=ARMS, default=list(ARMS))
@@ -296,15 +299,7 @@ if __name__ == "__main__":
         parser.error("--history-mode model-text requires --run; no responses exist in an offline dry run")
     client = None
     if cfg.run:
-        key = "OPENAI_API_KEY" if cfg.provider == "openai" else "OPENROUTER_API_KEY"
-        if not os.environ.get(key):
-            raise SystemExit(f"--run --provider {cfg.provider} requires {key}")
-        if cfg.provider == "openai":
-            import openai
-            client = openai.OpenAI()
-        else:
-            import anthropic
-            client = anthropic.Anthropic(api_key=os.environ[key], base_url="https://openrouter.ai/api")
+        client = placement.make_client(cfg.provider, cfg.anthropic_route)
     writes = placement.make_compiler(cfg.provider, cfg.model).descriptor.cache_write_multiplier
     repeats = cfg.repeats if client else 1
     nonces = {(k, i): uuid.uuid4().hex[:12] if client else "offline" for k in cfg.scenarios for i in range(repeats)}
@@ -330,7 +325,8 @@ if __name__ == "__main__":
         scenarios[k] = runs
         aggregate[k] = placement.aggregate(runs, cfg.arms)
     meta = {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
-            "git_sha": run_git_sha, "provider": cfg.provider, "model": cfg.model, "turns": cfg.turns,
+            "git_sha": run_git_sha, "provider": cfg.provider, "model": cfg.model,
+            "anthropic_route": cfg.anthropic_route if cfg.provider == "anthropic" else None, "turns": cfg.turns,
             "history_mode": cfg.history_mode, "capture_requests": cfg.capture_requests,
             "repeats": repeats, "arms": cfg.arms, "scenarios": cfg.scenarios, "thinking": cfg.thinking,
             "effort": cfg.effort, "write_multiplier": writes, "read_multiplier": cfg.read_multiplier,

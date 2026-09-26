@@ -7,8 +7,8 @@ the first should read back everything the previous request read or wrote, becaus
 memory is never marked. The model's replies are ignored: history is scripted so every run sends the same prefixes.
 
 --provider openai uses gpt-5.6 in explicit cache mode; --provider anthropic sends the Anthropic adapter's request
-to OpenRouter's Anthropic-compatible endpoint pinned to Anthropic, with thinking disabled so the request carries no
-thinking blocks. Exit status is 1 when any request reads back less than --min-reuse of the previous request's
+to Anthropic's API (with --anthropic-route openrouter, to OpenRouter pinned to Anthropic), with thinking disabled so
+the request carries no thinking blocks. Exit status is 1 when any request reads back less than --min-reuse of the previous request's
 cached prefix, when a request's cached + written tokens fall short of --min-coverage of the estimated prefix up to its
 last marker (history never cached), or when nothing after the first request is read.
 """
@@ -17,14 +17,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 import uuid
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.dirname(__file__))
 from pcf import Context, Segment  # noqa: E402
 from pcf.families.anthropic_adapter import AnthropicCompiler  # noqa: E402
 from pcf.families.openai_adapter import OpenAICompiler  # noqa: E402
+from live_memory_placement import ANTHROPIC_ROUTES, anthropic_payload, make_client  # noqa: E402
 
 POLICIES = [f"Policy {i}: look up the order before answering, cite its id, and keep replies to one sentence."
             for i in range(80)]
@@ -56,19 +57,20 @@ def requests(iterations: int, nonce: str):
                                                    "content": f"Order O-{500 + k} shipped, tracking T{9000 + k}."}]))
 
 
-def send(provider: str, client, request: dict):
+def send(provider: str, client, request: dict, route: str = "direct"):
     if provider == "openai":
         return client.responses.create(**request, max_output_tokens=64, reasoning={"effort": "low"})
-    model = "anthropic/" + re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", request["model"])  # OpenRouter's model name
-    return client.messages.create(**{**request, "model": model, "max_tokens": 64,
-                                     "thinking": {"type": "disabled"}},
-                                  extra_body={"provider": {"order": ["Anthropic"], "allow_fallbacks": False}})
+    return client.messages.create(**anthropic_payload({**request, "max_tokens": 64,
+                                                       "thinking": {"type": "disabled"}}, route))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run", action="store_true")
     parser.add_argument("--provider", choices=("openai", "anthropic"), default="openai")
+    parser.add_argument("--anthropic-route", choices=ANTHROPIC_ROUTES, default="direct",
+                        help="direct: Anthropic's API (PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY); openrouter: "
+                        "OpenRouter pinned to Anthropic (OPENROUTER_API_KEY), as in the runs published up to 2026-09-26")
     parser.add_argument("--model", help="default: gpt-5.6 (openai) or claude-sonnet-5 (anthropic)")
     parser.add_argument("--iterations", type=int, default=8)
     parser.add_argument("--min-reuse", type=float, default=0.95)
@@ -79,15 +81,7 @@ if __name__ == "__main__":
     compiler = OpenAICompiler(model) if args.provider == "openai" else AnthropicCompiler(model)
     client = None
     if args.run:
-        key = "OPENAI_API_KEY" if args.provider == "openai" else "OPENROUTER_API_KEY"
-        if not os.environ.get(key):
-            raise SystemExit(f"--run --provider {args.provider} requires {key}")
-        if args.provider == "openai":
-            import openai
-            client = openai.OpenAI()
-        else:
-            import anthropic
-            client = anthropic.Anthropic(api_key=os.environ[key], base_url="https://openrouter.ai/api")
+        client = make_client(args.provider, args.anthropic_route)
     rows, previous, failed = [], None, False
     for label, ctx in requests(args.iterations, uuid.uuid4().hex[:12] if client else "offline"):
         compiled = compiler.compile(ctx)
@@ -96,7 +90,7 @@ if __name__ == "__main__":
         row = {"request": label, "marked": [ctx.segments[i].id for i in compiled.breakpoints],
                "est_tokens": compiled.total_tokens, "est_covered": covered}
         if client is not None:
-            usage = compiler.usage_from_response(send(args.provider, client, compiled.request))
+            usage = compiler.usage_from_response(send(args.provider, client, compiled.request, args.anthropic_route))
             row.update(cached=usage.cache_read_input_tokens, written=usage.cache_creation_input_tokens,
                        uncached=usage.input_tokens)
             if previous is not None:
