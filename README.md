@@ -91,6 +91,34 @@ module current, Claude often noticed the contradiction ("I need to stop here and
 answered at about three times the length (277 against 96 output tokens), and 4 of its 5 wrong answers quoted the
 frozen record. Echo-all, with every changing value current, showed none of this.
 
+## With the model's own replies
+
+The runs above replay scripted assistant turns, some of which state old values on purpose. The run below feeds each
+layout its own visible replies instead (`--history-mode model-text`), and adds `fixed-tail`: every declared changing
+module after the history from turn zero. Six scenarios, 60 turns, 2 repeats, back to back
+(`results/2026-09-26/domain-*-60turn-model-text.json`):
+
+| Against tuned front, 60 turns | gpt-5.6 input | total | correct | claude-sonnet-5 input | total | correct |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tuned front | 1 | 1 | 702/720 | 1 | 1 | 667/720 |
+| `MemoryPlacer` | 0.472 | 0.477 | 720/720 | 0.196 | 0.253 | 715/720 |
+| echo-all | 0.483 | 0.496 | 720/720 | 0.171 | 0.199 | 703/720 |
+| fixed-tail | 0.458 | 0.471 | 710/720 | 0.165 | 0.194 | 715/720 |
+
+- **Each arm's replies make its own history, so history length differs by arm.** On Claude, tuned front answered at
+  302 output tokens per turn against 107-174 for the others; its prompt reached 19.2k tokens at turn 60 against
+  11.9-15.9k, and only 44% of its input was read from cache against 93%. Claude's 0.17-0.20 therefore combines layout
+  and reply length and is not comparable with the scripted 0.49. Billed input per token sent, which removes history
+  length, is 0.22-0.23 of tuned front for all three arms. On gpt-5.6 replies are short in every arm (17-32 tokens) and
+  the ratios, 0.46-0.48, match the scripted runs.
+- **Placing the current values after the history holds with real replies.** All three arms beat tuned front in
+  accuracy on both models (paired discordant turns 0/18 on gpt-5.6 and 1/49 on Claude for `MemoryPlacer`).
+- **The simple arms were not free.** Echo-all on Claude was less accurate than `MemoryPlacer` (5/17 discordant
+  pairs, exact McNemar p = 0.017): 14 of its 17 misses gave a stale value, and in 11 of 14 turns after a wrong reply
+  it repeated that error. Fixed-tail on gpt-5.6 missed 10 turns `MemoryPlacer` answered (0/10, p = 0.002), 4 of them
+  stale. Fixed-tail matched `MemoryPlacer` on Claude (5/5), and echo-all matched it on gpt-5.6 (0/0).
+- Cost is still in assumed cache multipliers, and the sessions had no idle gaps.
+
 ## How it works
 
 ```
@@ -348,7 +376,7 @@ module, both now fixed; see [`docs/CACHE_AUDIT.md`](docs/CACHE_AUDIT.md).
 
 The evaluation kit now supports `--history-mode model-text`, which feeds each layout's actual visible replies
 into its own subsequent requests, and a `fixed-tail` baseline that places declared volatile records after history
-from turn zero. These are evaluation capabilities, not new measured results. `--capture-requests` records outbound
+from turn zero. One live run uses both; see [With the model's own replies](#with-the-models-own-replies). `--capture-requests` records outbound
 SDK arguments and timestamps for auditing. The [four-arm pilot](docs/PILOT.md) compares tuned front, echo-all,
 fixed-tail and MemoryPlacer with conversation-level assignment and descriptive bootstrap comparisons.
 

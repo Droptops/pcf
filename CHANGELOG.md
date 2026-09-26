@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Live 60-turn run with the model's own replies as history (`results/2026-09-26/`). Input against tuned front:
+  gpt-5.6 0.46-0.48 for placed, echo-all and fixed-tail; Claude 0.17-0.20, confounded by tuned front's longer
+  replies (0.22-0.23 per token sent). Echo-all on Claude and fixed-tail on gpt-5.6 were less accurate than placed.
 - Add actual visible-response history (`--history-mode model-text`), outbound request capture and a declared
   `fixed-tail` baseline to domain evaluation. Keep legacy scripted runs separate; report repeated prior errors.
 - Expand the production pilot to four arms with stable conversation assignment and all six descriptive pairwise
@@ -11,7 +14,7 @@
   list changed-field suspects, check cache scope/model compatibility, and validate independently annotated logs.
   Replace totals `estimated_lost_units`/`billed_input_units_approx` with
   `estimated_miss_opportunity_units`/`billed_input_units`. Event `lost_units` remains a documented legacy name.
-- No provider runs or production-log validation accompany these capabilities. Wire format, hashes and provider
+- No production-log validation accompanies these capabilities. Wire format, hashes and provider
   compiler cache identity are unchanged.
 
 - Add the echo baseline (`echo`, `echo-all` arms in `live_domain_sessions.py`) and live 60-turn runs: repeating every
