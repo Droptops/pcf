@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production-release
     timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read  # GET .../environments/{name} needs the Actions (read) permission
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
