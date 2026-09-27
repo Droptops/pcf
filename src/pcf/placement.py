@@ -70,12 +70,15 @@ class MemoryPlacer:
         self._lock = RLock()
 
     @classmethod
-    def for_compiler(cls, compiler, *, read_multiplier: float = 0.1, decay: float = 0.7,
+    def for_compiler(cls, compiler, *, read_multiplier: float | None = None, decay: float = 0.7,
                      expected_turns: int | None = None) -> "MemoryPlacer":
-        """A placer with the compiler's tokenizer, cache write price and minimum cacheable length."""
+        """A placer with the compiler's tokenizer and declared provider cache economics."""
         d = compiler.descriptor
+        read = d.cache_read_multiplier if read_multiplier is None else read_multiplier
+        if read is None:
+            raise ValueError("compiler does not declare a cache-read multiplier; pass read_multiplier explicitly")
         return cls(compiler.tokenizer, decay=decay, write_multiplier=d.cache_write_multiplier,
-                   read_multiplier=read_multiplier, min_cacheable_tokens=d.min_cacheable_tokens,
+                   read_multiplier=read, min_cacheable_tokens=d.min_cacheable_tokens,
                    expected_turns=expected_turns)
 
     @classmethod
