@@ -7,7 +7,7 @@ import { ConcurrentPlacementUpdate, MemoryPlacer } from "../src/index.ts";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/placer.json", import.meta.url), "utf8"));
 
-for (const session of fixture.sessions.filter((s: any) => (s.options?.min_cacheable_tokens ?? 0) === 0)) {
+for (const session of fixture.sessions) {
   test(`matches Python on ${session.scenario}, cold every ${session.coldEvery}`, () => {
     const tokens = new Map<string, number>();
     const options = session.options ?? {};
