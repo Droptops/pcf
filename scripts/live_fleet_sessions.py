@@ -64,7 +64,8 @@ def session(key: str, arm: str, tag: str, cfg, client=None, engine=None, clock=N
             clock[0] += gap
         mem = memory(scenario, turn)
         if arm.startswith("placed"):
-            front, tail = placer.split(mem, history, cold=cold and turn > 0,\n                                       prefix_tokens=compiler.tokenizer.count(system.content))
+            front, tail = placer.split(mem, history, cold=cold and turn > 0,
+                                       prefix_tokens=compiler.tokenizer.count(system.content))
         else:
             front, tail = arrange("front-tuned", placer, mem, history, scenario.volatile())
         ask, expected = scenario.question(turn)
