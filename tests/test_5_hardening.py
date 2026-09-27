@@ -12,7 +12,7 @@ from pcf.compiler import UnsupportedRequest, choose_breakpoints
 from pcf.families.anthropic_adapter import AnthropicCompiler, history_from_response as anthropic_history
 from pcf.families.capabilities import OpenAICapabilities
 from pcf.families.openai_adapter import OpenAICompiler, history_from_response as openai_history
-from pcf.families.sim import family_a, family_b
+from pcf.families.sim import SimEngine, family_a, family_b
 from pcf.router import Candidate, ConfidenceUnavailable, JevConfidenceSource, Router, UncalibratedSource, http_transport
 from pcf.router.calibration import fit_platt
 
@@ -380,6 +380,40 @@ def test_lead_system_anchor_survives_a_volatile_stable_module_behind_tools():
     assert "cache_control" in request["system"][-1] and "cache_control" not in request["tools"][-1]
     # OpenAI needs three history endpoints, so its budget keeps only the last anchor.
     assert OpenAICompiler("gpt-5.6").compile(ctx).breakpoints == (2, 4, 5, 6)
+
+
+def _front_memory_session(dose: str, mar_stable: bool = True) -> Context:
+    hist = [Segment(f"h{i}", "history", [{"role": "user", "content": f"q{i}"},
+                                         {"role": "assistant", "content": f"a{i}"}]) for i in range(3)]
+    return Context([Segment("s", "system", "policy " * 40),
+                    Segment("ref", "memory", "formulary entry " * 1500, provenance="ref"),
+                    Segment("pt", "memory", "patient: bed 4, allergies none", provenance="pt"),
+                    Segment("mar", "memory", f"metoprolol {dose} twice daily", mar_stable, provenance="mar"),
+                    *hist, Segment("u", "user", "current dose?", stable=False)])
+
+
+def test_openai_keeps_the_shared_anchor_when_the_history_extends_the_last_one():
+    # OpenAI's budget fits one anchor beside three history endpoints. With nothing unstable between the last module
+    # and the history, that anchor goes to the shared reference after the system prompt, not the last module.
+    def ids(ctx):
+        return [ctx.segments[i].id for i in OpenAICompiler("gpt-5.6").compile(ctx).breakpoints]
+
+    assert ids(_front_memory_session("12.5 mg")) == ["ref", "h0", "h1", "h2"]
+    # An unstable module before the history means the endpoints are rarely read, so the last stable anchor stays.
+    assert ids(_front_memory_session("12.5 mg", mar_stable=False)) == ["pt", "h0", "h1", "h2"]
+    # Anthropic keeps two history endpoints, so both anchors fit as before.
+    anthropic = AnthropicCompiler("claude-sonnet-5").compile(_front_memory_session("12.5 mg"))
+    assert [_front_memory_session("12.5 mg").segments[i].id for i in anthropic.breakpoints] == ["ref", "mar", "h1", "h2"]
+
+
+def test_openai_reads_the_front_after_a_stable_labelled_module_changes():
+    # A front module labelled stable changes on turn 3 before a placer moves it: the request must still read the
+    # reference prefix instead of writing everything again.
+    compiler = OpenAICompiler("gpt-5.6")
+    engine = SimEngine(compiler, PrefixCache(compiler.descriptor.ttl_seconds))
+    engine.run(_front_memory_session("12.5 mg"), 0)
+    usage, _ = engine.run(_front_memory_session("25 mg"), 5)
+    assert usage.cache_read_input_tokens > 0
 
 
 @pytest.mark.parametrize("compiler", [AnthropicCompiler("claude-sonnet-5"), OpenAICompiler("gpt-5.6")])

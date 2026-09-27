@@ -123,8 +123,12 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     fewer) still fit beside both anchors, so one mislabelled
     volatile module cannot take the system prompt out of cache (a memory or document anchor directly after that
     run takes the place: it covers the system prompt too, and it is the context other conversations share; every
-    request makes the same choice, so a later request reads the entry the first one wrote); then the newest history
-    endpoints, up to ``history_slots``; then the newest remaining candidates. ``history_slots`` is how
+    request makes the same choice, so a later request reads the entry the first one wrote). When only one anchor fits
+    beside the history endpoints and such a shared anchor exists, it replaces the last anchor if nothing unstable lies
+    between the last anchor and the history: the history endpoints then extend the last anchor's prefix, so that
+    anchor would be read only after a change in front of the history, and the earlier shared anchor survives more of
+    those changes (a front module labelled stable that changes no longer takes the whole prefix out of cache). Then
+    the newest history endpoints, up to ``history_slots``; then the newest remaining candidates. ``history_slots`` is how
     many history endpoints a compiler needs for the next request to name the endpoint this
     request writes: providers that read only at markers present in the request need one
     per markable segment a request can append.
@@ -167,10 +171,14 @@ def choose_breakpoints(ctx: Context, max_breakpoints: int, supported=None, *, hi
     keep = {anchor}
     need = min(history_slots, len(history))
     lead = [i for i in anchors if ctx.segments[i].kind in {"tools", "system"}]
-    if lead and lead[-1] != anchor and max_breakpoints - 2 >= need:
+    if lead and lead[-1] != anchor:
         after = lead[-1] + 1  # shared context right after the system run covers the system too
         shared = after in anchors and after != anchor and ctx.segments[after].kind in {"memory", "document"}
-        keep.add(after if shared else lead[-1])
+        if max_breakpoints - 2 >= need:
+            keep.add(after if shared else lead[-1])
+        elif shared and anchor < first_history and all(
+                seg.stable or not seg.content for seg in ctx.segments[anchor + 1:first_history]):
+            keep = {after}  # one anchor fits: the history endpoints already extend the last anchor's prefix
     reserve = min(need, max_breakpoints - len(keep))  # history endpoints before any newer non-history candidate
     if reserve:
         keep |= set([i for i in history if i not in keep][-reserve:])

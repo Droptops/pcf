@@ -57,8 +57,10 @@ gpt-5.6 is similar: 73% and 0.82M units for tuned front, and 90% and 0.22M for p
   the first front module takes the anchor on that turn. In simulation the 60-turn placed cost on gpt-5.6 falls 7%
   and Claude is unchanged. A paid gpt-5.6 check (6 scenarios, 12 turns, `move-turn-gpt-5.6.json`) read the reference
   prefix on all 18 move turns, 3,022-4,092 tokens, and wrote 182-642. One request, `clinical` turn 3, read
-  nothing on a turn without a move. Every other scenario read on that turn, and the audit cannot explain it from
-  the request; it is most likely a provider-side miss.
+  nothing on a turn without a move. Every other scenario read on that turn. The 2026-09-27 rerun traced the same
+  zero read to the breakpoint budget, not the provider: clinical's medication record changed on turn 3 while still
+  in front and labelled stable, and with three history endpoints the budget's only anchor was that record. OpenAI
+  requests now keep the shared reference's anchor in that case (see CHANGELOG).
 
 ## Limits
 

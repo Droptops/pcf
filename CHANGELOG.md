@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- OpenAI breakpoint selection: when only one anchor fits beside the three history endpoints, the memory or document
+  anchor directly after the system prompt now takes it instead of the last front module, provided nothing unstable
+  lies between that module and the history. A front module labelled stable that changed before `MemoryPlacer` moved
+  it used to leave no readable marker, so the request wrote its whole prefix again (clinical turn 3 in the gpt-5.6
+  runs, 62% of `MemoryPlacer`'s input-cost gap to the fixed tail). Marker positions move on many OpenAI requests
+  from the third history turn on (layouts with an unstable segment before the history keep theirs); segment hashes,
+  cache keys, accepted documents and the wire format do not change. Anthropic, with two history endpoints, is
+  unchanged.
+
 - Red-team hardening: release tags must resolve to protected `main`; the release job is bound to the
   `production-release` environment; sanitized pilot artifacts are hash-resolved; arm counts and all six release
   metrics are recomputed from the bound pilot log before thresholds are evaluated.

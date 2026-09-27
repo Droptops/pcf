@@ -59,7 +59,9 @@ the naive one:
   (gpt-5.6), so their accuracy can differ only by sampling (paired discordant turns 0/0 on gpt-5.6, 1/2 on Claude). On
   gpt-5.6, 68% of the difference is one scenario, clinical: its medication record changed on turn 3 while still in
   front (the placer moved it on turn 9), and with three history turns to mark, the OpenAI breakpoint budget kept no
-  anchor ahead of that record, so the whole prompt was written again on that turn.
+  anchor ahead of that record, so the whole prompt was written again on that turn. The library now keeps the shared reference's anchor in that
+  case; with that turn reading the reference as turns 2, 6 and 9 did, `MemoryPlacer` would have billed about 0.449 of
+  tuned front on gpt-5.6 (an offline estimate, not a rerun).
 - **These runs do not test what the placer is for.** `MemoryPlacer` is meant for when you do not know which modules
   change. Here the fixed tail was declared correctly and every changing record changed by turn 6, so the runs measure
   the placer's warm-up cost, not its benefit against a wrong or partial declaration. With scripted histories the two
@@ -400,7 +402,8 @@ minimum cacheable length stay together. List modules stable-first; memory with i
 Tail memory never takes a cache marker.
 
 Front memory that changes should be marked `stable=False`, or its marker is rewritten every turn (and on OpenAI,
-whose budget keeps three history endpoints, it can take the system prompt's slot). Pass `split(..., cold=True)`
+whose budget keeps three history endpoints, it can take the only anchor slot unless a shared memory module directly
+follows the system prompt; see the breakpoint rules in [`spec/SPEC.md`](spec/SPEC.md)). Pass `split(..., cold=True)`
 when the provider cache has expired, predicted from time (`now - last_request >= descriptor.ttl_seconds`), not from
 a zero cache read: by the time usage shows a miss, that request has already rewritten the cache in the old layout.
 
