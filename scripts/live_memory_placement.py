@@ -280,6 +280,13 @@ def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Se
     return mem, []
 
 
+def session_nonces(jobs, paid: bool) -> dict:
+    """A random tag per session for its system text. Anthropic caches by prefix with no namespace, so sessions that
+    shared a tag across arms read each other's cache entries; one tag per session keeps every arm's cache its own
+    while the text still names no arm. Offline runs make no provider calls and use a fixed tag."""
+    return {job: uuid.uuid4().hex[:12] if paid else "offline" for job in jobs}
+
+
 def session(arm: str, nonce: str, cfg, client=None) -> list[dict]:
     compiler = make_compiler(cfg.provider, cfg.model, effort=cfg.effort, thinking=cfg.thinking)
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
@@ -422,19 +429,21 @@ if __name__ == "__main__":
         client = make_client(cfg.provider, cfg.anthropic_route)
     writes = make_compiler(cfg.provider, cfg.model, effort=cfg.effort,
                            thinking=cfg.thinking).descriptor.cache_write_multiplier
-    nonces = [uuid.uuid4().hex[:12] if client else "offline" for _ in range(cfg.repeats if client else 1)]
-    jobs = [(i, arm) for i in range(len(nonces)) for arm in cfg.arms]  # fresh prefix per repeat: arms start cold
+    repeats = cfg.repeats if client else 1
+    jobs = [(i, arm) for i in range(repeats) for arm in cfg.arms]
+    nonces = session_nonces(jobs, client is not None)  # fresh prefix per session: every arm starts cold
     with ThreadPoolExecutor(max(1, cfg.workers if client else 1)) as pool:
-        done = dict(zip(jobs, pool.map(lambda job: session(job[1], nonces[job[0]], cfg, client), jobs)))
+        done = dict(zip(jobs, pool.map(lambda job: session(job[1], nonces[job], cfg, client), jobs)))
     runs = []
-    for i in range(len(nonces)):
+    for i in range(repeats):
         run = {arm: done[(i, arm)] for arm in cfg.arms}
         run["summary"] = {arm: summarize(run[arm], cfg, writes) for arm in cfg.arms}
         runs.append(run)
     meta = {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "git_sha": git_sha(),
             "provider": cfg.provider, "model": cfg.model,
-            "anthropic_route": cfg.anthropic_route if cfg.provider == "anthropic" else None, "turns": cfg.turns, "repeats": len(nonces),
+            "anthropic_route": cfg.anthropic_route if cfg.provider == "anthropic" else None, "turns": cfg.turns, "repeats": repeats,
             "arms": cfg.arms, "history_style": cfg.history_style, "thinking": cfg.thinking, "effort": cfg.effort,
             "write_multiplier": writes, "read_multiplier": cfg.read_multiplier,
-            "output_multiplier": cfg.output_multiplier, "paid": client is not None}
+            "output_multiplier": cfg.output_multiplier, "paid": client is not None,
+            "nonce_scope": "session", "workers": cfg.workers}
     print(json.dumps({"meta": meta, "runs": runs, "aggregate": aggregate(runs, cfg.arms)}, indent=2))

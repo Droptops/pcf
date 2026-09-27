@@ -7,6 +7,11 @@
   metrics are recomputed from the bound pilot log before thresholds are evaluated.
 - Synthetic treatment arms are no longer named in model-visible prompts. Historical benchmark numbers are marked
   descriptive pending an arm-blind rerun.
+- The live cost harnesses (`live_domain_sessions.py`, `live_memory_placement.py`) give every session its own random
+  nonce. Removing the arm name had left all arms of a repeat with one system prefix, and Anthropic, which caches by
+  prefix with no namespace, then served one arm's cache entries to another. The Claude costs in the first arm-blind
+  rerun (`results/2026-09-27`) are affected; its answers and its gpt-5.6 costs are not. Run metadata now records
+  `nonce_scope` and `workers`.
 - OpenAI reasoning/text settings and Anthropic thinking settings are compiled before request hashing/dispatch;
   candidate fingerprints include generation identity, so every existing candidate fingerprint changes, including
   for compilers with no generation settings. OpenAI `reasoning`/`text` settings are deep-copied at construction.

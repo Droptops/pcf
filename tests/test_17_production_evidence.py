@@ -190,3 +190,24 @@ def test_model_history_audit_requires_captures_and_preserves_them(tmp_path):
     row, = audit.from_domain(str(path), "placed")
     assert row["request"] == used["request"] and row["ts"] == 123
     assert row["source"] == "captured-synthetic"
+
+
+def test_paid_sessions_get_their_own_arm_blind_prefix(monkeypatch):
+    # Anthropic caches by prefix with no namespace: arms that share a system prefix read each other's cache entries.
+    jobs = [("tax", repeat, arm) for repeat in range(2) for arm in domain.ARMS]
+    nonces = domain.placement.session_nonces(jobs, paid=True)
+    assert len(set(nonces.values())) == len(jobs)
+    assert set(domain.placement.session_nonces(jobs, paid=False).values()) == {"offline"}
+    systems = {}
+
+    def call(provider, client, request, cfg):
+        systems.setdefault(arm, request["system"][0]["text"])
+        return {"usage": {"input_tokens": 100}}, "$1", {"output_tokens": 1}
+
+    monkeypatch.setattr(domain.placement, "call", call)
+    cfg = config(history_mode="scripted", capture_requests=False)
+    cfg.provider, cfg.model, cfg.turns = "anthropic", "claude-sonnet-5", 1
+    for arm in ("fixed-tail", "placed"):
+        domain.session("tax", arm, nonces[("tax", 0, arm)], cfg, client=object())
+    assert systems["fixed-tail"] != systems["placed"]
+    assert not any(label in text for text in systems.values() for label in ("fixed-tail", "placed", "tail"))

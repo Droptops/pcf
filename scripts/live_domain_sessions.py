@@ -27,7 +27,6 @@ import os
 import statistics
 import time
 import sys
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(__file__)
@@ -305,12 +304,12 @@ if __name__ == "__main__":
         client = placement.make_client(cfg.provider, cfg.anthropic_route)
     writes = placement.make_compiler(cfg.provider, cfg.model).descriptor.cache_write_multiplier
     repeats = cfg.repeats if client else 1
-    nonces = {(k, i): uuid.uuid4().hex[:12] if client else "offline" for k in cfg.scenarios for i in range(repeats)}
     run_git_sha = placement.git_sha()
     jobs = [(k, i, arm) for k in cfg.scenarios for i in range(repeats) for arm in cfg.arms]
+    nonces = placement.session_nonces(jobs, client is not None)  # per session, so arms never share a cache entry
     def attempt(job):
         try:
-            return session(job[0], job[2], nonces[(job[0], job[1])], cfg, client)
+            return session(job[0], job[2], nonces[job], cfg, client)
         except Exception as exc:  # e.g. quota exhausted: keep the sessions that finished
             return {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
 
@@ -334,7 +333,8 @@ if __name__ == "__main__":
             "repeats": repeats, "arms": cfg.arms, "scenarios": cfg.scenarios, "thinking": cfg.thinking,
             "effort": cfg.effort, "write_multiplier": writes, "read_multiplier": cfg.read_multiplier,
             "output_multiplier": cfg.output_multiplier, "violation_tokens": cfg.violation_tokens,
-            "paid": client is not None, "data": "synthetic; see scripts/domain_scenarios.py",
+            "paid": client is not None, "nonce_scope": "session", "workers": cfg.workers,
+            "data": "synthetic; see scripts/domain_scenarios.py",
             "failed_sessions": [{"scenario": j[0], "repeat": j[1], "arm": j[2], "error": e} for j, e in failed.items()],
             "scenarios_complete": complete}
     print(json.dumps({"meta": meta, "scenarios": scenarios, "aggregate": aggregate}, indent=2))
