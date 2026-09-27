@@ -90,13 +90,13 @@ def contexts(repeats: int, turns: int):
                 nonce = "calibration"  # no per-session tag: repeated scripted contexts must stay identical
                 compiler = AnthropicCompiler("claude-haiku-4-5")
                 placer = placement.MemoryPlacer(compiler.tokenizer, write_multiplier=1.25, read_multiplier=0.1)
-                system = Segment("s", "system", f"Session {nonce}-{arm}.\n" + "\n".join(placement.POLICIES))
+                system = Segment("s", "system", f"Session {nonce}.\n" + "\n".join(placement.POLICIES))
                 history, said = [], {}
                 for turn in range(turns):
                     mem = placement.memory(turn)
                     front, tail = placement.arrange(arm, placer, mem, history)
                     text, expected = placement.question(turn)
-                    ctx = Context([system, *front, *history, *tail, Segment("u", "user", text, stable=False)])
+                    ctx = Context([system, *front, *history, *tail, Segment("u", "user", text, stable=False)],\n                                  cache_namespace=f"{nonce}-{arm}")
                     stale = said.get(text)
                     trap = stale is not None and stale != expected
                     module = {0: "account", 1: "notes", 2: "preferences", 3: "profile"}[turn % 4]
