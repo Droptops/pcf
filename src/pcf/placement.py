@@ -267,6 +267,8 @@ class MemoryPlacer:
                 if decision[0] != input_hash:
                     raise ValueError("turn_id was already used with different placement inputs")
                 return self._replay(memory, decision)
+            if turn_id is not None and expected_revision is None:
+                raise ValueError("a new durable turn_id requires expected_revision")
             if expected_revision is not None and expected_revision != self._revision:
                 raise ConcurrentPlacementUpdate(
                     f"placement revision changed: expected {expected_revision}, found {self._revision}")
