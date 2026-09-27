@@ -86,7 +86,8 @@ def build(kind: str, final: int, style: str, arm: str, compiler, tag: str):
         expected = f"{placement.account(final)['open_tickets']}, {placement.notes(final)['current_plan']}"
     else:
         question, expected = placement.question(final)
-    ctx = Context([system, *front, *history, *tail, Segment("u", "user", question, stable=False)],\n                  cache_namespace=f"{tag}-{arm}")
+    ctx = Context([system, *front, *history, *tail, Segment("u", "user", question, stable=False)],
+                  cache_namespace=f"{tag}-{arm}")
     return ctx, expected
 
 
