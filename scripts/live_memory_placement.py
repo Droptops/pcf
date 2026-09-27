@@ -271,9 +271,9 @@ def call(provider: str, client, request: dict, cfg) -> tuple[object, str, dict]:
     raise AssertionError("unreachable")
 
 
-def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment]):
+def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], prefix_tokens: int = 0):
     if arm in {"placed", "placed-spacer"}:
-        front, tail = placer.split(mem, history)
+        front, tail = placer.split(mem, history, prefix_tokens=prefix_tokens)
         return front, [*tail, SPACER] if arm == "placed-spacer" else tail
     if arm == "tail":
         return [], [Segment(s.id, "memory", s.content, False, provenance=s.provenance) for s in mem]
@@ -286,8 +286,9 @@ def session(arm: str, nonce: str, cfg, client=None) -> list[dict]:
                           read_multiplier=cfg.read_multiplier)
     system = Segment("s", "system", f"Session {nonce}.\n" + "\n".join(POLICIES))
     history, rows, said = [], [], {}
+    prefix_tokens = compiler.tokenizer.count(system.content)
     for turn in range(cfg.turns):
-        front, tail = arrange(arm, placer, memory(turn), history)
+        front, tail = arrange(arm, placer, memory(turn), history, prefix_tokens)
         text, expected = question(turn)
         ctx = Context([system, *front, *history, *tail, Segment("u", "user", text, stable=False)],
                       cache_namespace=f"{arm}-{nonce}")
