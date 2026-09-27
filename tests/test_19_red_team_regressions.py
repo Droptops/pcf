@@ -83,3 +83,20 @@ def test_model_specific_cache_read_prices_feed_placement():
     assert MemoryPlacer.for_compiler(AnthropicCompiler("claude-sonnet-5")).read_multiplier == .1
     with pytest.raises(ValueError, match="cache-read multiplier"):
         MemoryPlacer.for_compiler(OpenAICompiler("gpt-5.5"))
+
+
+def test_descriptors_without_a_cache_read_multiplier_still_validate():
+    from pcf.schemas import validate
+    doc = OpenAICompiler("gpt-5.6").descriptor.to_json()
+    del doc["cache_read_multiplier"]  # as serialized before the field existed
+    validate("cache-descriptor", doc)
+
+
+def test_openai_generation_settings_are_snapshotted_deeply():
+    text = {"format": {"type": "json_schema", "name": "answer", "schema": {"type": "object"}}}
+    compiler = OpenAICompiler("gpt-5.6", text=text)
+    fingerprint = compiler.candidate_fingerprint
+    text["format"]["schema"]["type"] = "array"  # a later caller edit must not reach the compiler
+    ctx = Context([Segment("s", "system", "rules"), Segment("u", "user", "hi", stable=False)])
+    assert compiler.compile(ctx).request["text"]["format"]["schema"] == {"type": "object"}
+    assert compiler.candidate_fingerprint == fingerprint

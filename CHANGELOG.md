@@ -8,14 +8,19 @@
 - Synthetic treatment arms are no longer named in model-visible prompts. Historical benchmark numbers are marked
   descriptive pending an arm-blind rerun.
 - OpenAI reasoning/text settings and Anthropic thinking settings are compiled before request hashing/dispatch;
-  candidate fingerprints include generation identity. The generic OpenAI `default` namespace no longer forces
-  unrelated callers into one explicit provider cache key.
+  candidate fingerprints include generation identity, so every existing candidate fingerprint changes, including
+  for compilers with no generation settings. OpenAI `reasoning`/`text` settings are deep-copied at construction.
+  The generic OpenAI `default` namespace no longer forces unrelated callers into one explicit provider cache key:
+  such requests omit `prompt_cache_key`.
 - `MemoryPlacer` cache minimums now use the provider-visible prefix a tail move keeps cached, ending at the
   history breakpoint: the stable lead (`prefix_tokens` / `prefixTokens`), front modules and history. Durable
   decisions can be returned with their exact state snapshot atomically, and retained idempotency decisions are
-  bounded. State format is version 2 in Python and TypeScript.
+  bounded. State format is version 2 in Python and TypeScript; version 1 snapshots are rejected. A new `turn_id` /
+  `turnId` now requires `expected_revision` / `expectedRevision`; callers that passed a turn id alone must read
+  the revision first.
 - Cache-read economics are descriptor/model specific, including current Claude Fable/Mythos 5.1 and Opus 5.5
   exceptions. `for_compiler()` requires an explicit read multiplier when a compiler profile does not declare one.
+  Serialized cache descriptors gain an optional `cache_read_multiplier`; descriptors without it still validate.
 - The installable distribution is renamed to `portable-context-format` to avoid the occupied PyPI `pcf` project;
   the Python import namespace remains `pcf`.
 

@@ -19,6 +19,9 @@ MIN_CACHEABLE = {"claude-fable-5-1": 512, "claude-fable-5": 512, "claude-mythos-
 # "Claude 4.6 and later models and Claude Mythos Preview" reject a final assistant turn (prefill) with a 400, per
 # platform.claude.com/docs/en/api/errors ("Prefill not supported"), checked 2026-09-24. IDs per Anthropic's models
 # overview; unlisted models are not checked.
+# Cache-read price over base input price where it is not the usual 0.1: Claude Fable 5.1 and Claude Mythos 5.1 read
+# at $0.25 against $10/MTok input, Claude Opus 5.5 at $0.20 against $4/MTok, per Anthropic's model pricing, checked
+# 2026-09-27.
 CACHE_READ_MULTIPLIER = {"claude-fable-5-1": 0.025, "claude-mythos-5-1": 0.025, "claude-opus-5-5": 0.05}
 
 PREFILL_REJECTED = {"claude-fable-5-1", "claude-fable-5", "claude-mythos-5-1", "claude-mythos-5", "claude-mythos-preview",

@@ -1,6 +1,7 @@
 """Responses API compiler with native content markers and stable cache partitions."""
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from ..compiler import ContextCompiler, Usage, data_text
@@ -114,8 +115,9 @@ class OpenAICompiler(ContextCompiler):
             raise ValueError("reasoning must be an object or null")
         if text is not None and not isinstance(text, dict):
             raise ValueError("text must be an object or null")
-        self.reasoning = dict(reasoning) if reasoning is not None else None
-        self.text = dict(text) if text is not None else None
+        # Deep copies: `text` can carry a nested JSON schema that a caller could otherwise change after compiling.
+        self.reasoning = copy.deepcopy(reasoning)
+        self.text = copy.deepcopy(text)
         self.profile = openai_profile(model_id, capabilities)
         self.descriptor = openai_descriptor(model_id, capabilities=self.profile)
         self.tokenizer = tokenizer if tokenizer is not None else HeuristicTokenizer()
@@ -214,9 +216,9 @@ class OpenAICompiler(ContextCompiler):
         if partition is not None:
             result["prompt_cache_key"] = partition
         if self.reasoning is not None:
-            result["reasoning"] = dict(self.reasoning)
+            result["reasoning"] = copy.deepcopy(self.reasoning)
         if self.text is not None:
-            result["text"] = dict(self.text)
+            result["text"] = copy.deepcopy(self.text)
         if tools:
             result["tools"] = tools
         if self.explicit:  # explicit mode with no marker disables caching, so fall back to implicit
