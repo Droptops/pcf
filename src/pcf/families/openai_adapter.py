@@ -102,12 +102,19 @@ class OpenAICompiler(ContextCompiler):
     history_slots = 3
 
     def __init__(self, model_id: str, *, tokenizer=None, capabilities: OpenAICapabilities | None = None,
-                 reasoning_items: str = "replay"):
-        """``reasoning_items`` chooses what happens to reasoning items kept in history: "replay" sends them before
-        the assistant turn they preceded, "drop" strips them."""
+                 reasoning_items: str = "replay", reasoning: dict | None = None, text: dict | None = None):
+        """``reasoning_items`` chooses what happens to reasoning items kept in history. Provider settings that can
+        affect prompt-cache identity, including ``reasoning`` and ``text``, are compiled into the request rather
+        than appended by a caller after compilation."""
         if reasoning_items not in {"replay", "drop"}:
             raise ValueError("reasoning_items must be replay or drop")
         self.reasoning_items = reasoning_items
+        if reasoning is not None and not isinstance(reasoning, dict):
+            raise ValueError("reasoning must be an object or null")
+        if text is not None and not isinstance(text, dict):
+            raise ValueError("text must be an object or null")
+        self.reasoning = dict(reasoning) if reasoning is not None else None
+        self.text = dict(text) if text is not None else None
         self.profile = openai_profile(model_id, capabilities)
         self.descriptor = openai_descriptor(model_id, capabilities=self.profile)
         self.tokenizer = tokenizer if tokenizer is not None else HeuristicTokenizer()
@@ -116,7 +123,9 @@ class OpenAICompiler(ContextCompiler):
 
     @property
     def generation_identity(self) -> dict:
-        return {"reasoning_items": self.reasoning_items} if self.reasoning_items != "replay" else {}
+        return {**({"reasoning_items": self.reasoning_items} if self.reasoning_items != "replay" else {}),
+                **({"reasoning": self.reasoning} if self.reasoning is not None else {}),
+                **({"text": self.text} if self.text is not None else {})}
 
     def supports_boundary(self, ctx, index):
         seg = ctx.segments[index]
@@ -191,11 +200,22 @@ class OpenAICompiler(ContextCompiler):
             yield self._result(partition, inputs, tools, marked)
 
     @staticmethod
-    def _partition(ctx: Context) -> str:
+    def _partition(ctx: Context) -> str | None:
+        # Do not force every caller that accepted Context's generic "default" into one provider cache partition.
+        # Applications that intentionally share cache state across conversations must supply a tenant/workspace
+        # cache_namespace explicitly.
+        if ctx.cache_namespace == "default":
+            return None
         return "pcf-" + hash_object("pcf:partition:0.2", {"namespace": ctx.cache_namespace})[7:39]
 
-    def _result(self, partition: str, inputs: list, tools: list, marked: bool) -> dict:
-        result = {"model": self.descriptor.model_id, "input": inputs, "prompt_cache_key": partition}
+    def _result(self, partition: str | None, inputs: list, tools: list, marked: bool) -> dict:
+        result = {"model": self.descriptor.model_id, "input": inputs}
+        if partition is not None:
+            result["prompt_cache_key"] = partition
+        if self.reasoning is not None:
+            result["reasoning"] = dict(self.reasoning)
+        if self.text is not None:
+            result["text"] = dict(self.text)
         if tools:
             result["tools"] = tools
         if self.explicit:  # explicit mode with no marker disables caching, so fall back to implicit
