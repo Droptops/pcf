@@ -79,6 +79,18 @@ def _verify_pilot_log(rows: list[dict], arms: dict) -> None:
         arm, conversation = row.get("arm"), row.get("conversation")
         if arm not in summary or not isinstance(conversation, str) or not conversation:
             raise ValueError(f"pilot log row {i} has invalid arm/conversation")
+        for key in ("cached", "written", "uncached"):
+            value = row.get(key)
+            if type(value) is not int or value < 0:
+                raise ValueError(f"pilot log row {i} {key} must be a nonnegative integer")
+        latency = row.get("latency_s")
+        if isinstance(latency, bool) or not isinstance(latency, (int, float)) or not math.isfinite(latency) or latency < 0:
+            raise ValueError(f"pilot log row {i} latency_s must be finite and nonnegative")
+        if type(row.get("success")) is not bool:
+            raise ValueError(f"pilot log row {i} success must be boolean")
+        for key in ("correct", "blind_acceptable"):
+            if row.get(key) is not None and type(row[key]) is not bool:
+                raise ValueError(f"pilot log row {i} {key} must be boolean or null")
         request_id = row.get("request_id")
         if request_id is not None:
             identity = (row.get("cache_scope"), request_id)
@@ -87,12 +99,53 @@ def _verify_pilot_log(rows: list[dict], arms: dict) -> None:
             seen_requests.add(identity)
         summary[arm]["conversations"].add(conversation)
         summary[arm]["requests"] += 1
-        summary[arm]["failures"] += row.get("success") is False
+        summary[arm]["failures"] += row["success"] is False
     for arm in ARMS:
         actual = {"conversations": len(summary[arm]["conversations"]), "requests": summary[arm]["requests"],
                   "failures": summary[arm]["failures"]}
         if actual != arms[arm]:
             raise ValueError(f"bound pilot log does not match arm summary for {arm}")
+
+
+def _recompute_gates(rows: list[dict], prices: dict) -> dict[str, float]:
+    grouped = {arm: {} for arm in ARMS}
+    for row in rows:
+        grouped[row["arm"]].setdefault(row["conversation"], []).append(row)
+    write = prices["cache_write"] / prices["uncached_input"]
+    read = prices["cache_read"] / prices["uncached_input"]
+
+    def mean_input_cost(arm):
+        costs = [math.fsum(r["uncached"] + write * r["written"] + read * r["cached"] for r in turns)
+                 for turns in grouped[arm].values()]
+        return math.fsum(costs) / len(costs)
+
+    def error_rate(arm, key):
+        values = [row[key] for row in rows if row["arm"] == arm and row.get(key) is not None]
+        if not values:
+            raise ValueError(f"bound pilot log has no {key} observations for {arm}")
+        return sum(not value for value in values) / len(values)
+
+    def failure_rate(arm):
+        values = [row["success"] for row in rows if row["arm"] == arm]
+        return sum(not value for value in values) / len(values)
+
+    def p90(arm):
+        values = sorted(row["latency_s"] for row in rows if row["arm"] == arm)
+        return values[min(len(values) - 1, int(.9 * len(values)))]
+
+    front, placed, fixed = "front-tuned", "placed", "fixed-tail"
+    front_cost, placed_cost, fixed_cost = mean_input_cost(front), mean_input_cost(placed), mean_input_cost(fixed)
+    if front_cost <= 0 or fixed_cost <= 0:
+        raise ValueError("bound pilot log has a zero input-cost baseline")
+    return {
+        "placed_vs_fixed_tail_input_cost": round(placed_cost / fixed_cost, 4),
+        "placed_vs_front_tuned_input_cost": round(placed_cost / front_cost, 4),
+        "quality_noninferiority": round(error_rate(placed, "correct") - error_rate(front, "correct"), 4),
+        "blind_quality_noninferiority": round(
+            error_rate(placed, "blind_acceptable") - error_rate(front, "blind_acceptable"), 4),
+        "latency": round(p90(placed) - p90(front), 4),
+        "failure_rate": round(failure_rate(placed) - failure_rate(front), 4),
+    }
 
 
 def validate_evidence(doc: dict, artifact_dir: str | Path | None = None) -> dict:
@@ -166,6 +219,10 @@ def validate_evidence(doc: dict, artifact_dir: str | Path | None = None) -> dict
         raise ValueError("bound release artifacts are required")
     pilot_rows, blind_artifact, analysis_artifact = _load_bound_artifacts(doc, artifact_dir)
     _verify_pilot_log(pilot_rows, doc["arms"])
+    recomputed = _recompute_gates(pilot_rows, doc["actual_prices_per_million_tokens"])
+    for name, estimate in recomputed.items():
+        if doc["gates"][name]["estimate"] != estimate:
+            raise ValueError(f"release gate {name} estimate does not match bound pilot log")
     if not isinstance(blind_artifact, dict) or blind_artifact != doc["blind_review"]:
         raise ValueError("bound blind-review artifact does not match release evidence")
     if not isinstance(analysis_artifact, dict) or analysis_artifact.get("gates") != doc["gates"]:
