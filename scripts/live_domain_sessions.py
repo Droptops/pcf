@@ -80,10 +80,10 @@ def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None 
         raise ValueError("unknown history mode")
     if history_mode == "model-text" and client is None:
         raise ValueError("model-text history requires responses; use --run")
-    compiler = placement.make_compiler(cfg.provider, cfg.model)
+    compiler = placement.make_compiler(cfg.provider, cfg.model, effort=cfg.effort, thinking=cfg.thinking)
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=cfg.read_multiplier)
-    system = Segment("s", "system", f"Session {nonce}-{key}-{arm}.\n" + scenario.system())
+    system = Segment("s", "system", f"Session {nonce}-{key}.\n" + scenario.system())
     history, rows, said, prior = [], [], {}, {}
     for turn in range(cfg.turns):
         ask, expected = scenario.question(turn)
