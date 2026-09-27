@@ -26,6 +26,11 @@ cheaper model and always falls back.
 
 ## Headline result
 
+> **Evidence status:** the historical synthetic runs below exposed the layout arm name in a model-visible session
+> label. That is a treatment-isolation confound. The harness is fixed on this branch, but these numbers remain
+> historical/descriptive until the four-arm matrix is rerun with arm-blind prompts. Do not use them as confirmatory
+> evidence for an RC or stable release.
+
 Measured live on gpt-5.6 and claude-sonnet-5 on synthetic sessions, with assumed cache prices (raw data in
 [`results/`](results/)). The baseline is the best front layout, with the changing modules marked uncacheable, not
 the naive one:
