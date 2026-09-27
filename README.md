@@ -26,49 +26,98 @@ cheaper model and always falls back.
 
 ## Headline result
 
-Measured live on gpt-5.6 and claude-sonnet-5 on synthetic sessions, with assumed cache prices (raw data in
-[`results/`](results/)). The baseline is the best front layout, with the changing modules marked uncacheable, not
+> **Evidence status:** the 60-turn numbers below come from an arm-blind rerun (2026-09-27): no layout label reaches
+> the model, and no session reads another session's cache entries (Claude: one nonce per session in the system text;
+> gpt-5.6: one `prompt_cache_key` per session, with the layouts of a repeat sharing the system text). Earlier
+> synthetic runs showed the layout's name in a model-visible session label, a treatment-isolation confound; sections
+> built on them are marked historical and remain descriptive. All of these are synthetic workloads at assumed cache
+> prices, not release evidence: a release needs the production pilot in [`release/`](release/).
+
+Measured live on gpt-5.6 and claude-sonnet-5 over 60 back-to-back turns, 2 repeats, at assumed cache prices (writes
+1.25× and reads 0.1× the base input price; raw data in [`results/2026-09-27/`](results/2026-09-27/)). The six
+synthetic scenarios share one schedule in six vocabularies: a large reference and one record that never change, and
+records changing every 6th turn, every 3rd turn and every turn, with the questions cycling through the records. One
+record changes every turn, so tuned front re-bills its history on every turn; workloads whose front memory changes
+less often will save less. The baseline is the best front layout, with the changing modules marked uncacheable, not
 the naive one:
 
-| Placed memory against the tuned front layout | gpt-5.6 | claude-sonnet-5 |
+| Against the tuned front layout, 60 turns | gpt-5.6 | claude-sonnet-5 |
 | --- | ---: | ---: |
-| Input cost, 24 turns (six scenarios) | 0.86 | 0.88 |
-| Input cost, 60 turns (six scenarios) | **0.46** | **0.49** |
-| Input cost, 60 turns, prefix shared across users | **0.53** | **0.50** |
-| Correct at 60 turns, tuned front → placed | 696 → 718 of 720 | 650 → 719 of 720 |
-| Median latency at 60 turns, tuned front → placed | 2.00 s → 1.91 s | 6.01 s → 3.73 s |
-| **Echo-all** at 60 turns: input cost, correct | 0.47, 719 of 720 | 0.51, 719 of 720 |
+| Input cost: `MemoryPlacer` | 0.456 | 0.486 |
+| Input cost: fixed tail (declared changing modules after the history) | 0.444 | 0.484 |
+| Input cost: echo-all (front unchanged, current values repeated before the question) | 0.465 | 0.507 |
+| Input and output cost (output at 5×): `MemoryPlacer`, fixed tail, echo-all | 0.493, 0.478, 0.500 | 0.414, 0.415, 0.447 |
+| Correct of 720: tuned front, `MemoryPlacer`, fixed tail, echo-all | 703, 719, 719, 720 | 641, 719, 718, 718 |
+| Median latency: tuned front, `MemoryPlacer`, fixed tail, echo-all | 1.94, 1.73, 1.70, 1.75 s | 4.97, 2.27, 2.35, 3.20 s |
 
-- **The 60-turn rows are from the current library** (`domain-*-60turn-after-fixes.json`), after two cache-marker
-  fixes found by the fleet test and the cache audit; the run before them gave 0.49 and 0.53, with 703 and 652 correct
-  for tuned front and 720 and 719 for placed. Two of placed's three misses answered a negative balance as "a credit
-  of $145.47", which the grader counts wrong.
-- **A simpler layout does as well.** *Echo-all* leaves the memory in front unchanged all session (the cached prefix
-  never changes) and repeats every module that changes just before the question. In the same 60-turn runs it matched
-  `MemoryPlacer` within noise on cost and accuracy (placed 0.46 and 0.49, 717 and 718 correct). The accuracy gain over
-  tuned front is recency: the current value next to the question. Echoing only the field the question needs costs
-  less (0.36 and 0.38) but needs to know that field, and on Claude the stale values left in front drew replies about
-  three times longer that flagged the inconsistency. See [the echo baseline](#the-echo-baseline).
+- **The gain is putting current values after the history; the placer is not the cheapest way to do it.** A fixed tail,
+  declared from the scenarios' own metadata, cost 2.7% less input than `MemoryPlacer` on gpt-5.6 and 0.3% less on
+  Claude (where the placer was cheaper in clinical, and 0.2% cheaper overall once output is counted); echo-all cost
+  more. The difference is the placer's warm-up: it moves a module only after seeing it change and once the history
+  behind it is long enough for the move to pay. By turn 6 (turn 9 in clinical) it has reached the fixed tail's layout,
+  and from the next turn the two send the same requests apart from the per-session nonce (Claude) or cache key
+  (gpt-5.6), so their accuracy can differ only by sampling (paired discordant turns 0/0 on gpt-5.6, 1/2 on Claude). On
+  gpt-5.6, 68% of the difference is one scenario, clinical: its medication record changed on turn 3 while still in
+  front (the placer moved it on turn 9), and with three history turns to mark, the OpenAI breakpoint budget kept no
+  anchor ahead of that record, so the whole prompt was written again on that turn.
+- **These runs do not test what the placer is for.** `MemoryPlacer` is meant for when you do not know which modules
+  change. Here the fixed tail was declared correctly and every changing record changed by turn 6, so the runs measure
+  the placer's warm-up cost, not its benefit against a wrong or partial declaration. With scripted histories the two
+  cannot be separated on accuracy; the only run with the models' own replies (historical) had the fixed tail 10 turns
+  behind `MemoryPlacer` on gpt-5.6.
+- **All three beat tuned front on accuracy.** Paired discordant turns for `MemoryPlacer` are 1/17 on gpt-5.6 and 1/79
+  on Claude. Turns within a session are correlated and the two gpt-5.6 repeats bill within 1% of each other, so the
+  independent units are the six scenarios: `MemoryPlacer` had fewer misses than tuned front in 5 of 6 on gpt-5.6 (one
+  tie) and 6 of 6 on Claude (two-sided sign test p = 0.06 and 0.03). On 444 of the 720 turns the history had stated an
+  older value for the question; 15 of tuned front's 17 misses on gpt-5.6 and 74 of 79 on Claude fell on such turns,
+  and 13 of the 17 and 49 of the 79 repeated a value the history had stated for that question (only 1 and 5 repeated
+  the most recent one). The scripted replies plant those values on purpose, so on gpt-5.6 this measures recency
+  against a planted stale value, not answer quality in general. The other 30 Claude misses gave a value the history
+  never stated for that question (25) or none (5), and some Claude misses on both sides of that split were replies
+  that stopped to correct earlier answers and were scored on their first value. `MemoryPlacer`'s only miss on each
+  model read a balance of -$145.47 as a $145.47 credit (gpt-5.6: "$0 due; the account has a $145.47 credit"), which
+  the grader scores on its first value. On Claude, 3 of the 4 misses by the fixed tail and echo-all were the same
+  credit answer or a close date of -3 given as "3 days overdue", so all three layouts after the history are at or near
+  ceiling on both models. For small models, see [Limits](#limits-of-the-evidence).
+- **Cost ratios depend on the assumed prices and the session length.** Repricing the same usage (the placer's moves
+  were chosen at 1.25×/0.1×; set to 0.5× reads or 2.0× writes it would move some records earlier), `MemoryPlacer`
+  bills 0.62 and 0.79 of tuned front on gpt-5.6 at reads of 0.25× and 0.5× (0.66 and 0.81 on Claude), and at writes of
+  2.0× with reads at 0.1× 0.34 on gpt-5.6 and 0.36 on Claude. The fixed tail stays within 0.02 of it at all these
+  prices, but the order can change: at writes of 2.0× echo-all is marginally cheaper than `MemoryPlacer` on gpt-5.6
+  (0.339 against 0.341), and at writes of 1.0× `MemoryPlacer` is marginally cheaper than the fixed tail on Claude.
+  Savings grow with the history: over the first 12, 24 and 36 turns of these scripted sessions, `MemoryPlacer` billed
+  0.93, 0.72 and 0.60 of tuned front on gpt-5.6 (fixed tail 0.83, 0.68 and 0.58) and 0.86, 0.71 and 0.61 on Claude
+  (fixed tail 0.84, 0.71 and 0.61); over the first 6 turns on gpt-5.6 it cost more than tuned front (1.05; fixed tail
+  0.93). Output is not cached, so counting it makes every layout less favorable on gpt-5.6; it helps on Claude only
+  because tuned front wrote longer replies.
+- **Claude's tuned front wrote much more.** It produced 311 output tokens per turn, thinking included, against 95-110
+  for the other layouts (visible replies about 116 against 28-33 estimated tokens), and 403 of its 720 replies failed
+  the harness's 80-token length check (the prompt asks for the value plus at most one short sentence). Output explains
+  most of its latency gap but not all: on turns with at most 100 output tokens its median latency was 3.07 s against
+  1.95 s for `MemoryPlacer`. Structured outputs or tool calls will not reproduce these reply lengths.
+- **The rerun reproduces the earlier cache-isolated figures:** 0.46 on gpt-5.6 (every request served by gpt-5.6-sol)
+  and 0.49 on Claude (then through OpenRouter, now directly through Anthropic's API). A first arm-blind Claude run
+  gave 0.45 because its layouts shared one cache prefix and read each other's entries; its files are kept and marked
+  superseded in [`results/README.md`](results/README.md).
 - **When it does not pay.** Turns that arrive after the cache lifetime (5 minutes on Claude's default) read nothing:
-  in a Claude run with every turn past it, no turn read the cache, so casework with pauses between turns keeps
-  little of the 60-turn figure. At 24 turns the input saving is 12-14%. Structured outputs or tool calls will not
-  reproduce the shorter replies seen on Claude, so quote input cost, not total. Tail memory that changes between
-  turns conflicts with replaying extended-thinking blocks bound to the earlier prefix. Sessions that share a prefix
-  were tested with synchronized users only.
-- **Front layouts gave out-of-date values.** Most of their wrong answers repeated an older value instead of the
-  current record; placed memory sits next to the question. The scripted replies state old values in the history on
-  purpose, so this measures recency against a planted stale value, not answer quality in general. The exception is a small model with a record
-  that was not updated: see [Limits](#limits-of-the-evidence).
-- **Against the naive front layout** (every module cacheable), the domain workloads cost 3.7-4.1x more than placed
-  memory at 24 turns (input plus output). That comparison flatters the method; the tuned numbers above are the ones to quote.
+  in a historical Claude run with every turn past it, no turn read the cache, so casework with pauses between turns
+  keeps little of the 60-turn figure. Tail memory that changes between turns conflicts with replaying
+  extended-thinking blocks bound to the earlier prefix. Sessions that share a prefix were tested only in historical
+  runs, with synchronized users (0.53 and 0.50 of tuned front at 60 turns).
+- **Against the naive front layout** (every module cacheable), historical 24-turn domain runs cost 3.7-4.1x more than
+  placed memory (input plus output). That comparison flatters the method; quote the tuned comparison above.
 - **Multi-step tool loops reuse 100% of the previous request's cache** on both providers.
 
-Recommended starting point: keep large stable reference modules in front and let `MemoryPlacer` place changing
-modules. All-tail worked well on the smaller support workload below, but was substantially more expensive on the
-domain workloads with large stable references, including Claude. Compare layouts on your workload. For small
-models, see the caveat under [Limits](#limits-of-the-evidence).
+Recommended starting point: keep large stable reference modules in front and put changing modules after the history.
+If you know which modules change, a fixed tail is simplest and cost the least input here (these runs cannot separate
+its accuracy from `MemoryPlacer`'s); `MemoryPlacer` learns the split from observed changes at the cost of warm-up
+turns. In historical runs, all-tail worked well on the smaller support workload below but was substantially more
+expensive on the domain workloads with large stable references; the arm-blind rerun did not include it. Compare
+layouts on your workload. For small models, see the caveat under [Limits](#limits-of-the-evidence).
 
 ## The echo baseline
+
+> Historical run: the session label named the layout (see [Evidence status](#headline-result)).
 
 A reviewer asked for the arm the experiments lacked: leave the cached prefix alone and repeat the current values next
 to the question. `scripts/live_domain_sessions.py` has two such arms. `echo` keeps the memory as it was on turn 0 in
@@ -92,6 +141,8 @@ answered at about three times the length (277 against 96 output tokens), and 4 o
 frozen record. Echo-all, with every changing value current, showed none of this.
 
 ## With the model's own replies
+
+> Historical run: the session label named the layout (see [Evidence status](#headline-result)).
 
 The runs above replay scripted assistant turns, some of which state old values on purpose. The run below feeds each
 layout its own visible replies instead (`--history-mode model-text`), and adds `fixed-tail`: every declared changing
@@ -148,6 +199,9 @@ PCF covers the pieces this needs:
 
 ## Evidence
 
+> Historical runs: the session label named the layout (see [Evidence status](#headline-result)), except the
+> 2026-09-24 gpt-5.6 runs, which predate that label and kept their layouts apart by `prompt_cache_key`.
+
 One scripted support session per cell, 20 turns × 5 repeats. Four memory modules change at different rates (never,
 every 6th turn, every 3rd, every turn). Costs are in uncached-input-token units: cache writes 1.25×, cache reads
 0.1× (an assumed price; `--read-multiplier`), output 5× (`--output-multiplier`). Cost columns are per-session
@@ -187,7 +241,7 @@ Takeaways:
   60-turn gpt-5.6 session: 640k front, 121k tail, 112k `MemoryPlacer` (`results/2026-09-24/`).
 - **Accuracy.** With varied history, front memory missed 6 (gpt-5.6) and 12 (Claude) of 55 stale-history checks;
   tail memory missed none.
-- **Which layout.** On gpt-5.6, `MemoryPlacer` is cheapest. On Claude, all-tail is cheapest or level once output is
+- **Which layout.** Of the layouts in these runs (no fixed tail or echo arm), `MemoryPlacer` was cheapest on gpt-5.6. On Claude, all-tail is cheapest or level once output is
   counted: with little between the last reply and the question, Claude copies the history's reply pattern more and
   thinks more.
 
@@ -224,6 +278,8 @@ question did not override the conversation.
 
 ## Synthetic domain workloads
 
+> Historical runs: the session label named the layout (see [Evidence status](#headline-result)).
+
 `scripts/live_domain_sessions.py` runs six synthetic assistant sessions closer to production prompts
 (`scripts/domain_scenarios.py`; every record is invented): an inpatient nurse copilot and health plan member services
 (healthcare), benefits casework and taxpayer assistance (government), and an IT service desk and sales CRM copilot
@@ -255,7 +311,7 @@ gpt-5.6 (`results/2026-09-25/domain-gpt-5.6.json`), same sessions:
 | Tail | 592.8k | 620.1k | 432/432 | 234/234 | 1.62 / 2.98 s |
 | `MemoryPlacer` | 160.7k | 182.7k | 432/432 | 234/234 | 1.65 / 3.02 s |
 
-- **Cost.** `MemoryPlacer` was cheapest overall on both models: 3.7x (Claude) and 4.1x (gpt-5.6) below the naive
+- **Cost.** Of the four layouts in this run (no fixed tail or echo arm), `MemoryPlacer` was cheapest overall on both models: 3.7x (Claude) and 4.1x (gpt-5.6) below the naive
   front layout and 1.6x and 1.2x below the tuned one, counting output. It was cheapest in every scenario on Claude and
   in five of six on gpt-5.6 (clinical: 1% above tuned front).
 - **Accuracy.** It answered every question on both models. These are extracted-value scores, not full instruction-compliance or safety grades. Paired by turn, it was right where tuned front memory was
@@ -374,19 +430,21 @@ turn on the domain scenarios and on random sessions near the decision threshold.
 ## Auditing an existing assistant
 
 `scripts/cache_audit.py` reads the requests an assistant already sends, with the usage each response returned, and
-names the fields whose changes cost the most cache: for example, on the tuned front layout at 60 turns,
+names the fields whose changes cost the most cache: for example, in a historical tuned-front run at 60 turns,
 `memory 'claims' amount_owed` re-billed the history behind it on 80 requests. It needs no PCF types. On PCF's own
 logs it found the first-request anchor bug and a full prefix rewrite on OpenAI whenever `MemoryPlacer` moved a
 module, both now fixed; see [`docs/CACHE_AUDIT.md`](docs/CACHE_AUDIT.md).
 
 ## Limits of the evidence
 
-- Scripted support and six synthetic domain workloads with lookup questions graded by value. Histories use
-  predetermined replies rather than each model's actual prior answer, so these runs do not test error propagation
-  through real conversations. Value correctness does not imply instruction compliance or domain safety.
+- Scripted support and six synthetic domain workloads with lookup questions graded by value. The arm-blind rerun and
+  most runs use predetermined replies rather than each model's actual prior answer; only the historical model-text
+  run (see [With the model's own replies](#with-the-models-own-replies)) tests error propagation through a model's own
+  replies. Value correctness does not imply instruction compliance or domain safety.
 - Cache prices are assumed multipliers, not billed dollars. Runs were back to back, so no cache entry expired
-  between turns; idle gaps past the cache lifetime shrink the savings, and `MemoryPlacer`'s edge further.
-- Small models: on conflict items, claude-haiku-4-5 followed the customer's request 50/50 with front memory but
+  between turns; idle gaps past the cache lifetime shrink the savings of every after-history layout against tuned
+  front.
+- Small models (historical run; the session label named the layout): on conflict items, claude-haiku-4-5 followed the customer's request 50/50 with front memory but
   43/50 with `MemoryPlacer` and 49/50 with all-tail (`MemoryPlacer` against front: exact McNemar p = 0.016). Every
   miss gave the stale record's value. Where users change preferences in conversation, update the memory record, or
   keep that module in front, for small models.
@@ -403,8 +461,8 @@ The audit separates usage-derived cost from heuristic miss attribution, checks l
 and can score independently annotated logs with `--validate-labels`. No production-log validation or realized
 savings claim has been added; see the [validation workflow](docs/CACHE_AUDIT.md#production-log-contract-and-validation-workflow).
 
-The evidence here is scripted or synthetic. The last synthetic test, [`docs/FLEET_CACHE.md`](docs/FLEET_CACHE.md),
-passed all its pre-registered rules on both models: at 60 turns with a prefix shared across sessions, placement
+The evidence here is scripted or synthetic. An earlier synthetic test, [`docs/FLEET_CACHE.md`](docs/FLEET_CACHE.md)
+(historical: the session label named the layout), passed all its pre-registered rules on both models: at 60 turns with a prefix shared across sessions, placement
 billed 0.53 (gpt-5.6) and 0.50 (Claude) of the tuned layout's input, a shared prefix cut a conversation's first
 request to under a fifth, and turns after the cache lifetime read nothing. [`docs/PILOT.md`](docs/PILOT.md) is the
 next test, on one real assistant, measuring billed cost, latency and answer quality; `scripts/pilot_analysis.py`

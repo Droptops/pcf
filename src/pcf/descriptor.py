@@ -91,6 +91,7 @@ class CacheDescriptor:
     identity_kind: str = "opaque"
     execution_config_hash: str | None = None
     cache_write_multiplier: float = 1.25
+    cache_read_multiplier: float | None = None
 
     def __post_init__(self):
         nonempty(self.family, "family")
@@ -105,6 +106,10 @@ class CacheDescriptor:
         integer(self.max_breakpoints, "max_breakpoints")
         integer(self.ttl_seconds, "ttl_seconds", minimum=1)
         number(self.cache_write_multiplier, "cache_write_multiplier")
+        if self.cache_read_multiplier is not None:
+            number(self.cache_read_multiplier, "cache_read_multiplier")
+            if not 0 <= self.cache_read_multiplier < 1:
+                raise ValueError("cache_read_multiplier must be in [0, 1)")
         if self.execution_config_hash is not None:
             digest(self.execution_config_hash, "execution_config_hash")
         if self.identity_kind == "manifest" and not self.execution_config_hash:

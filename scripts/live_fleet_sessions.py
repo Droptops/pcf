@@ -45,11 +45,12 @@ def session(key: str, arm: str, tag: str, cfg, client=None, engine=None, clock=N
     reference: without it a shared prefix would reach into the previous session's history, which real users
     do not repeat."""
     scenario = SCENARIOS[key]
-    compiler = placement.make_compiler(cfg.provider, cfg.model)
+    compiler = placement.make_compiler(cfg.provider, cfg.model, effort=getattr(cfg, "effort", "low"),
+                                       thinking=getattr(cfg, "thinking", "default"))
     ttl = compiler.descriptor.ttl_seconds
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=cfg.read_multiplier)
-    system = Segment("s", "system", f"Fleet {tag}.\n" + scenario.system())
+    system = Segment("s", "system", f"Fleet {tag.partition('-')[0]}.\n" + scenario.system())
     user = Segment("session", "memory", f"Session {uuid.uuid4().hex[:12]}.", provenance="session")
     probe = Context([system, memory(scenario, 0)[0], Segment("u", "user", "?", stable=False)])
     prefix_tokens = compiler.compile(probe).total_tokens
@@ -63,7 +64,8 @@ def session(key: str, arm: str, tag: str, cfg, client=None, engine=None, clock=N
             clock[0] += gap
         mem = memory(scenario, turn)
         if arm.startswith("placed"):
-            front, tail = placer.split(mem, history, cold=cold and turn > 0)
+            front, tail = placer.split(mem, history, cold=cold and turn > 0,
+                                       prefix_tokens=compiler.tokenizer.count(system.content))
         else:
             front, tail = arrange("front-tuned", placer, mem, history, scenario.volatile())
         ask, expected = scenario.question(turn)

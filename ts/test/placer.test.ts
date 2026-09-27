@@ -63,3 +63,33 @@ test("stale concurrent revisions and configuration drift are rejected", () => {
   const other = new MemoryPlacer({ ...options, tokenizerId: "chars-v2" });
   assert.throws(() => other.restoreState(placer.exportState()), /configuration/);
 });
+
+
+test("minimum cacheability is measured from the prefix before the module", () => {
+  const placer = new MemoryPlacer({ countTokens: (text) => [...text].filter((c) => c === "x").length,
+                                    minCacheableTokens: 1000 });
+  placer.split([{ id: "m", content: "x".repeat(100) + "a" }], 90, { prefixTokens: 950 });
+  assert.deepEqual(placer.split([{ id: "m", content: "x".repeat(100) + "b" }], 90,
+                                { prefixTokens: 950 }).tail.map((m) => m.id), ["m"]);
+});
+
+test("history behind a module counts toward the cache minimum", () => {
+  const placer = new MemoryPlacer({ countTokens: (text) => [...text].filter((c) => c === "x").length,
+                                    minCacheableTokens: 1000 });
+  const tails = [0, 1, 2, 3].map((v) =>
+    placer.split([{ id: "m", content: "x".repeat(100) + v }], 2000).tail.map((m) => m.id));
+  assert.deepEqual(tails, [[], ["m"], ["m"], ["m"]]);
+});
+
+test("durable retry state is bounded and snapshot is exact", () => {
+  const placer = new MemoryPlacer({ countTokens: (text) => text.length, tokenizerId: "chars",
+                                    maxIdempotencyEntries: 2 });
+  const memory = [{ id: "m", content: "v" }];
+  const first = placer.splitAndSnapshot(memory, 10, { turnId: "t0", expectedRevision: 0 });
+  placer.split(memory, 10, { turnId: "t1", expectedRevision: 1 });
+  placer.split(memory, 10, { turnId: "t2", expectedRevision: 2 });
+  assert.equal(first.state.revision, 1);
+  assert.deepEqual(Object.keys(first.state.decisions), ["t0"]);
+  assert.deepEqual(Object.keys(placer.exportState().decisions), ["t1", "t2"]);
+  assert.throws(() => placer.split(memory, 10, { turnId: "t0" }), /requires expectedRevision/);
+});

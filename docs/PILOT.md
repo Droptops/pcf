@@ -16,7 +16,8 @@ incremental value of adaptive placement. No production pilot has been completed 
 Declare potentially changing modules from the application schema before assignment. Echo-all and fixed-tail use
 that declaration; do not infer it from future observations or select only the field a question needs. The synthetic
 harness uses scenario metadata for this declaration. Keep model, system instructions, record sources, tools,
-temperature and output limits fixed across arms. Each arm retains its actual responses in its own conversation
+temperature and output limits fixed across arms. Never put semantic arm names such as `placed`, `echo-all` or
+`fixed-tail` in model-visible system/user text; isolate provider cache state with cache namespaces instead. Each arm retains its actual responses in its own conversation
 history. Echo-all's stale initial copy is intentional; label every repeated record as current.
 
 ## Assignment and analysis plan

@@ -51,14 +51,15 @@ def fixture() -> dict:
                                                              "content": scenario.reply(turn, expected)}]))
         sessions.append({"scenario": key, "coldEvery": every, "turns": turns})
     rng = random.Random(20260925)
-    for n in range(8):
+    for n in range(7):
         counts: dict[str, int] = {}
 
         class Lookup:
             def count(self, text: str) -> int:
                 return counts[text]
-        # from session 4 on: a known conversation length, modules that go quiet, and in the last a minimum size
-        options = {"expected_turns": 120, "min_cacheable_tokens": 20_000 if n == 7 else 0} if n >= 4 else {}
+        # from session 4 on: a known conversation length and modules that go quiet. Prefix-minimum parity is
+        # covered directly in the Python/TypeScript regression tests because it now requires an explicit lead.
+        options = {"expected_turns": 120, "min_cacheable_tokens": 0} if n >= 4 else {}
         placer = MemoryPlacer(Lookup(), write_multiplier=1.25, read_multiplier=0.1, **options)
         spec = [(f"m{k}", rng.uniform(0.02, 0.7), rng.randint(20, 3000)) for k in range(rng.randint(2, 7))]
         # from session 4 on, modules after the first join partway through: appended at the end or inserted

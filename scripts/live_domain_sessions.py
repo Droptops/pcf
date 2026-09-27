@@ -27,7 +27,6 @@ import os
 import statistics
 import time
 import sys
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(__file__)
@@ -50,7 +49,8 @@ def memory(scenario, turn: int) -> list[Segment]:
     return [Segment(name, "memory", data, provenance=name) for name, data in mods]
 
 
-def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], volatile: set[str]):
+def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], volatile: set[str],
+            prefix_tokens: int = 0):
     if arm == "fixed-tail":
         return ([s for s in mem if s.id not in volatile],
                 [Segment(s.id, "memory", s.content, False, provenance=s.provenance)
@@ -58,7 +58,7 @@ def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Se
     if arm == "front-tuned":
         return [Segment(s.id, "memory", s.content, s.id not in volatile, provenance=s.provenance) for s in mem], []
     if arm == "placed":
-        return placer.split(mem, history)
+        return placer.split(mem, history, prefix_tokens=prefix_tokens)
     if arm == "tail":
         return [], [Segment(s.id, "memory", s.content, False, provenance=s.provenance) for s in mem]
     return mem, []
@@ -80,11 +80,13 @@ def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None 
         raise ValueError("unknown history mode")
     if history_mode == "model-text" and client is None:
         raise ValueError("model-text history requires responses; use --run")
-    compiler = placement.make_compiler(cfg.provider, cfg.model)
+    compiler = placement.make_compiler(cfg.provider, cfg.model, effort=getattr(cfg, "effort", "low"),
+                                       thinking=getattr(cfg, "thinking", "default"))
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=cfg.read_multiplier)
-    system = Segment("s", "system", f"Session {nonce}-{key}-{arm}.\n" + scenario.system())
+    system = Segment("s", "system", f"Session {nonce}-{key}.\n" + scenario.system())
     history, rows, said, prior = [], [], {}, {}
+    prefix_tokens = compiler.tokenizer.count(system.content)
     for turn in range(cfg.turns):
         ask, expected = scenario.question(turn)
         if arm.startswith("echo"):
@@ -93,7 +95,7 @@ def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None 
             tail = [Segment(f"{s.id}-now", "memory", s.content, False, provenance=f"{s.id} (current)")
                     for s in memory(scenario, turn) if s.id in wanted]
         else:
-            front, tail = arrange(arm, placer, memory(scenario, turn), history, scenario.volatile())
+            front, tail = arrange(arm, placer, memory(scenario, turn), history, scenario.volatile(), prefix_tokens)
         ctx = Context([system, *front, *history, *tail, Segment("u", "user", ask.text, stable=False)],
                       cache_namespace=f"{key}-{arm}-{nonce}")
         started = time.perf_counter()
@@ -302,12 +304,12 @@ if __name__ == "__main__":
         client = placement.make_client(cfg.provider, cfg.anthropic_route)
     writes = placement.make_compiler(cfg.provider, cfg.model).descriptor.cache_write_multiplier
     repeats = cfg.repeats if client else 1
-    nonces = {(k, i): uuid.uuid4().hex[:12] if client else "offline" for k in cfg.scenarios for i in range(repeats)}
     run_git_sha = placement.git_sha()
     jobs = [(k, i, arm) for k in cfg.scenarios for i in range(repeats) for arm in cfg.arms]
+    nonces = placement.session_nonces(jobs, client is not None)  # per session, so arms never share a cache entry
     def attempt(job):
         try:
-            return session(job[0], job[2], nonces[(job[0], job[1])], cfg, client)
+            return session(job[0], job[2], nonces[job], cfg, client)
         except Exception as exc:  # e.g. quota exhausted: keep the sessions that finished
             return {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
 
@@ -331,7 +333,8 @@ if __name__ == "__main__":
             "repeats": repeats, "arms": cfg.arms, "scenarios": cfg.scenarios, "thinking": cfg.thinking,
             "effort": cfg.effort, "write_multiplier": writes, "read_multiplier": cfg.read_multiplier,
             "output_multiplier": cfg.output_multiplier, "violation_tokens": cfg.violation_tokens,
-            "paid": client is not None, "data": "synthetic; see scripts/domain_scenarios.py",
+            "paid": client is not None, "nonce_scope": "session", "workers": cfg.workers,
+            "data": "synthetic; see scripts/domain_scenarios.py",
             "failed_sessions": [{"scenario": j[0], "repeat": j[1], "arm": j[2], "error": e} for j, e in failed.items()],
             "scenarios_complete": complete}
     print(json.dumps({"meta": meta, "scenarios": scenarios, "aggregate": aggregate}, indent=2))

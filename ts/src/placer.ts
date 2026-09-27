@@ -9,8 +9,9 @@
  * Modules are assumed stable until a change is seen. Moving back to the front re-bills m + H once: while the
  * cache is warm a tail module returns only after going quiet (unchanged for more than twice its average gap
  * between changes) and when, at its decayed rate, the per-turn saving over the turns still to come repays that
- * rewrite. On a cold turn modules are re-placed from the decayed rate. Nothing moves while a module and what
- * follows it are below the provider's minimum cacheable length.
+ * rewrite. On a cold turn modules are re-placed from the decayed rate. A module moves to the tail only when the
+ * prefix it keeps cached, ending at the history breakpoint (lead, front modules and history), reaches the provider's
+ * minimum; pass the stable/tool/system lead as `prefixTokens`.
  */
 
 import { createHash } from "node:crypto";
@@ -49,10 +50,12 @@ export interface PlacerOptions {
   expectedTurns?: number;
   /** Stable identity of countTokens; required to detect tokenizer drift across durable restores. */
   tokenizerId?: string;
+  /** Maximum retry decisions retained in durable state. */
+  maxIdempotencyEntries?: number;
 }
 
 export interface MemoryPlacerState {
-  memoryPlacerStateVersion: 1;
+  memoryPlacerStateVersion: 2;
   configuration: {
     tokenizerId: string;
     writeMultiplier: number;
@@ -60,6 +63,7 @@ export interface MemoryPlacerState {
     decay: number;
     minCacheableTokens: number;
     expectedTurns?: number;
+    maxIdempotencyEntries: number;
   };
   revision: number;
   turns: number;
@@ -86,6 +90,7 @@ export class MemoryPlacer {
   readonly minCacheableTokens: number;
   readonly expectedTurns: number | undefined;
   readonly tokenizerId: string;
+  readonly maxIdempotencyEntries: number;
   private readonly countTokens: (text: string) => number;
   private readonly seen = new Map<string, State>();
   private readonly quiet = new Map<string, number>();
@@ -96,10 +101,13 @@ export class MemoryPlacer {
 
   constructor(options: PlacerOptions) {
     const { countTokens, writeMultiplier = 1.25, readMultiplier = 0.1, decay = 0.7, minCacheableTokens = 0,
-            expectedTurns, tokenizerId = "unspecified" } = options;
+            expectedTurns, tokenizerId = "unspecified", maxIdempotencyEntries = 256 } = options;
     if (!Number.isInteger(minCacheableTokens) || minCacheableTokens < 0) throw new RangeError("minCacheableTokens must be a non-negative integer");
     if (expectedTurns !== undefined && (!Number.isInteger(expectedTurns) || expectedTurns < 1)) {
       throw new RangeError("expectedTurns must be a positive integer");
+    }
+    if (!Number.isInteger(maxIdempotencyEntries) || maxIdempotencyEntries < 1) {
+      throw new RangeError("maxIdempotencyEntries must be a positive integer");
     }
     if (!(decay >= 0 && decay < 1)) throw new RangeError("decay must be in [0, 1)");
     if (!(readMultiplier >= 0 && readMultiplier < 1) || !(writeMultiplier > readMultiplier)) {
@@ -111,6 +119,7 @@ export class MemoryPlacer {
     this.decay = decay;
     this.minCacheableTokens = minCacheableTokens;
     this.expectedTurns = expectedTurns;
+    this.maxIdempotencyEntries = maxIdempotencyEntries;
     if (!tokenizerId) throw new RangeError("tokenizerId must be non-empty");
     this.tokenizerId = tokenizerId;
   }
@@ -122,11 +131,12 @@ export class MemoryPlacer {
   private configuration(): MemoryPlacerState["configuration"] {
     return { tokenizerId: this.tokenizerId, writeMultiplier: this.writeMultiplier,
              readMultiplier: this.readMultiplier, decay: this.decay,
-             minCacheableTokens: this.minCacheableTokens, expectedTurns: this.expectedTurns };
+             minCacheableTokens: this.minCacheableTokens, expectedTurns: this.expectedTurns,
+             maxIdempotencyEntries: this.maxIdempotencyEntries };
   }
 
   exportState(): MemoryPlacerState {
-    return { memoryPlacerStateVersion: 1, configuration: this.configuration(), revision: this.stateRevision,
+    return { memoryPlacerStateVersion: 2, configuration: this.configuration(), revision: this.stateRevision,
              turns: this.turns, quiet: Object.fromEntries([...this.quiet.entries()].sort()),
              seen: Object.fromEntries([...this.seen.entries()].sort()),
              previousFront: this.previousFront === null ? null : [...this.previousFront],
@@ -135,7 +145,7 @@ export class MemoryPlacer {
   }
 
   restoreState(state: MemoryPlacerState): void {
-    if (state?.memoryPlacerStateVersion !== 1 || JSON.stringify(state.configuration) !== JSON.stringify(this.configuration())) {
+    if (state?.memoryPlacerStateVersion !== 2 || JSON.stringify(state.configuration) !== JSON.stringify(this.configuration())) {
       throw new RangeError("MemoryPlacer state configuration/version mismatch");
     }
     if (!Number.isInteger(state.revision) || state.revision < 0 || state.revision !== state.turns) {
@@ -178,9 +188,9 @@ export class MemoryPlacer {
     for (const [id, value] of decisions) this.decisions.set(id, value);
   }
 
-  private inputHash(memory: MemoryModule[], historyTokens: number, cold: boolean): string {
+  private inputHash(memory: MemoryModule[], historyTokens: number, cold: boolean, prefixTokens: number): string {
     const input = JSON.stringify({ memory: memory.map(({ id, content, authority }) => ({ id, content, authority })),
-                                   historyTokens, cold });
+                                   historyTokens, cold, prefixTokens });
     return `sha256:${createHash("sha256").update(input).digest("hex")}`;
   }
 
@@ -208,17 +218,21 @@ export class MemoryPlacer {
    * are returned unstable and the first front module carries it.
    */
   split(memory: MemoryModule[], historyTokens: number,
-        { cold = false, turnId, expectedRevision }:
-        { cold?: boolean; turnId?: string; expectedRevision?: number } = {}): Placement {
+        { cold = false, turnId, expectedRevision, prefixTokens = 0 }:
+        { cold?: boolean; turnId?: string; expectedRevision?: number; prefixTokens?: number } = {}): Placement {
     if (turnId !== undefined && !turnId) throw new RangeError("turnId must be non-empty");
     if (expectedRevision !== undefined && (!Number.isInteger(expectedRevision) || expectedRevision < 0)) {
       throw new RangeError("expectedRevision must be a non-negative integer");
     }
-    const inputHash = this.inputHash(memory, historyTokens, cold);
+    if (!Number.isInteger(prefixTokens) || prefixTokens < 0) throw new RangeError("prefixTokens must be non-negative");
+    const inputHash = this.inputHash(memory, historyTokens, cold, prefixTokens);
     if (turnId !== undefined && this.decisions.has(turnId)) {
       const decision = this.decisions.get(turnId)!;
       if (decision.inputHash !== inputHash) throw new RangeError("turnId was already used with different inputs");
       return this.replay(memory, decision);
+    }
+    if (turnId !== undefined && expectedRevision === undefined) {
+      throw new RangeError("a new durable turnId requires expectedRevision");
     }
     if (expectedRevision !== undefined && expectedRevision !== this.stateRevision) {
       throw new ConcurrentPlacementUpdate(
@@ -247,8 +261,6 @@ export class MemoryPlacer {
           obs = 0;
           changes = 0;
         }
-      } else if (m + behind < this.minCacheableTokens) {
-        // nothing here is cached: moving it saves nothing
       } else if (!tail) {
         tail = this.tailPays(changes / (obs + 1), m, behind);
       } else if (quiet > (2 * (obs + 1)) / Math.max(changes, 1) && this.returnPays(rate, m, behind)) {
@@ -260,6 +272,19 @@ export class MemoryPlacer {
       inTail[i] = tail;
       if (!tail) behind += m;
     }
+
+    // A tail module saves only what stays cached ahead of it: the lead, front modules and history, ending at the
+    // history breakpoint (`behind` now holds history plus front modules). Below the minimum nothing there is
+    // cached, so tail modules return to the front in order, each lengthening that prefix.
+    let cacheablePrefix = prefixTokens + behind;
+    for (let i = 0; i < memory.length; i++) {
+      if (inTail[i] && cacheablePrefix < this.minCacheableTokens) {
+        inTail[i] = false;
+        this.seen.set(memory[i].id, { ...this.seen.get(memory[i].id)!, inTail: false });
+        cacheablePrefix += this.countTokens(memory[i].content);
+      }
+    }
+
     let front: PlacedModule[] = memory.filter((_, i) => !inTail[i]).map((m) => ({ ...m, stable: true }));
     const tail: PlacedModule[] = memory.filter((_, i) => inTail[i]).map((m) => ({ ...m, stable: false }));
     const ids = front.map((m) => m.id);
@@ -275,8 +300,18 @@ export class MemoryPlacer {
     this.stateRevision += 1;
     if (turnId !== undefined) {
       this.decisions.set(turnId, { inputHash, front: front.map(({ id, stable }) => ({ id, stable })) });
+      while (this.decisions.size > this.maxIdempotencyEntries) {
+        this.decisions.delete(this.decisions.keys().next().value!);
+      }
     }
     return result;
+  }
+
+  splitAndSnapshot(memory: MemoryModule[], historyTokens: number,
+                   options: { cold?: boolean; turnId?: string; expectedRevision?: number; prefixTokens?: number } = {}):
+                   { placement: Placement; state: MemoryPlacerState } {
+    const placement = this.split(memory, historyTokens, options);
+    return { placement, state: this.exportState() };
   }
 
   private returnPays(p: number, m: number, behind: number): boolean {

@@ -318,7 +318,8 @@ class ContextCompiler(ABC):
 
     @property
     def candidate_fingerprint(self):
-        return hash_object("pcf:candidate:0.2", {"model": self.descriptor.model_id, "cache": self.cache_key})
+        return hash_object("pcf:candidate:0.2", {"model": self.descriptor.model_id, "cache": self.cache_key,
+                                                    "generation": self.generation_identity})
 
     def compile(self, ctx: Context) -> CompiledPrompt:
         ctx.validate_tool_history(require_resolved=True)
