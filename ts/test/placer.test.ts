@@ -82,5 +82,5 @@ test("durable retry state is bounded and snapshot is exact", () => {
   placer.split(memory, 10, { turnId: "t2", expectedRevision: 2 });
   assert.equal(first.state.revision, 1);
   assert.deepEqual(Object.keys(first.state.decisions), ["t0"]);
-  assert.deepEqual(Object.keys(placer.exportState().decisions), ["t1", "t2"]);
+  assert.deepEqual(Object.keys(placer.exportState().decisions), ["t1", "t2"]);\n  assert.throws(() => placer.split(memory, 10, { turnId: "t0" }), /requires expectedRevision/);
 });
