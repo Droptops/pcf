@@ -16,8 +16,10 @@ spec.loader.exec_module(gate)
 
 def evidence():
     arms = {name: {"conversations": 2, "requests": 2, "failures": 0} for name in gate.ARMS}
-    gates = {name: {"passed": True, "estimate": .5, "limit": .8, "comparison": "frozen CI boundary"}
+    gates = {name: {"passed": True, "estimate": 0.0, "limit": .1, "comparison": "frozen CI boundary"}
              for name in gate.GATES}
+    for name in ("placed_vs_fixed_tail_input_cost", "placed_vs_front_tuned_input_cost"):
+        gates[name].update(estimate=1.0, limit=1.1)
     digest = "sha256:" + "0" * 64
     return {"evidence_version": 1, "pilot_id": "pilot-1", "source": "production", "decision": "pass",
             "preregistered_at": "2026-09-01T00:00:00Z", "started_at": "2026-09-02T00:00:00Z",
@@ -43,7 +45,9 @@ def _digest(path: Path) -> str:
 
 
 def bind(tmp_path: Path, doc: dict) -> Path:
-    rows = [{"conversation": f"{arm}-{i}", "request_id": f"{arm}-{i}", "arm": arm, "success": True}
+    rows = [{"conversation": f"{arm}-{i}", "request_id": f"{arm}-{i}", "arm": arm, "success": True,
+             "cached": 0, "written": 0, "uncached": 100, "latency_s": 1.0,
+             "correct": True, "blind_acceptable": True}
             for arm in gate.ARMS for i in range(2)]
     pilot = tmp_path / "pilot.jsonl"
     pilot.write_text("".join(json.dumps(row) + "\n" for row in rows))
