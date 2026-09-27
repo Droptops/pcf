@@ -7,11 +7,16 @@ After the preregistered pilot ends:
 
 1. Analyze provider usage with the actual billed prices and conversation as the sampling unit.
 2. Complete the arm-hidden review with at least two independent reviewers and adjudicate disagreements.
-3. Keep raw prompts and reviews in the approved private evidence store. Record SHA-256 identities here; do not add
-   private prompts, customer records, reviewer exports or internal links to this public repository.
-4. Add `release/production-pilot.json` using the example shape. Record the frozen thresholds and observed values in
-   each gate, then obtain distinct pilot-owner and independent-quality-reviewer approvals.
-5. Run `python scripts/check_release_gate.py release/production-pilot.json`.
+3. Keep raw prompts and sensitive review material in the approved private evidence store. Create a sanitized,
+   content-free release bundle under `release/evidence/`: `pilot.jsonl` with request/conversation IDs, arm,
+   usage/outcome fields but no prompts; `blind-review.json` with the frozen review summary; and `analysis.json`
+   with the frozen gate results.
+4. Hash those exact sanitized files into `release/production-pilot.json`. The checker resolves every hash, verifies
+   arm counts/failures from the bound pilot log, requires the blind-review summary and gate analysis to match, and
+   recomputes each pass/fail threshold from estimate <= preregistered limit.
+5. Obtain distinct pilot-owner and independent-quality-reviewer approvals. The tag job also uses the protected
+   `production-release` GitHub environment; configure required reviewers on that environment before releasing.
+6. Run `python scripts/check_release_gate.py release/production-pilot.json --artifact-dir release/evidence`.
 
 The tag workflow also requires protected `main`, an exact tag/project-version match, the full test suite, a built
 wheel and sdist, and this evidence check. A missing, pending, synthetic or malformed evidence file blocks release.
