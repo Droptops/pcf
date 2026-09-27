@@ -64,9 +64,10 @@ def build(kind: str, final: int, style: str, arm: str, compiler, tag: str):
                                     read_multiplier=0.1)
     system = Segment("s", "system", f"Session {tag}.\n" + "\n".join([*placement.POLICIES, POLICY]))
     history, front, tail = [], [], []
+    prefix_tokens = compiler.tokenizer.count(system.content)
     switch_at = final - 2
     for turn in range(final + 1):
-        front, tail = placement.arrange(arm, placer, placement.memory(turn), history)
+        front, tail = placement.arrange(arm, placer, placement.memory(turn), history, prefix_tokens)
         if turn == final:
             break
         if kind == "conflict" and turn == switch_at:
