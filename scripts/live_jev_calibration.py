@@ -96,7 +96,8 @@ def contexts(repeats: int, turns: int):
                     mem = placement.memory(turn)
                     front, tail = placement.arrange(arm, placer, mem, history)
                     text, expected = placement.question(turn)
-                    ctx = Context([system, *front, *history, *tail, Segment("u", "user", text, stable=False)],\n                                  cache_namespace=f"{nonce}-{arm}")
+                    ctx = Context([system, *front, *history, *tail, Segment("u", "user", text, stable=False)],
+                                  cache_namespace=f"{nonce}-{arm}")
                     stale = said.get(text)
                     trap = stale is not None and stale != expected
                     module = {0: "account", 1: "notes", 2: "preferences", 3: "profile"}[turn % 4]
