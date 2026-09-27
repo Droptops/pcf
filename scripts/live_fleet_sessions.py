@@ -50,7 +50,7 @@ def session(key: str, arm: str, tag: str, cfg, client=None, engine=None, clock=N
     ttl = compiler.descriptor.ttl_seconds
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=cfg.read_multiplier)
-    system = Segment("s", "system", f"Fleet {tag.split(\"-\")[0]}.\n" + scenario.system())
+    system = Segment("s", "system", f"Fleet {tag.partition(\"-\")[0]}.\n" + scenario.system())
     user = Segment("session", "memory", f"Session {uuid.uuid4().hex[:12]}.", provenance="session")
     probe = Context([system, memory(scenario, 0)[0], Segment("u", "user", "?", stable=False)])
     prefix_tokens = compiler.compile(probe).total_tokens
