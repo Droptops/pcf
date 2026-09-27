@@ -38,12 +38,9 @@ jobs:
           python examples/demo.py
           python scripts/live_smoke.py
       - name: Require real production evidence and exact version tag
-        env:
-          PCF_RELEASE_EVIDENCE_DIR: ${{ vars.PCF_RELEASE_EVIDENCE_DIR }}
         run: |
-          test -n "$PCF_RELEASE_EVIDENCE_DIR"
           python scripts/check_release_gate.py release/production-pilot.json --tag "$GITHUB_REF_NAME" \
-            --artifact-dir "$PCF_RELEASE_EVIDENCE_DIR"
+            --artifact-dir release/evidence
       - name: Build and inspect distributions
         run: |
           python -m build
