@@ -50,7 +50,8 @@ def memory(scenario, turn: int) -> list[Segment]:
     return [Segment(name, "memory", data, provenance=name) for name, data in mods]
 
 
-def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], volatile: set[str],\n            prefix_tokens: int = 0):
+def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], volatile: set[str],
+            prefix_tokens: int = 0):
     if arm == "fixed-tail":
         return ([s for s in mem if s.id not in volatile],
                 [Segment(s.id, "memory", s.content, False, provenance=s.provenance)
