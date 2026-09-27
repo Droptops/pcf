@@ -15,6 +15,10 @@
   idempotency decisions are bounded. State format is version 2 in Python and TypeScript.
 - Cache-read economics are descriptor/model specific, including current Claude Fable/Mythos 5.1 and Opus 5.5
   exceptions. `for_compiler()` requires an explicit read multiplier when a compiler profile does not declare one.
+- The cache descriptor schema (`descriptor_version` "0.2") accepts an optional `cache_read_multiplier` (a number in
+  [0, 1) or null), so descriptors written by v0.3.0a1 without it still validate. Descriptors emitted now always
+  carry the field, which the v0.3.0a1 schema rejects as an unknown property. `compat_key`, `byte_compat_key` and
+  compiler cache keys are unchanged.
 - The installable distribution is renamed to `portable-context-format` to avoid the occupied PyPI `pcf` project;
   the Python import namespace remains `pcf`.
 

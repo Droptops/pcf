@@ -94,6 +94,19 @@ def test_descriptor_schema_rejects_what_the_runtime_rejects():
             validate("cache-descriptor", bad)
 
 
+def test_descriptor_schema_accepts_documents_without_read_multiplier():
+    # Descriptor 0.2 documents written before cache_read_multiplier existed (v0.3.0a1) must still validate.
+    for d in (*_descriptors(), replace(_descriptors()[0], cache_read_multiplier=0.1)):
+        doc = d.to_json()
+        assert "cache_read_multiplier" in doc
+        validate("cache-descriptor", doc)
+        del doc["cache_read_multiplier"]
+        validate("cache-descriptor", doc)
+    for bad in (1.0, -0.1, "0.1"):
+        with pytest.raises(ValueError, match="validation failed at cache_read_multiplier"):
+            validate("cache-descriptor", {**doc, "cache_read_multiplier": bad})
+
+
 # ---------------------------------------------------------------- mutation guard
 
 
