@@ -9,8 +9,8 @@
  * Modules are assumed stable until a change is seen. Moving back to the front re-bills m + H once: while the
  * cache is warm a tail module returns only after going quiet (unchanged for more than twice its average gap
  * between changes) and when, at its decayed rate, the per-turn saving over the turns still to come repays that
- * rewrite. On a cold turn modules are re-placed from the decayed rate. Nothing moves while a module and what
- * follows it are below the provider's minimum cacheable length.
+ * rewrite. On a cold turn modules are re-placed from the decayed rate. Cache minimums apply to the provider-visible
+ * prefix ending at a module; pass the stable/tool/system lead as `prefixTokens`.
  */
 
 import { createHash } from "node:crypto";
