@@ -230,6 +230,9 @@ export class MemoryPlacer {
       if (decision.inputHash !== inputHash) throw new RangeError("turnId was already used with different inputs");
       return this.replay(memory, decision);
     }
+    if (turnId !== undefined && expectedRevision === undefined) {
+      throw new RangeError("a new durable turnId requires expectedRevision");
+    }
     if (expectedRevision !== undefined && expectedRevision !== this.stateRevision) {
       throw new ConcurrentPlacementUpdate(
         `placement revision changed: expected ${expectedRevision}, found ${this.stateRevision}`);
