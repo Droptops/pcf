@@ -1,7 +1,6 @@
 """The release gate accepts bound production evidence and rejects claim laundering."""
 from __future__ import annotations
 
-import copy
 import hashlib
 import importlib.util
 import json
