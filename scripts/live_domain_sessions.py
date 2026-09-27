@@ -50,7 +50,7 @@ def memory(scenario, turn: int) -> list[Segment]:
     return [Segment(name, "memory", data, provenance=name) for name, data in mods]
 
 
-def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], volatile: set[str]):
+def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], volatile: set[str],\n            prefix_tokens: int = 0):
     if arm == "fixed-tail":
         return ([s for s in mem if s.id not in volatile],
                 [Segment(s.id, "memory", s.content, False, provenance=s.provenance)
@@ -58,7 +58,7 @@ def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Se
     if arm == "front-tuned":
         return [Segment(s.id, "memory", s.content, s.id not in volatile, provenance=s.provenance) for s in mem], []
     if arm == "placed":
-        return placer.split(mem, history)
+        return placer.split(mem, history, prefix_tokens=prefix_tokens)
     if arm == "tail":
         return [], [Segment(s.id, "memory", s.content, False, provenance=s.provenance) for s in mem]
     return mem, []
@@ -86,6 +86,7 @@ def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None 
                           read_multiplier=cfg.read_multiplier)
     system = Segment("s", "system", f"Session {nonce}-{key}.\n" + scenario.system())
     history, rows, said, prior = [], [], {}, {}
+    prefix_tokens = compiler.tokenizer.count(system.content)
     for turn in range(cfg.turns):
         ask, expected = scenario.question(turn)
         if arm.startswith("echo"):
@@ -94,7 +95,7 @@ def session(key: str, arm: str, nonce: str, cfg, client=None, sink: list | None 
             tail = [Segment(f"{s.id}-now", "memory", s.content, False, provenance=f"{s.id} (current)")
                     for s in memory(scenario, turn) if s.id in wanted]
         else:
-            front, tail = arrange(arm, placer, memory(scenario, turn), history, scenario.volatile())
+            front, tail = arrange(arm, placer, memory(scenario, turn), history, scenario.volatile(), prefix_tokens)
         ctx = Context([system, *front, *history, *tail, Segment("u", "user", ask.text, stable=False)],
                       cache_namespace=f"{key}-{arm}-{nonce}")
         started = time.perf_counter()
