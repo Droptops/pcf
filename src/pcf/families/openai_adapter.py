@@ -91,7 +91,8 @@ def openai_descriptor(model_id, *, capabilities=None):
     return CacheDescriptor("openai", model_id, sha256_tag(f"opaque:openai:{model_id}"),
                            sha256_tag(f"opaque:openai-tokenizer:{model_id}"), Layout("rope", "bf16", "gqa"),
                            p.min_tokens, p.max_breakpoints, p.ttl_seconds,
-                           identity_kind="opaque", cache_write_multiplier=p.write_multiplier)
+                           identity_kind="opaque", cache_write_multiplier=p.write_multiplier,
+                           cache_read_multiplier=p.read_multiplier)
 
 
 class OpenAICompiler(ContextCompiler):
