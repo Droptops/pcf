@@ -19,6 +19,8 @@ MIN_CACHEABLE = {"claude-fable-5-1": 512, "claude-fable-5": 512, "claude-mythos-
 # "Claude 4.6 and later models and Claude Mythos Preview" reject a final assistant turn (prefill) with a 400, per
 # platform.claude.com/docs/en/api/errors ("Prefill not supported"), checked 2026-09-24. IDs per Anthropic's models
 # overview; unlisted models are not checked.
+CACHE_READ_MULTIPLIER = {"claude-fable-5-1": 0.025, "claude-mythos-5-1": 0.025, "claude-opus-5-5": 0.05}
+
 PREFILL_REJECTED = {"claude-fable-5-1", "claude-fable-5", "claude-mythos-5-1", "claude-mythos-5", "claude-mythos-preview",
                     "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5", "claude-sonnet-4-6",
                     "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6"}
@@ -105,7 +107,8 @@ def anthropic_descriptor(model_id, *, ttl="5m", min_cacheable_tokens=None):
     return CacheDescriptor("anthropic", model_id, sha256_tag(f"opaque:anthropic:{model_id}"),
                            sha256_tag(f"opaque:anthropic-tokenizer:{model_id}"), Layout("rope", "bf16", "gqa"),
                            minimum, 4, 3600 if ttl == "1h" else 300, identity_kind="opaque",
-                           cache_write_multiplier=2 if ttl == "1h" else 1.25)
+                           cache_write_multiplier=2 if ttl == "1h" else 1.25,
+                           cache_read_multiplier=CACHE_READ_MULTIPLIER.get(model_id, 0.1))
 
 
 class AnthropicCompiler(ContextCompiler):
