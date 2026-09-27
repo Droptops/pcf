@@ -15,8 +15,9 @@ conversation length) when the application knows it; otherwise the placer assumes
 conversation has had,
 under which returning rarely pays once history grows faster per turn than the module, since the rewrite grows too.
 A module that changes on a steady period is never quiet that long, so it does not bounce. When the caller reports a cold cache (everything is re-billed anyway), modules are
-re-placed from a decayed change rate. A module never moves while it and everything after it are below the
-provider's minimum cacheable length: nothing there is cached, so moving it saves nothing. The defaults are the
+re-placed from a decayed change rate. A module never moves unless the provider-visible prefix ending at that module reaches the provider's minimum
+cacheable length. Pass the stable/tool/system lead as `prefix_tokens` to `split`; the placer then accounts for
+earlier front modules in final order. The defaults are the
 common cache prices (write 1.25, read 0.1); `for_compiler` takes the write price and minimum from a compiler.
 State is per module id; there is no global policy. This is a cost heuristic, not a quality guarantee.
 """
