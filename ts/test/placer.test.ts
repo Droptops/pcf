@@ -73,6 +73,14 @@ test("minimum cacheability is measured from the prefix before the module", () =>
                                 { prefixTokens: 950 }).tail.map((m) => m.id), ["m"]);
 });
 
+test("history behind a module counts toward the cache minimum", () => {
+  const placer = new MemoryPlacer({ countTokens: (text) => [...text].filter((c) => c === "x").length,
+                                    minCacheableTokens: 1000 });
+  const tails = [0, 1, 2, 3].map((v) =>
+    placer.split([{ id: "m", content: "x".repeat(100) + v }], 2000).tail.map((m) => m.id));
+  assert.deepEqual(tails, [[], ["m"], ["m"], ["m"]]);
+});
+
 test("durable retry state is bounded and snapshot is exact", () => {
   const placer = new MemoryPlacer({ countTokens: (text) => text.length, tokenizerId: "chars",
                                     maxIdempotencyEntries: 2 });

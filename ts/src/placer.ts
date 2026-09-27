@@ -9,8 +9,9 @@
  * Modules are assumed stable until a change is seen. Moving back to the front re-bills m + H once: while the
  * cache is warm a tail module returns only after going quiet (unchanged for more than twice its average gap
  * between changes) and when, at its decayed rate, the per-turn saving over the turns still to come repays that
- * rewrite. On a cold turn modules are re-placed from the decayed rate. Cache minimums apply to the provider-visible
- * prefix ending at a module; pass the stable/tool/system lead as `prefixTokens`.
+ * rewrite. On a cold turn modules are re-placed from the decayed rate. A module moves to the tail only when the
+ * prefix it keeps cached, ending at the history breakpoint (lead, front modules and history), reaches the provider's
+ * minimum; pass the stable/tool/system lead as `prefixTokens`.
  */
 
 import { createHash } from "node:crypto";
@@ -272,14 +273,16 @@ export class MemoryPlacer {
       if (!tail) behind += m;
     }
 
-    let cacheablePrefix = prefixTokens;
+    // A tail module saves only what stays cached ahead of it: the lead, front modules and history, ending at the
+    // history breakpoint (`behind` now holds history plus front modules). Below the minimum nothing there is
+    // cached, so tail modules return to the front in order, each lengthening that prefix.
+    let cacheablePrefix = prefixTokens + behind;
     for (let i = 0; i < memory.length; i++) {
-      const m = this.countTokens(memory[i].content);
-      if (inTail[i] && cacheablePrefix + m < this.minCacheableTokens) {
+      if (inTail[i] && cacheablePrefix < this.minCacheableTokens) {
         inTail[i] = false;
         this.seen.set(memory[i].id, { ...this.seen.get(memory[i].id)!, inTail: false });
+        cacheablePrefix += this.countTokens(memory[i].content);
       }
-      if (!inTail[i]) cacheablePrefix += m;
     }
 
     let front: PlacedModule[] = memory.filter((_, i) => !inTail[i]).map((m) => ({ ...m, stable: true }));

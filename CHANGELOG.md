@@ -10,9 +10,10 @@
 - OpenAI reasoning/text settings and Anthropic thinking settings are compiled before request hashing/dispatch;
   candidate fingerprints include generation identity. The generic OpenAI `default` namespace no longer forces
   unrelated callers into one explicit provider cache key.
-- `MemoryPlacer` cache minimums now use the provider-visible prefix ending at each module (`prefix_tokens` /
-  `prefixTokens`), durable decisions can be returned with their exact state snapshot atomically, and retained
-  idempotency decisions are bounded. State format is version 2 in Python and TypeScript.
+- `MemoryPlacer` cache minimums now use the provider-visible prefix a tail move keeps cached, ending at the
+  history breakpoint: the stable lead (`prefix_tokens` / `prefixTokens`), front modules and history. Durable
+  decisions can be returned with their exact state snapshot atomically, and retained idempotency decisions are
+  bounded. State format is version 2 in Python and TypeScript.
 - Cache-read economics are descriptor/model specific, including current Claude Fable/Mythos 5.1 and Opus 5.5
   exceptions. `for_compiler()` requires an explicit read multiplier when a compiler profile does not declare one.
 - The installable distribution is renamed to `portable-context-format` to avoid the occupied PyPI `pcf` project;

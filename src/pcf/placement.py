@@ -15,9 +15,9 @@ conversation length) when the application knows it; otherwise the placer assumes
 conversation has had,
 under which returning rarely pays once history grows faster per turn than the module, since the rewrite grows too.
 A module that changes on a steady period is never quiet that long, so it does not bounce. When the caller reports a cold cache (everything is re-billed anyway), modules are
-re-placed from a decayed change rate. A module never moves unless the provider-visible prefix ending at that module reaches the provider's minimum
-cacheable length. Pass the stable/tool/system lead as `prefix_tokens` to `split`; the placer then accounts for
-earlier front modules in final order. The defaults are the
+re-placed from a decayed change rate. A module moves to the tail only when what it keeps cached, the prefix
+ending at the history breakpoint (lead, front modules and history), reaches the provider's minimum cacheable
+length. Pass the stable/tool/system lead as `prefix_tokens` to `split`. The defaults are the
 common cache prices (write 1.25, read 0.1); `for_compiler` takes the write price and minimum from a compiler.
 State is per module id; there is no global policy. This is a cost heuristic, not a quality guarantee.
 """
@@ -317,18 +317,17 @@ class MemoryPlacer:
             if not in_tail:
                 behind += m
 
-        # Provider minimums apply to the prefix ending at a cache breakpoint, not to the suffix after a module.
-        # Enforce eligibility in final front order. Forcing an early module to the front can make a later module's
-        # breakpoint eligible, so a single forward pass is sufficient.
-        cacheable_prefix = prefix_tokens
+        # Provider minimums apply to the prefix ending at a cache breakpoint. A tail module saves only what stays
+        # cached ahead of it: the lead, the front modules and the history, whose breakpoint ends that prefix
+        # (`behind` now holds history plus front modules). Below the minimum nothing there is cached, so tail
+        # modules return to the front in order; each one lengthens that prefix and can make the rest eligible.
+        cacheable_prefix = prefix_tokens + behind
         for i, seg in enumerate(memory):
-            m = self.tokenizer.count(segment_text(seg))
-            if placed[i] and cacheable_prefix + m < self.min_cacheable_tokens:
+            if placed[i] and cacheable_prefix < self.min_cacheable_tokens:
                 placed[i] = False
                 state = self._seen[seg.id]
                 self._seen[seg.id] = (*state[:4], False)
-            if not placed[i]:
-                cacheable_prefix += m
+                cacheable_prefix += self.tokenizer.count(segment_text(seg))
 
         front = [seg for seg, in_tail in zip(memory, placed) if not in_tail]
         ids = tuple(seg.id for seg in front)

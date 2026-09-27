@@ -31,6 +31,14 @@ def test_cache_minimum_uses_prefix_before_module_not_history_suffix():
     assert ineligible.split(memory1, history, prefix_tokens=0)[1] == []
 
 
+def test_history_behind_a_module_counts_toward_the_cache_minimum():
+    # A short lead and a small module, but the history the tail move keeps cached clears the minimum.
+    history = [Segment("h", "history", [{"role": "user", "content": "x" * 2000}])]
+    placer = MemoryPlacer(XTokenizer(), min_cacheable_tokens=1000)
+    tails = [placer.split([Segment("m", "memory", "x" * 100 + str(v))], history)[1] for v in range(4)]
+    assert [[s.id for s in tail] for tail in tails] == [[], ["m"], ["m"], ["m"]]
+
+
 def test_atomic_snapshot_cannot_be_advanced_by_a_later_turn():
     placer = MemoryPlacer(XTokenizer())
     memory = [Segment("m", "memory", "x" * 10)]
