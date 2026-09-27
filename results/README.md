@@ -69,8 +69,9 @@ items.
 | `2026-09-27/domain-claude-sonnet-5-60turn-armblind-isolated-<scenario>.json` (6 files) | claude-sonnet-5, direct to Anthropic's API | same | arm-blind rerun with one nonce per session (`meta.nonce_scope`); the README headline |
 | `2026-09-27/domain-claude-sonnet-5-60turn-armblind-<scenario>.json` (6 files) | claude-sonnet-5, direct to Anthropic's API | same | superseded: all arms of a repeat shared one system prefix, so they read each other's cache entries and their costs are too low; answers are valid |
 
-The 2026-09-27 files each hold one scenario; pool a model's six with `--analyze`. They ran 4 sessions at a time
-(`--workers 4`). The gpt-5.6 files and the superseded Claude files record `git_sha` e50542f, f8e2b11 or 5878741, which
+The 2026-09-27 files each hold one scenario; pool a model's six with `--analyze`. The isolated Claude files record
+`workers: 4` (4 sessions at a time); the gpt-5.6 and superseded Claude files predate that field and were also run with
+`--workers 4`, which their metadata does not record. The gpt-5.6 files and the superseded Claude files record `git_sha` e50542f, f8e2b11 or 5878741, which
 differ only in files under `results/`; the isolated Claude files record ec43db2, which adds the per-session nonce.
 
 ```bash

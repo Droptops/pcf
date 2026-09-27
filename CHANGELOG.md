@@ -5,8 +5,8 @@
 - Red-team hardening: release tags must resolve to protected `main`; the release job is bound to the
   `production-release` environment; sanitized pilot artifacts are hash-resolved; arm counts and all six release
   metrics are recomputed from the bound pilot log before thresholds are evaluated.
-- Synthetic treatment arms are no longer named in model-visible prompts. Historical benchmark numbers are marked
-  descriptive pending an arm-blind rerun.
+- Synthetic treatment arms are no longer named in model-visible prompts. Benchmark numbers from runs that named
+  them are marked historical and descriptive; the arm-blind rerun below replaces the README headline.
 - The live cost harnesses (`live_domain_sessions.py`, `live_memory_placement.py`) give every session its own random
   nonce. Removing the arm name had left all arms of a repeat with one system prefix, and Anthropic, which caches by
   prefix with no namespace, then served one arm's cache entries to another. The Claude costs in the first arm-blind
@@ -14,8 +14,8 @@
   `nonce_scope` and `workers`.
 - Arm-blind four-arm rerun (`results/2026-09-27`, 6 scenarios × 60 turns × 2 repeats): against tuned front,
   `MemoryPlacer` input cost is 0.46 (gpt-5.6) and 0.49 (claude-sonnet-5, rerun with isolated caches), the fixed tail
-  0.44 and 0.48, echo-all 0.47 and 0.51. The README headline now uses these; earlier synthetic numbers are marked
-  historical.
+  0.44 and 0.48, echo-all 0.47 and 0.51. The README headline now uses these, with their price, session-length and
+  design caveats; README sections built on runs that named the layout are marked historical.
 - OpenAI reasoning/text settings and Anthropic thinking settings are compiled before request hashing/dispatch;
   candidate fingerprints include generation identity, so every existing candidate fingerprint changes, including
   for compilers with no generation settings. OpenAI `reasoning`/`text` settings are deep-copied at construction.
