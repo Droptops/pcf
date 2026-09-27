@@ -187,17 +187,25 @@ def make_client(provider: str, route: str = "direct"):
                                else "https://openrouter.ai/api")
 
 
-def make_compiler(provider: str, model: str):
-    # Room for adaptive thinking before the answer: at 512 a thinking model can stop with no visible text.
-    return OpenAICompiler(model) if provider == "openai" else AnthropicCompiler(model, max_tokens=4096)
+def make_compiler(provider: str, model: str, *, effort: str = "low", thinking: str = "default"):
+    # Cache-affecting provider settings belong in the compiled request and its native identity.
+    if provider == "openai":
+        return OpenAICompiler(model, reasoning={"effort": effort})
+    return AnthropicCompiler(model, max_tokens=4096,
+                             thinking={"type": "disabled"} if thinking == "disabled" else None)
 
 
 def request_payload(provider: str, request: dict, cfg) -> dict:
-    """The outbound SDK arguments, shared with request capture in the domain harness."""
+    """The outbound SDK arguments. Cache-affecting fields must already be present in the compiled request."""
     if provider == "openai":
-        return {**request, "max_output_tokens": 4096, "reasoning": {"effort": cfg.effort}}
-    thinking = {"thinking": {"type": "disabled"}} if cfg.thinking == "disabled" else {}
-    return anthropic_payload({**request, **thinking}, getattr(cfg, "anthropic_route", "direct"))
+        expected = {"effort": cfg.effort}
+        if request.get("reasoning") != expected:
+            raise ValueError("OpenAI reasoning settings must be compiled before request dispatch")
+        return {**request, "max_output_tokens": 4096}
+    expected = {"type": "disabled"} if cfg.thinking == "disabled" else None
+    if request.get("thinking") != expected:
+        raise ValueError("Anthropic thinking settings must be compiled before request dispatch")
+    return anthropic_payload(request, getattr(cfg, "anthropic_route", "direct"))
 
 
 class ProviderProtocolError(RuntimeError):
@@ -273,10 +281,10 @@ def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Se
 
 
 def session(arm: str, nonce: str, cfg, client=None) -> list[dict]:
-    compiler = make_compiler(cfg.provider, cfg.model)
+    compiler = make_compiler(cfg.provider, cfg.model, effort=cfg.effort, thinking=cfg.thinking)
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=cfg.read_multiplier)
-    system = Segment("s", "system", f"Session {nonce}-{arm}.\n" + "\n".join(POLICIES))
+    system = Segment("s", "system", f"Session {nonce}.\n" + "\n".join(POLICIES))
     history, rows, said = [], [], {}
     for turn in range(cfg.turns):
         front, tail = arrange(arm, placer, memory(turn), history)
@@ -411,7 +419,8 @@ if __name__ == "__main__":
     client = None
     if cfg.run:
         client = make_client(cfg.provider, cfg.anthropic_route)
-    writes = make_compiler(cfg.provider, cfg.model).descriptor.cache_write_multiplier
+    writes = make_compiler(cfg.provider, cfg.model, effort=cfg.effort,
+                           thinking=cfg.thinking).descriptor.cache_write_multiplier
     nonces = [uuid.uuid4().hex[:12] if client else "offline" for _ in range(cfg.repeats if client else 1)]
     jobs = [(i, arm) for i in range(len(nonces)) for arm in cfg.arms]  # fresh prefix per repeat: arms start cold
     with ThreadPoolExecutor(max(1, cfg.workers if client else 1)) as pool:
