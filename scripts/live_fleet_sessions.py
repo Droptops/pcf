@@ -45,7 +45,8 @@ def session(key: str, arm: str, tag: str, cfg, client=None, engine=None, clock=N
     reference: without it a shared prefix would reach into the previous session's history, which real users
     do not repeat."""
     scenario = SCENARIOS[key]
-    compiler = placement.make_compiler(cfg.provider, cfg.model, effort=getattr(cfg, "effort", "low"),\n                                       thinking=getattr(cfg, "thinking", "default"))
+    compiler = placement.make_compiler(cfg.provider, cfg.model, effort=getattr(cfg, "effort", "low"),
+                                       thinking=getattr(cfg, "thinking", "default"))
     ttl = compiler.descriptor.ttl_seconds
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=cfg.read_multiplier)
