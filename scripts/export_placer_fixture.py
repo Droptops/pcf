@@ -5,7 +5,8 @@ The TypeScript port (ts/) replays the same inputs and must reach the same decisi
 by its hash and token count, which is all the placer reads. Each scenario runs twice: with every 17th turn
 reported cold, and with every 4th turn cold. Seeded random sessions then put module sizes, change rates and cold
 turns near the decision threshold, so a small difference in the rule changes a decision; in half of them modules
-join partway through, appended or inserted.
+join partway through, appended or inserted. The last sessions add a lead (`prefixTokens` per turn) and a provider
+minimum cacheable length, and keep the prompt near that minimum.
 """
 from __future__ import annotations
 
@@ -52,43 +53,63 @@ def fixture() -> dict:
         sessions.append({"scenario": key, "coldEvery": every, "turns": turns})
     rng = random.Random(20260925)
     for n in range(7):
-        counts: dict[str, int] = {}
-
-        class Lookup:
-            def count(self, text: str) -> int:
-                return counts[text]
-        # from session 4 on: a known conversation length and modules that go quiet. Prefix-minimum parity is
-        # covered directly in the Python/TypeScript regression tests because it now requires an explicit lead.
+        # from session 4 on: a known conversation length and modules that go quiet
         options = {"expected_turns": 120, "min_cacheable_tokens": 0} if n >= 4 else {}
-        placer = MemoryPlacer(Lookup(), write_multiplier=1.25, read_multiplier=0.1, **options)
         spec = [(f"m{k}", rng.uniform(0.02, 0.7), rng.randint(20, 3000)) for k in range(rng.randint(2, 7))]
         # from session 4 on, modules after the first join partway through: appended at the end or inserted
         start = {name: 0 if n < 4 or k == 0 else rng.randint(0, 40) for k, (name, _, _) in enumerate(spec)}
         stop = {name: 10_000 if n < 4 else rng.randint(20, 60) for name, _, _ in spec}
-        version = {name: 0 for name, _, _ in spec}
-        history, history_tokens, turns = [], 0, []
-        for turn in range(80):
-            mem = []
-            for name, p, size in spec:
-                version[name] += rng.random() < p and turn < stop[name]
-                if turn < start[name]:
-                    continue
-                text = f"{name} v{version[name]}"
-                counts[text] = size
-                mem.append(Segment(name, "memory", text, provenance=name))
-            cold = rng.random() < 0.15
-            front, tail = placer.split(mem, history, cold=cold)
-            turns.append({"modules": [{"id": seg.id, "content": seg.content, "tokens": counts[seg.content]}
-                                      for seg in mem],
-                          "historyTokens": history_tokens, "cold": cold,
-                          "front": [[seg.id, seg.stable] for seg in front], "tail": [seg.id for seg in tail]})
-            step = rng.randint(10, 400)
-            entry = Segment(f"h{turn}", "history", [{"role": "user", "content": f"h{n}-{turn}"}])
-            counts[segment_text(entry)] = step
-            history.append(entry)
-            history_tokens += step
-        sessions.append({"scenario": f"random-{n}", "coldEvery": "random", "options": options, "turns": turns})
+        sessions.append(random_session(rng, n, options, spec, start, stop, (10, 400)))
+    # Cache-minimum sessions: a lead that sometimes changes, and history that grows slowly, so lead + front modules +
+    # history stays below the provider minimum for many turns and tail modules are forced back to the front, either
+    # because the prompt stays below the minimum even with them or because they would lift it there. From session 9
+    # on modules join partway through; sessions 11 and 12 know the conversation length. A separate seed keeps the
+    # sessions above byte-identical.
+    rng = random.Random(20260927)
+    for n, minimum in enumerate((1024, 4096) * 3, start=7):
+        options = {**({"expected_turns": 120} if n >= 11 else {}), "min_cacheable_tokens": minimum}
+        spec = [(f"m{k}", rng.uniform(0.02, 0.95), rng.randint(20, minimum // 3)) for k in range(rng.randint(1, 5))]
+        start = {name: 0 if n < 9 or k == 0 else rng.randint(0, 40) for k, (name, _, _) in enumerate(spec)}
+        stop = {name: 10_000 if n < 9 else rng.randint(20, 60) for name, _, _ in spec}
+        sessions.append(random_session(rng, n, options, spec, start, stop, (5, minimum // 40),
+                                       lead=rng.randint(minimum // 8, minimum * 3 // 4)))
     return {"writeMultiplier": 1.25, "readMultiplier": 0.1, "decay": 0.7, "sessions": sessions}
+
+
+def random_session(rng: random.Random, n: int, options: dict, spec: list, start: dict, stop: dict, steps: tuple,
+                   lead: int | None = None) -> dict:
+    """80 turns of seeded module versions, cold turns and history growth; with `lead`, a prefix that changes rarely."""
+    counts: dict[str, int] = {}
+
+    class Lookup:
+        def count(self, text: str) -> int:
+            return counts[text]
+    placer = MemoryPlacer(Lookup(), write_multiplier=1.25, read_multiplier=0.1, **options)
+    version = {name: 0 for name, _, _ in spec}
+    history, history_tokens, turns = [], 0, []
+    for turn in range(80):
+        mem = []
+        for name, p, size in spec:
+            version[name] += rng.random() < p and turn < stop[name]
+            if turn < start[name]:
+                continue
+            text = f"{name} v{version[name]}"
+            counts[text] = size
+            mem.append(Segment(name, "memory", text, provenance=name))
+        cold = rng.random() < 0.15
+        if lead is not None and rng.random() < 0.05:  # a tool or policy added or removed
+            lead += rng.randint(-lead // 4, lead // 4)
+        front, tail = placer.split(mem, history, cold=cold, prefix_tokens=lead or 0)
+        turns.append({"modules": [{"id": seg.id, "content": seg.content, "tokens": counts[seg.content]}
+                                  for seg in mem],
+                      "historyTokens": history_tokens, **({} if lead is None else {"prefixTokens": lead}),
+                      "cold": cold, "front": [[seg.id, seg.stable] for seg in front], "tail": [seg.id for seg in tail]})
+        step = rng.randint(*steps)
+        entry = Segment(f"h{turn}", "history", [{"role": "user", "content": f"h{n}-{turn}"}])
+        counts[segment_text(entry)] = step
+        history.append(entry)
+        history_tokens += step
+    return {"scenario": f"random-{n}", "coldEvery": "random", "options": options, "turns": turns}
 
 
 if __name__ == "__main__":

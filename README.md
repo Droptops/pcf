@@ -345,7 +345,9 @@ openrouter` (with `OPENROUTER_API_KEY`) reproduces them. OpenRouter is otherwise
 history once p·(w−r)·(m+H) > (1−r)·m, where p is its observed change rate, m its size, H the history and later
 front modules behind it, and w and r are the cache write and read price multipliers. Use
 `MemoryPlacer.for_compiler(compiler)` or `MemoryPlacer.for_candidate(candidate)` so prices and the provider's
-minimum cacheable length stay together. List modules stable-first; memory with instruction authority never moves.
+minimum cacheable length stay together, and pass the stable lead before memory (system prompt, tool definitions) as
+`split(..., prefix_tokens=...)`: the placer counts the lead, the front modules and the history toward that minimum.
+List modules stable-first; memory with instruction authority never moves.
 Tail memory never takes a cache marker.
 
 Front memory that changes should be marked `stable=False`, or its marker is rewritten every turn (and on OpenAI,
@@ -361,7 +363,8 @@ placer = MemoryPlacer.for_compiler(compiler, expected_turns=40)
 if saved_state is not None:
     placer.restore_state(saved_state)
 revision = placer.revision
-front, tail = placer.split(memory, history, turn_id=request_id, expected_revision=revision)
+lead = compiler.tokenizer.count(system.content)  # the system segment sent before memory
+front, tail = placer.split(memory, history, turn_id=request_id, expected_revision=revision, prefix_tokens=lead)
 state_store.compare_and_set(conversation_id, revision, placer.export_state())
 ```
 

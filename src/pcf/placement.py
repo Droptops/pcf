@@ -15,10 +15,13 @@ conversation length) when the application knows it; otherwise the placer assumes
 conversation has had,
 under which returning rarely pays once history grows faster per turn than the module, since the rewrite grows too.
 A module that changes on a steady period is never quiet that long, so it does not bounce. When the caller reports a cold cache (everything is re-billed anyway), modules are
-re-placed from a decayed change rate. A module never moves unless the provider-visible prefix ending at that module reaches the provider's minimum
-cacheable length. Pass the stable/tool/system lead as `prefix_tokens` to `split`; the placer then accounts for
-earlier front modules in final order. The defaults are the
-common cache prices (write 1.25, read 0.1); `for_compiler` takes the write price and minimum from a compiler.
+re-placed from a decayed change rate. While the lead, the front modules and the history are below the provider's
+minimum cacheable length the prompt is not cached, so tail modules return to the front: first, in order until the
+prompt reaches the minimum, those whose cache writes cost no more than uncached input (p * (w - r) <= 1 - r), then
+any other that leaves the prompt below the minimum even in front. Pass the stable/tool/system lead as
+`prefix_tokens` to `split`.
+The defaults are the common cache prices (write 1.25, read 0.1); `for_compiler` takes the write price and minimum
+from a compiler.
 State is per module id; there is no global policy. This is a cost heuristic, not a quality guarantee.
 """
 from __future__ import annotations
@@ -66,8 +69,8 @@ class MemoryPlacer:
         self._seen: dict[str, tuple[int, int, float, str, bool]] = {}
         self._front: tuple[str, ...] | None = None  # front module ids of the previous call
         self._revision = 0
-        # turn id -> (input fingerprint, ((front module id, returned stability), ...))
-        self._decisions: dict[str, tuple[str, tuple[tuple[str, bool], ...]]] = {}
+        # turn id -> (input fingerprint, ((front module id, returned stability), ...), revision after it); oldest first
+        self._decisions: dict[str, tuple[str, tuple[tuple[str, bool], ...], int]] = {}
         self._lock = RLock()
 
     @classmethod
@@ -120,7 +123,8 @@ class MemoryPlacer:
                     "front": list(self._front) if self._front is not None else None,
                     "decisions": {key: {"input_hash": value[0],
                                          "front": [{"id": seg_id, "stable": stable}
-                                                   for seg_id, stable in value[1]]}
+                                                   for seg_id, stable in value[1]],
+                                         "revision": value[2]}
                                   for key, value in sorted(self._decisions.items())}}
 
     def restore_state(self, state: dict) -> None:
@@ -166,11 +170,15 @@ class MemoryPlacer:
             if type(value["in_tail"]) is not bool:
                 raise ValueError("in_tail must be boolean")
             seen[key] = (observations, changes, rate, value["last_hash"], value["in_tail"])
+        if len(decisions_raw) > self.max_idempotency_entries:  # an exported state never exceeds the cap
+            raise ValueError("stored decisions exceed max_idempotency_entries")
         decisions = {}
         for turn_id, value in decisions_raw.items():
             nonempty(turn_id, "turn_id")
-            if not isinstance(value, dict) or set(value) != {"input_hash", "front"}:
+            if not isinstance(value, dict) or set(value) != {"input_hash", "front", "revision"}:
                 raise ValueError("invalid stored placement decision")
+            if not 1 <= integer(value["revision"], "decision revision") <= revision:
+                raise ValueError("stored decision revision is outside the state revision")
             digest(value["input_hash"], "input_hash")
             if not isinstance(value["front"], list):
                 raise ValueError("stored decision front must be a list")
@@ -181,11 +189,14 @@ class MemoryPlacer:
                 front.append((nonempty(item["id"], "module id"), item["stable"]))
             if len(front) != len({item[0] for item in front}):
                 raise ValueError("stored front module ids must be unique")
-            decisions[turn_id] = (value["input_hash"], tuple(front))
+            decisions[turn_id] = (value["input_hash"], tuple(front), value["revision"])
+        if len({value[2] for value in decisions.values()}) != len(decisions):
+            raise ValueError("stored decision revisions must be unique")
         with self._lock:
             self._revision, self._turns, self._quiet, self._seen = revision, turns, quiet, seen
             self._front = tuple(front_raw) if front_raw is not None else None
-            self._decisions = decisions
+            # oldest first, so eviction removes the lowest revision
+            self._decisions = dict(sorted(decisions.items(), key=lambda item: item[1][2]))
 
     @classmethod
     def from_state(cls, tokenizer: Tokenizer, state: dict) -> "MemoryPlacer":
@@ -216,7 +227,7 @@ class MemoryPlacer:
         return seg if seg.stable == stable else Segment(seg.id, "memory", seg.content, stable,
                                                         authority=seg.authority, provenance=seg.provenance)
 
-    def _replay(self, memory: list[Segment], decision: tuple[str, tuple[tuple[str, bool], ...]]):
+    def _replay(self, memory: list[Segment], decision: tuple[str, tuple[tuple[str, bool], ...], int]):
         front_spec = decision[1]
         front_ids = {seg_id for seg_id, _ in front_spec}
         by_id = {seg.id: seg for seg in memory}
@@ -243,7 +254,8 @@ class MemoryPlacer:
         A change to a front module re-bills everything after it: history and the front modules that follow
         it, so H for each module counts both. List modules stable-first; order is kept. Modules with
         instruction authority never move (instructions precede data). Tail copies are unstable so they
-        get no breakpoint.
+        get no breakpoint. ``prefix_tokens`` is the stable lead before memory (tools, system); with the front
+        modules and history it decides whether the prompt reaches the provider's cache minimum.
 
         On a warm turn where the front changes, providers that read only at markers present in the request need a
         marker at an entry written earlier. When modules were only appended, the previous last front module's entry
@@ -275,8 +287,9 @@ class MemoryPlacer:
             result = self._split_new(memory, history, cold, prefix_tokens)
             self._revision += 1
             if turn_id is not None:
-                self._decisions[turn_id] = (input_hash, tuple((seg.id, seg.stable) for seg in result[0]))
-                while len(self._decisions) > self.max_idempotency_entries:
+                self._decisions[turn_id] = (input_hash, tuple((seg.id, seg.stable) for seg in result[0]),
+                                            self._revision)
+                while len(self._decisions) > self.max_idempotency_entries:  # insertion order is revision order
                     self._decisions.pop(next(iter(self._decisions)))
             return result
 
@@ -292,7 +305,7 @@ class MemoryPlacer:
     def _split_new(self, memory: list[Segment], history: list[Segment], cold: bool, prefix_tokens: int):
         behind = sum(self.tokenizer.count(segment_text(h)) for h in history)
         self._turns += 1
-        placed = [False] * len(memory)
+        placed, sizes, rates = [False] * len(memory), [0] * len(memory), [0.0] * len(memory)
         for i in range(len(memory) - 1, -1, -1):  # later front modules add to what an earlier change re-bills
             seg = memory[i]
             obs, changes, rate, last, in_tail = self._seen.get(seg.id, (-1, 0, 0.0, seg.hash, False))
@@ -300,8 +313,8 @@ class MemoryPlacer:
             quiet = 0 if changed else self._quiet.get(seg.id, 0) + 1
             self._quiet[seg.id] = quiet
             obs, changes = obs + 1, changes + changed
-            rate = self.decay * rate + (1 - self.decay) * changed
-            m = self.tokenizer.count(segment_text(seg))
+            rate = rates[i] = self.decay * rate + (1 - self.decay) * changed
+            m = sizes[i] = self.tokenizer.count(segment_text(seg))
             if seg.authority == "instruction":
                 in_tail = False
             elif cold:
@@ -317,18 +330,25 @@ class MemoryPlacer:
             if not in_tail:
                 behind += m
 
-        # Provider minimums apply to the prefix ending at a cache breakpoint, not to the suffix after a module.
-        # Enforce eligibility in final front order. Forcing an early module to the front can make a later module's
-        # breakpoint eligible, so a single forward pass is sufficient.
-        cacheable_prefix = prefix_tokens
-        for i, seg in enumerate(memory):
-            m = self.tokenizer.count(segment_text(seg))
-            if placed[i] and cacheable_prefix + m < self.min_cacheable_tokens:
-                placed[i] = False
-                state = self._seen[seg.id]
-                self._seen[seg.id] = (*state[:4], False)
-            if not placed[i]:
-                cacheable_prefix += m
+        # A prompt below the provider minimum is not cached. While lead + front modules + history is below it, tail
+        # modules go back to the front in two passes. First, in memory order (so list modules stable-first) until the
+        # prompt reaches the minimum, those whose decayed rate p has p * (w - r) <= 1 - r: once the prompt is cached,
+        # writes on their changes cost no more than the uncached input the tail would leave. Then any other tail module
+        # that leaves the prompt below the minimum even in front: nothing is cached either way, so moving saves nothing.
+        # In the other order, or in one pass, a module moved because the prompt stayed uncached could end up at the
+        # front of a prompt that a later move lifts to the minimum, rewriting everything after it on each of its
+        # frequent changes. A second-pass move never lifts the prompt to the minimum, so it cannot invalidate any other
+        # decision.
+        cacheable = prefix_tokens + behind  # behind now holds history plus every front module
+        w, r, minimum = self.write_multiplier, self.read_multiplier, self.min_cacheable_tokens
+        for band in (True, False):
+            for i, seg in enumerate(memory):
+                if placed[i] and cacheable < minimum and (
+                        rates[i] * (w - r) <= 1 - r if band else cacheable + sizes[i] < minimum):
+                    placed[i] = False
+                    state = self._seen[seg.id]
+                    self._seen[seg.id] = (*state[:4], False)
+                    cacheable += sizes[i]
 
         front = [seg for seg, in_tail in zip(memory, placed) if not in_tail]
         ids = tuple(seg.id for seg in front)

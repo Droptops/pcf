@@ -10,9 +10,19 @@
 - OpenAI reasoning/text settings and Anthropic thinking settings are compiled before request hashing/dispatch;
   candidate fingerprints include generation identity. The generic OpenAI `default` namespace no longer forces
   unrelated callers into one explicit provider cache key.
-- `MemoryPlacer` cache minimums now use the provider-visible prefix ending at each module (`prefix_tokens` /
-  `prefixTokens`), durable decisions can be returned with their exact state snapshot atomically, and retained
-  idempotency decisions are bounded. State format is version 2 in Python and TypeScript.
+- `MemoryPlacer` counts the stable lead (`prefix_tokens` / `prefixTokens`), the front modules and the history toward
+  the provider's minimum cacheable length. While that total is below the minimum, tail modules return to the front in
+  two passes: first, in memory order and only until the total reaches the minimum, each whose decayed change rate p
+  has p·(w−r) ≤ 1−r; then any remaining module that leaves the total below the minimum even in front. A module that
+  changes often therefore keeps a long history cached from the tail, and does not land at the front of a cached prompt
+  because of module order. This changes placement decisions only for prompts near or below the minimum; segment
+  hashes, the PCF wire format and compiler cache keys are unchanged.
+- Durable decisions can be returned with their exact state snapshot atomically, and retained idempotency decisions
+  are bounded by `max_idempotency_entries` / `maxIdempotencyEntries`. State format is version 2 in Python and
+  TypeScript: each stored decision carries the placer `revision` after its turn, restore requires it (unique, between
+  1 and the state revision) and evicts the lowest revision first, so a restored state evicts the oldest decision rather
+  than the one with the lowest turn id. Restore rejects a state holding more decisions than the cap. The TypeScript
+  restore now rejects the same malformed states as Python.
 - Cache-read economics are descriptor/model specific, including current Claude Fable/Mythos 5.1 and Opus 5.5
   exceptions. `for_compiler()` requires an explicit read multiplier when a compiler profile does not declare one.
 - The cache descriptor schema (`descriptor_version` "0.2") accepts an optional `cache_read_multiplier` (a number in
@@ -65,7 +75,7 @@
 - `MemoryPlacer` moves a tail module back while the cache is warm once it has gone quiet (unchanged for more than
   twice its average gap between changes) and, at its decayed rate, the saving over the remaining turns repays the
   rewrite. `expected_turns` sets the remaining turns; without it the placer assumes as many more as have passed.
-  Cache-minimum eligibility is superseded by the prefix-aware rule above. Same rules in `ts/`.
+  Cache-minimum eligibility is superseded by the cache-minimum rule above. Same rules in `ts/`.
 - Rerun the 60-turn domain comparison on the current library: placed input is 0.46 (gpt-5.6) and 0.49 (Claude) of
   tuned front, from 0.49 and 0.53 before the marker fixes. The README headline uses the new runs.
 - Breakpoints: every request, not only the first, gives a memory or document anchor directly after the system run
