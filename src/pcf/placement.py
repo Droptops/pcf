@@ -30,7 +30,7 @@ from .segments import Segment, canonical_bytes
 from .validation import digest, integer, nonempty, number
 
 
-PLACER_STATE_VERSION = 1
+PLACER_STATE_VERSION = 2
 
 
 class ConcurrentPlacementUpdate(RuntimeError):
@@ -40,7 +40,7 @@ class ConcurrentPlacementUpdate(RuntimeError):
 class MemoryPlacer:
     def __init__(self, tokenizer: Tokenizer, *, decay: float = 0.7, write_multiplier: float = 1.25,
                  read_multiplier: float = 0.1, min_cacheable_tokens: int = 0,
-                 expected_turns: int | None = None) -> None:
+                 expected_turns: int | None = None, max_idempotency_entries: int = 256) -> None:
         number(decay, "decay")
         if not 0 <= decay < 1:
             raise ValueError("decay must be in [0, 1)")
@@ -51,7 +51,9 @@ class MemoryPlacer:
         integer(min_cacheable_tokens, "min_cacheable_tokens")
         if expected_turns is not None:
             integer(expected_turns, "expected_turns", minimum=1)
+        integer(max_idempotency_entries, "max_idempotency_entries", minimum=1)
         self.expected_turns = expected_turns
+        self.max_idempotency_entries = max_idempotency_entries
         self.tokenizer = tokenizer
         self.min_cacheable_tokens = min_cacheable_tokens
         self._turns = 0
@@ -95,7 +97,8 @@ class MemoryPlacer:
     def _configuration(self) -> dict:
         return {"tokenizer_hash": self.tokenizer.tokenizer_hash, "decay": self.decay,
                 "write_multiplier": self.write_multiplier, "read_multiplier": self.read_multiplier,
-                "min_cacheable_tokens": self.min_cacheable_tokens, "expected_turns": self.expected_turns}
+                "min_cacheable_tokens": self.min_cacheable_tokens, "expected_turns": self.expected_turns,
+                "max_idempotency_entries": self.max_idempotency_entries}
 
     def export_state(self) -> dict:
         """Return a versioned JSON-compatible snapshot of all placement and idempotency state.
@@ -187,19 +190,21 @@ class MemoryPlacer:
             raise ValueError("invalid MemoryPlacer state")
         config = state["configuration"]
         required = {"tokenizer_hash", "decay", "write_multiplier", "read_multiplier", "min_cacheable_tokens",
-                    "expected_turns"}
+                    "expected_turns", "max_idempotency_entries"}
         if set(config) != required or config["tokenizer_hash"] != tokenizer.tokenizer_hash:
             raise ValueError("MemoryPlacer state tokenizer/configuration mismatch")
         placer = cls(tokenizer, decay=config["decay"], write_multiplier=config["write_multiplier"],
                      read_multiplier=config["read_multiplier"], min_cacheable_tokens=config["min_cacheable_tokens"],
-                     expected_turns=config["expected_turns"])
+                     expected_turns=config["expected_turns"],
+                     max_idempotency_entries=config["max_idempotency_entries"])
         placer.restore_state(state)
         return placer
 
     @staticmethod
-    def _input_hash(memory: list[Segment], history: list[Segment], cold: bool) -> str:
+    def _input_hash(memory: list[Segment], history: list[Segment], cold: bool, prefix_tokens: int) -> str:
         value = {"memory": [{"id": s.id, "hash": s.hash, "stable": s.stable} for s in memory],
-                 "history": [{"id": s.id, "hash": s.hash, "stable": s.stable} for s in history], "cold": cold}
+                 "history": [{"id": s.id, "hash": s.hash, "stable": s.stable} for s in history],
+                 "cold": cold, "prefix_tokens": prefix_tokens}
         return "sha256:" + hashlib.sha256(canonical_bytes(value)).hexdigest()
 
     @staticmethod
@@ -218,7 +223,8 @@ class MemoryPlacer:
         return front, tail
 
     def split(self, memory: list[Segment], history: list[Segment], *, cold: bool = False,
-              turn_id: str | None = None, expected_revision: int | None = None) -> tuple[list[Segment], list[Segment]]:
+              turn_id: str | None = None, expected_revision: int | None = None,
+              prefix_tokens: int = 0) -> tuple[list[Segment], list[Segment]]:
         """Return (front, tail); call once per turn. Pass cold=True when the provider cache has expired.
 
         Supply a durable unique ``turn_id`` in production. Retrying that id with byte-identical inputs returns the
@@ -249,7 +255,8 @@ class MemoryPlacer:
             integer(expected_revision, "expected_revision")
             if expected_revision < 0:
                 raise ValueError("expected_revision must be nonnegative")
-        input_hash = self._input_hash(memory, history, cold)
+        integer(prefix_tokens, "prefix_tokens")
+        input_hash = self._input_hash(memory, history, cold, prefix_tokens)
         with self._lock:
             if turn_id is not None and turn_id in self._decisions:
                 decision = self._decisions[turn_id]
@@ -259,13 +266,24 @@ class MemoryPlacer:
             if expected_revision is not None and expected_revision != self._revision:
                 raise ConcurrentPlacementUpdate(
                     f"placement revision changed: expected {expected_revision}, found {self._revision}")
-            result = self._split_new(memory, history, cold)
+            result = self._split_new(memory, history, cold, prefix_tokens)
             self._revision += 1
             if turn_id is not None:
                 self._decisions[turn_id] = (input_hash, tuple((seg.id, seg.stable) for seg in result[0]))
+                while len(self._decisions) > self.max_idempotency_entries:
+                    self._decisions.pop(next(iter(self._decisions)))
             return result
 
-    def _split_new(self, memory: list[Segment], history: list[Segment], cold: bool):
+    def split_and_snapshot(self, memory: list[Segment], history: list[Segment], *, cold: bool = False,
+                           turn_id: str | None = None, expected_revision: int | None = None,
+                           prefix_tokens: int = 0) -> tuple[list[Segment], list[Segment], dict]:
+        """Atomically return the placement decision and the exact durable state that produced it."""
+        with self._lock:
+            front, tail = self.split(memory, history, cold=cold, turn_id=turn_id,
+                                     expected_revision=expected_revision, prefix_tokens=prefix_tokens)
+            return front, tail, self.export_state()
+
+    def _split_new(self, memory: list[Segment], history: list[Segment], cold: bool, prefix_tokens: int):
         behind = sum(self.tokenizer.count(segment_text(h)) for h in history)
         self._turns += 1
         placed = [False] * len(memory)
@@ -284,8 +302,6 @@ class MemoryPlacer:
                 in_tail = self._tail_pays(rate, m, behind)
                 if not in_tail:
                     obs, changes = 0, 0  # back in front: evidence restarts
-            elif m + behind < self.min_cacheable_tokens:
-                pass  # nothing here is cached: moving it saves nothing
             elif not in_tail:
                 in_tail = self._tail_pays(changes / (obs + 1), m, behind)
             elif quiet > 2 * (obs + 1) / max(changes, 1) and self._return_pays(rate, m, behind):
@@ -294,6 +310,20 @@ class MemoryPlacer:
             placed[i] = in_tail
             if not in_tail:
                 behind += m
+
+        # Provider minimums apply to the prefix ending at a cache breakpoint, not to the suffix after a module.
+        # Enforce eligibility in final front order. Forcing an early module to the front can make a later module's
+        # breakpoint eligible, so a single forward pass is sufficient.
+        cacheable_prefix = prefix_tokens
+        for i, seg in enumerate(memory):
+            m = self.tokenizer.count(segment_text(seg))
+            if placed[i] and cacheable_prefix + m < self.min_cacheable_tokens:
+                placed[i] = False
+                state = self._seen[seg.id]
+                self._seen[seg.id] = (*state[:4], False)
+            if not placed[i]:
+                cacheable_prefix += m
+
         front = [seg for seg, in_tail in zip(memory, placed) if not in_tail]
         ids = tuple(seg.id for seg in front)
         self._previous, self._front = self._front or (), ids
