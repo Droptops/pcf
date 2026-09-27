@@ -47,7 +47,7 @@ def test_idempotency_history_is_bounded():
     memory = [Segment("m", "memory", "x" * 10)]
     for i in range(3):
         placer.split(memory, [], turn_id=f"t{i}", expected_revision=i)
-    assert list(placer.export_state()["decisions"]) == ["t1", "t2"]
+    assert list(placer.export_state()["decisions"]) == ["t1", "t2"]\n    with pytest.raises(ValueError, match="requires expected_revision"):\n        placer.split(memory, [], turn_id="t0")
 
 
 def test_openai_cache_affecting_settings_are_compiled_and_fingerprinted():
