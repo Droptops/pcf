@@ -19,6 +19,7 @@ class OpenAICapabilities:
     ttl_seconds: int
     min_tokens: int = 1024  # estimate/profile threshold; never exact native billing
     write_multiplier: float | None = None  # default: 1.25 with explicit caching (gpt-5.6+), else free writes
+    read_multiplier: float | None = None
     max_breakpoints: int = 4
 
     def __post_init__(self):
@@ -33,7 +34,13 @@ class OpenAICapabilities:
             raise ValueError("invalid explicit breakpoint budget")
         if self.write_multiplier is None:
             object.__setattr__(self, "write_multiplier", 1.25 if self.explicit else 1)
+        if self.read_multiplier is None and self.explicit:
+            object.__setattr__(self, "read_multiplier", 0.1)
         number(self.write_multiplier, "write_multiplier")
+        if self.read_multiplier is not None:
+            number(self.read_multiplier, "read_multiplier")
+            if not 0 <= self.read_multiplier < 1:
+                raise ValueError("read_multiplier must be in [0, 1)")
 
 
 _MODERN = OpenAICapabilities(True, "30m", 1800)
