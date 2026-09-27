@@ -65,6 +65,18 @@ items.
 | `2026-09-25/domain-claude-sonnet-5-60turn-echo.json` | claude-sonnet-5 via OpenRouter | same | same |
 | `2026-09-26/domain-gpt-5.6-60turn-model-text.json` | OpenAI gpt-5.6 | 6 scenarios × front-tuned, placed, echo-all, fixed-tail × 2 repeats × 60 turns | `--history-mode model-text`: each arm's own replies form its history; see `meta.note` |
 | `2026-09-26/domain-claude-sonnet-5-60turn-model-text.json` | claude-sonnet-5 via OpenRouter | same | same |
+| `2026-09-27/domain-gpt-5.6-60turn-armblind-<scenario>.json` (6 files) | OpenAI gpt-5.6 (served by gpt-5.6-sol) | one scenario per file × front-tuned, echo-all, fixed-tail, placed × 2 repeats × 60 turns | arm-blind rerun; arms isolated by `prompt_cache_key`; the README headline |
+| `2026-09-27/domain-claude-sonnet-5-60turn-armblind-isolated-<scenario>.json` (6 files) | claude-sonnet-5, direct to Anthropic's API | same | arm-blind rerun with one nonce per session (`meta.nonce_scope`); the README headline |
+| `2026-09-27/domain-claude-sonnet-5-60turn-armblind-<scenario>.json` (6 files) | claude-sonnet-5, direct to Anthropic's API | same | superseded: all arms of a repeat shared one system prefix, so they read each other's cache entries and their costs are too low; answers are valid |
+
+The 2026-09-27 files each hold one scenario; pool a model's six with `--analyze`. They ran 4 sessions at a time
+(`--workers 4`). The gpt-5.6 files and the superseded Claude files record `git_sha` e50542f, f8e2b11 or 5878741, which
+differ only in files under `results/`; the isolated Claude files record ec43db2, which adds the per-session nonce.
+
+```bash
+python scripts/live_domain_sessions.py --analyze results/2026-09-27/domain-gpt-5.6-60turn-armblind-*.json \
+  results/2026-09-27/domain-claude-sonnet-5-60turn-armblind-isolated-*.json
+```
 
 Domain table costs in the main README sum per-scenario means over repetitions; accuracy counts cover all
 repetitions. To pool the two compatible Claude runs, preserving all six repetitions per scenario:
