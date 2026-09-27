@@ -62,11 +62,12 @@ def build(kind: str, final: int, style: str, arm: str, compiler, tag: str):
     """The context for one item under one arm, and the expected answer."""
     placer = placement.MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                                     read_multiplier=0.1)
-    system = Segment("s", "system", f"Session {tag}-{arm}.\n" + "\n".join([*placement.POLICIES, POLICY]))
+    system = Segment("s", "system", f"Session {tag}.\n" + "\n".join([*placement.POLICIES, POLICY]))
     history, front, tail = [], [], []
+    prefix_tokens = compiler.tokenizer.count(system.content)
     switch_at = final - 2
     for turn in range(final + 1):
-        front, tail = placement.arrange(arm, placer, placement.memory(turn), history)
+        front, tail = placement.arrange(arm, placer, placement.memory(turn), history, prefix_tokens)
         if turn == final:
             break
         if kind == "conflict" and turn == switch_at:
@@ -86,7 +87,8 @@ def build(kind: str, final: int, style: str, arm: str, compiler, tag: str):
         expected = f"{placement.account(final)['open_tickets']}, {placement.notes(final)['current_plan']}"
     else:
         question, expected = placement.question(final)
-    ctx = Context([system, *front, *history, *tail, Segment("u", "user", question, stable=False)])
+    ctx = Context([system, *front, *history, *tail, Segment("u", "user", question, stable=False)],
+                  cache_namespace=f"{tag}-{arm}")
     return ctx, expected
 
 

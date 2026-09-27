@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- Red-team hardening: release tags must resolve to protected `main`; the release job is bound to the
+  `production-release` environment; sanitized pilot artifacts are hash-resolved; arm counts and all six release
+  metrics are recomputed from the bound pilot log before thresholds are evaluated.
+- Synthetic treatment arms are no longer named in model-visible prompts. Benchmark numbers from runs that named
+  them are marked historical and descriptive; the arm-blind rerun below replaces the README headline.
+- The live cost harnesses (`live_domain_sessions.py`, `live_memory_placement.py`) give every session its own random
+  nonce. Removing the arm name had left all arms of a repeat with one system prefix, and Anthropic, which caches by
+  prefix with no namespace, then served one arm's cache entries to another. The Claude costs in the first arm-blind
+  rerun (`results/2026-09-27`) are affected; its answers and its gpt-5.6 costs are not. Run metadata now records
+  `nonce_scope` and `workers`.
+- Arm-blind four-arm rerun (`results/2026-09-27`, 6 scenarios × 60 turns × 2 repeats): against tuned front,
+  `MemoryPlacer` input cost is 0.46 (gpt-5.6) and 0.49 (claude-sonnet-5, rerun with isolated caches), the fixed tail
+  0.44 and 0.48, echo-all 0.47 and 0.51. The README headline now uses these, with their price, session-length and
+  design caveats; README sections that compare layouts on runs that named the layout are marked historical.
+- OpenAI reasoning/text settings and Anthropic thinking settings are compiled before request hashing/dispatch;
+  candidate fingerprints include generation identity, so every existing candidate fingerprint changes, including
+  for compilers with no generation settings. OpenAI `reasoning`/`text` settings are deep-copied at construction.
+  The generic OpenAI `default` namespace no longer forces unrelated callers into one explicit provider cache key:
+  such requests omit `prompt_cache_key`.
+- `MemoryPlacer` cache minimums now use the provider-visible prefix a tail move keeps cached, ending at the
+  history breakpoint: the stable lead (`prefix_tokens` / `prefixTokens`), front modules and history. Durable
+  decisions can be returned with their exact state snapshot atomically, and retained idempotency decisions are
+  bounded. State format is version 2 in Python and TypeScript; version 1 snapshots are rejected. A new `turn_id` /
+  `turnId` now requires `expected_revision` / `expectedRevision`; callers that passed a turn id alone must read
+  the revision first.
+- Cache-read economics are descriptor/model specific, including current Claude Fable/Mythos 5.1 and Opus 5.5
+  exceptions. `for_compiler()` requires an explicit read multiplier when a compiler profile does not declare one.
+  Serialized cache descriptors gain an optional `cache_read_multiplier`; descriptors without it still validate.
+- The installable distribution is renamed to `portable-context-format` to avoid the occupied PyPI `pcf` project;
+  the Python import namespace remains `pcf`.
+
 - Make `MemoryPlacer` state durable and retry-safe. `export_state()` / `restore_state()` provide a versioned,
   JSON-compatible conversation snapshot; `turn_id` makes a repeated placement decision idempotent; and
   `expected_revision` rejects concurrent new turns planned from stale state. The snapshot stores hashes and
@@ -45,7 +76,7 @@
 - `MemoryPlacer` moves a tail module back while the cache is warm once it has gone quiet (unchanged for more than
   twice its average gap between changes) and, at its decayed rate, the saving over the remaining turns repays the
   rewrite. `expected_turns` sets the remaining turns; without it the placer assumes as many more as have passed.
-  Modules no longer move while they and what follows them are below `min_cacheable_tokens`. Same rules in `ts/`.
+  Cache-minimum eligibility is superseded by the prefix-aware rule above. Same rules in `ts/`.
 - Rerun the 60-turn domain comparison on the current library: placed input is 0.46 (gpt-5.6) and 0.49 (Claude) of
   tuned front, from 0.49 and 0.53 before the marker fixes. The README headline uses the new runs.
 - Breakpoints: every request, not only the first, gives a memory or document anchor directly after the system run

@@ -61,7 +61,8 @@ def test_anthropic_runs_go_to_anthropic_unless_openrouter_is_asked(monkeypatch):
     request = {"model": "claude-sonnet-5", "max_tokens": 10, "messages": []}
     cfg = SimpleNamespace(thinking="default")
     assert live.request_payload("anthropic", request, cfg) == request
-    routed = live.request_payload("anthropic", request, SimpleNamespace(thinking="disabled", anthropic_route="openrouter"))
+    disabled = {**request, "thinking": {"type": "disabled"}}
+    routed = live.request_payload("anthropic", disabled, SimpleNamespace(thinking="disabled", anthropic_route="openrouter"))
     assert routed["model"] == "anthropic/claude-sonnet-5" and routed["thinking"] == {"type": "disabled"}
     assert routed["extra_body"]["provider"] == {"order": ["Anthropic"], "allow_fallbacks": False}
 
@@ -100,7 +101,7 @@ def test_live_call_retries_transient_provider_status(status):
 
     responses = Responses()
     cfg = SimpleNamespace(effort="low", max_attempts=2, retry_base_seconds=0)
-    _, answer, out = live.call("openai", SimpleNamespace(responses=responses), {"model": "gpt-test"}, cfg)
+    _, answer, out = live.call("openai", SimpleNamespace(responses=responses), {"model": "gpt-test", "reasoning": {"effort": "low"}}, cfg)
     assert answer == "ok" and out["attempts"] == 2 and responses.calls == 2
 
 
@@ -118,10 +119,10 @@ def test_live_call_does_not_retry_missing_usage_or_sdk_drift():
     responses = Responses()
     cfg = SimpleNamespace(effort="low", max_attempts=3, retry_base_seconds=0)
     with pytest.raises(live.ProviderProtocolError, match="missing input/output usage"):
-        live.call("openai", SimpleNamespace(responses=responses), {"model": "gpt-test"}, cfg)
+        live.call("openai", SimpleNamespace(responses=responses), {"model": "gpt-test", "reasoning": {"effort": "low"}}, cfg)
     assert responses.calls == 1
     with pytest.raises(live.ProviderProtocolError, match="responses.create"):
-        live.call("openai", SimpleNamespace(), {"model": "gpt-test"}, cfg)
+        live.call("openai", SimpleNamespace(), {"model": "gpt-test", "reasoning": {"effort": "low"}}, cfg)
 
 
 def test_live_call_surfaces_exhausted_server_errors():

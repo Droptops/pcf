@@ -187,17 +187,25 @@ def make_client(provider: str, route: str = "direct"):
                                else "https://openrouter.ai/api")
 
 
-def make_compiler(provider: str, model: str):
-    # Room for adaptive thinking before the answer: at 512 a thinking model can stop with no visible text.
-    return OpenAICompiler(model) if provider == "openai" else AnthropicCompiler(model, max_tokens=4096)
+def make_compiler(provider: str, model: str, *, effort: str = "low", thinking: str = "default"):
+    # Cache-affecting provider settings belong in the compiled request and its native identity.
+    if provider == "openai":
+        return OpenAICompiler(model, reasoning={"effort": effort})
+    return AnthropicCompiler(model, max_tokens=4096,
+                             thinking={"type": "disabled"} if thinking == "disabled" else None)
 
 
 def request_payload(provider: str, request: dict, cfg) -> dict:
-    """The outbound SDK arguments, shared with request capture in the domain harness."""
+    """The outbound SDK arguments. Cache-affecting fields must already be present in the compiled request."""
     if provider == "openai":
-        return {**request, "max_output_tokens": 4096, "reasoning": {"effort": cfg.effort}}
-    thinking = {"thinking": {"type": "disabled"}} if cfg.thinking == "disabled" else {}
-    return anthropic_payload({**request, **thinking}, getattr(cfg, "anthropic_route", "direct"))
+        expected = {"effort": cfg.effort}
+        if request.get("reasoning") != expected:
+            raise ValueError("OpenAI reasoning settings must be compiled before request dispatch")
+        return {**request, "max_output_tokens": 4096}
+    expected = {"type": "disabled"} if cfg.thinking == "disabled" else None
+    if request.get("thinking") != expected:
+        raise ValueError("Anthropic thinking settings must be compiled before request dispatch")
+    return anthropic_payload(request, getattr(cfg, "anthropic_route", "direct"))
 
 
 class ProviderProtocolError(RuntimeError):
@@ -263,23 +271,31 @@ def call(provider: str, client, request: dict, cfg) -> tuple[object, str, dict]:
     raise AssertionError("unreachable")
 
 
-def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment]):
+def arrange(arm: str, placer: MemoryPlacer, mem: list[Segment], history: list[Segment], prefix_tokens: int = 0):
     if arm in {"placed", "placed-spacer"}:
-        front, tail = placer.split(mem, history)
+        front, tail = placer.split(mem, history, prefix_tokens=prefix_tokens)
         return front, [*tail, SPACER] if arm == "placed-spacer" else tail
     if arm == "tail":
         return [], [Segment(s.id, "memory", s.content, False, provenance=s.provenance) for s in mem]
     return mem, []
 
 
+def session_nonces(jobs, paid: bool) -> dict:
+    """A random tag per session for its system text. Anthropic caches by prefix with no namespace, so sessions that
+    shared a tag across arms read each other's cache entries; one tag per session keeps every arm's cache its own
+    while the text still names no arm. Offline runs make no provider calls and use a fixed tag."""
+    return {job: uuid.uuid4().hex[:12] if paid else "offline" for job in jobs}
+
+
 def session(arm: str, nonce: str, cfg, client=None) -> list[dict]:
-    compiler = make_compiler(cfg.provider, cfg.model)
+    compiler = make_compiler(cfg.provider, cfg.model, effort=cfg.effort, thinking=cfg.thinking)
     placer = MemoryPlacer(compiler.tokenizer, write_multiplier=compiler.descriptor.cache_write_multiplier,
                           read_multiplier=cfg.read_multiplier)
-    system = Segment("s", "system", f"Session {nonce}-{arm}.\n" + "\n".join(POLICIES))
+    system = Segment("s", "system", f"Session {nonce}.\n" + "\n".join(POLICIES))
     history, rows, said = [], [], {}
+    prefix_tokens = compiler.tokenizer.count(system.content)
     for turn in range(cfg.turns):
-        front, tail = arrange(arm, placer, memory(turn), history)
+        front, tail = arrange(arm, placer, memory(turn), history, prefix_tokens)
         text, expected = question(turn)
         ctx = Context([system, *front, *history, *tail, Segment("u", "user", text, stable=False)],
                       cache_namespace=f"{arm}-{nonce}")
@@ -411,20 +427,23 @@ if __name__ == "__main__":
     client = None
     if cfg.run:
         client = make_client(cfg.provider, cfg.anthropic_route)
-    writes = make_compiler(cfg.provider, cfg.model).descriptor.cache_write_multiplier
-    nonces = [uuid.uuid4().hex[:12] if client else "offline" for _ in range(cfg.repeats if client else 1)]
-    jobs = [(i, arm) for i in range(len(nonces)) for arm in cfg.arms]  # fresh prefix per repeat: arms start cold
+    writes = make_compiler(cfg.provider, cfg.model, effort=cfg.effort,
+                           thinking=cfg.thinking).descriptor.cache_write_multiplier
+    repeats = cfg.repeats if client else 1
+    jobs = [(i, arm) for i in range(repeats) for arm in cfg.arms]
+    nonces = session_nonces(jobs, client is not None)  # fresh prefix per session: every arm starts cold
     with ThreadPoolExecutor(max(1, cfg.workers if client else 1)) as pool:
-        done = dict(zip(jobs, pool.map(lambda job: session(job[1], nonces[job[0]], cfg, client), jobs)))
+        done = dict(zip(jobs, pool.map(lambda job: session(job[1], nonces[job], cfg, client), jobs)))
     runs = []
-    for i in range(len(nonces)):
+    for i in range(repeats):
         run = {arm: done[(i, arm)] for arm in cfg.arms}
         run["summary"] = {arm: summarize(run[arm], cfg, writes) for arm in cfg.arms}
         runs.append(run)
     meta = {"date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "git_sha": git_sha(),
             "provider": cfg.provider, "model": cfg.model,
-            "anthropic_route": cfg.anthropic_route if cfg.provider == "anthropic" else None, "turns": cfg.turns, "repeats": len(nonces),
+            "anthropic_route": cfg.anthropic_route if cfg.provider == "anthropic" else None, "turns": cfg.turns, "repeats": repeats,
             "arms": cfg.arms, "history_style": cfg.history_style, "thinking": cfg.thinking, "effort": cfg.effort,
             "write_multiplier": writes, "read_multiplier": cfg.read_multiplier,
-            "output_multiplier": cfg.output_multiplier, "paid": client is not None}
+            "output_multiplier": cfg.output_multiplier, "paid": client is not None,
+            "nonce_scope": "session", "workers": cfg.workers}
     print(json.dumps({"meta": meta, "runs": runs, "aggregate": aggregate(runs, cfg.arms)}, indent=2))

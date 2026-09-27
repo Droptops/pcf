@@ -216,6 +216,14 @@
       "type": "number",
       "minimum": 0
     },
+    "cache_read_multiplier": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "exclusiveMaximum": 1
+    },
     "compat_key": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$(?!\\n)"
