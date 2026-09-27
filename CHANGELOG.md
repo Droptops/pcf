@@ -15,7 +15,7 @@
 - Arm-blind four-arm rerun (`results/2026-09-27`, 6 scenarios × 60 turns × 2 repeats): against tuned front,
   `MemoryPlacer` input cost is 0.46 (gpt-5.6) and 0.49 (claude-sonnet-5, rerun with isolated caches), the fixed tail
   0.44 and 0.48, echo-all 0.47 and 0.51. The README headline now uses these, with their price, session-length and
-  design caveats; README sections built on runs that named the layout are marked historical.
+  design caveats; README sections that compare layouts on runs that named the layout are marked historical.
 - OpenAI reasoning/text settings and Anthropic thinking settings are compiled before request hashing/dispatch;
   candidate fingerprints include generation identity, so every existing candidate fingerprint changes, including
   for compilers with no generation settings. OpenAI `reasoning`/`text` settings are deep-copied at construction.
