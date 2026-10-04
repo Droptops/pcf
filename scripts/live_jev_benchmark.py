@@ -9,12 +9,14 @@ from __future__ import annotations
 import json
 
 from pcf.jit.jev_benchmark import default_jev_benchmark_cases, run_jev_benchmark
+from pcf.jit.jev_ood_benchmark import hard_jev_benchmark_cases
 from pcf.jit.jev_openrouter import OpenRouterJevClient
 
 
 def main() -> int:
     client = OpenRouterJevClient.from_env()
-    summary = run_jev_benchmark(client, default_jev_benchmark_cases())
+    cases = default_jev_benchmark_cases() + hard_jev_benchmark_cases()
+    summary = run_jev_benchmark(client, cases)
 
     for item in summary.observations:
         print(
