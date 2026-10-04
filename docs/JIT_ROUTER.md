@@ -42,6 +42,35 @@ A semantic/result cache is treated as a route, but cache reuse must be invalidat
 Prompt/KV cache economics remain the responsibility of PCF's existing cache-aware compiler. This layer decides whether
 inference is needed at all and, if so, what execution primitive should serve it.
 
+## PCF prompt-cache economics
+
+`pcf.jit.pcf_cost` bridges the existing PCF compiler/router cache model into JIT shadow metering rather than reimplementing
+provider tokenization or prompt-cache behavior.
+
+For a PCF `Candidate`, the bridge asks the candidate compiler for its current `warmth()` and splits the existing router's
+input-cost equation into the two JIT economic buckets:
+
+```text
+token_cost = uncached_tokens * input_price
+
+memory_cost =
+    cache_creation_tokens * cache_write_price
+  + warm_tokens * cache_read_price
+```
+
+The sum is exactly the PCF router input-cost estimate for that candidate and cache state. The shadow metadata records the
+warm/cold/cache-creation/uncached token counts, cache state, model id, observation time, and whether token counts are
+estimated.
+
+The metered shadow-run wrapper takes the cache-cost snapshot **before** route execution. A route that populates cache while
+it runs therefore cannot make its own current request appear warm. The bridge rejects already-metered runs and reserved
+metadata collisions to avoid silent double counting.
+
+For simulated PCF families, locally observed cache metadata can produce warm-read estimates. For closed providers, PCF's
+existing contract remains intact: provider cache state is `unknown` preflight and local cache metadata is never promoted
+into knowledge of the provider's live cache. Output-token cost is not included by this bridge because PCF `warmth()`
+models input caching only.
+
 ## Shadow runtime
 
 `pcf.jit.shadow` replays one semantic request against multiple candidate routes and feeds the observed economics and an
@@ -140,14 +169,14 @@ compile candidate.
 
 ## Current boundary
 
-The runtime can score, fingerprint, shadow-run, replay, audit task-key collisions/drift, statistically gate candidates,
-and manage an evidence-backed route lifecycle. It deliberately does **not** train models, synthesize executable code,
-invoke write-capable tools, or send production traffic.
+The runtime can score, fingerprint, shadow-run, meter PCF prompt-cache economics, replay, audit task-key collisions/drift,
+statistically gate candidates, and manage an evidence-backed route lifecycle. It deliberately does **not** train models,
+synthesize executable code, invoke write-capable tools, or send production traffic.
 
 Next experiments:
 
-1. Connect PCF prompt-cache cost estimates to shadow-run token/memory measurements.
-2. Connect FAAR/AAR authority decisions as a hard admissibility gate rather than another weighted feature.
-3. Feed fingerprint collision/drift gates into hot-path eligibility directly.
-4. Add durable registry persistence + transactional compare-and-swap semantics.
+1. Connect FAAR/AAR authority decisions as a hard admissibility gate rather than another weighted feature.
+2. Feed fingerprint collision/drift gates into hot-path eligibility directly.
+3. Add durable registry persistence + transactional compare-and-swap semantics.
+4. Add post-execution provider usage reconciliation so estimates can be compared with billed cache usage.
 5. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.
