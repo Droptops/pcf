@@ -10,6 +10,16 @@ from .cache import CacheEnvelope, RiskAwareResultCache
 from .cost_calibration import CostCalibrationPolicy, CostCalibrationSnapshot, PCFCostCalibrator
 from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintObservation, TaskSignature
 from .hotpath import CompileEconomics, CompileEligibility, HotPathDetector, HotPathStats
+from .jev_openrouter import (
+    DEFAULT_JEV_MODEL,
+    DEFAULT_OPENROUTER_DECISIONS_URL,
+    JevOpenRouterError,
+    JevRouteAdvice,
+    JevRouteBenchmarkStats,
+    JevUsage,
+    OpenRouterJevClient,
+    annotate_candidates_with_jev,
+)
 from .optimizer import JITOptimizer, NoAdmissibleRoute
 from .pcf_cost import (
     PCFInputCostEstimate,
@@ -57,6 +67,8 @@ __all__ = [
     "CompileEligibility",
     "CostCalibrationPolicy",
     "CostCalibrationSnapshot",
+    "DEFAULT_JEV_MODEL",
+    "DEFAULT_OPENROUTER_DECISIONS_URL",
     "ExecutionPrimitive",
     "FingerprintAudit",
     "FingerprintAuditSummary",
@@ -65,7 +77,12 @@ __all__ = [
     "HotPathStats",
     "InvalidRouteTransition",
     "JITOptimizer",
+    "JevOpenRouterError",
+    "JevRouteAdvice",
+    "JevRouteBenchmarkStats",
+    "JevUsage",
     "NoAdmissibleRoute",
+    "OpenRouterJevClient",
     "OptimizerPolicy",
     "PCFCostCalibrator",
     "PCFInputCostEstimate",
@@ -96,6 +113,7 @@ __all__ = [
     "TaskSignature",
     "TraceReplaySummary",
     "TraceReplayer",
+    "annotate_candidates_with_jev",
     "apply_faar_authority",
     "apply_pcf_input_cost",
     "apply_pcf_reconciled_input_cost",
