@@ -5,6 +5,14 @@ from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintO
 from .hotpath import CompileEconomics, HotPathDetector, HotPathStats
 from .optimizer import JITOptimizer, NoAdmissibleRoute
 from .promotion import PromotionDecision, PromotionEvaluator, PromotionEvidence, PromotionPolicy
+from .registry import (
+    InvalidRouteTransition,
+    RegisteredRoute,
+    RouteRegistry,
+    RouteState,
+    RouteTransition,
+    StaleRouteGeneration,
+)
 from .shadow import (
     ReplayRouteStats,
     ShadowAssessment,
@@ -29,6 +37,7 @@ __all__ = [
     "FingerprintObservation",
     "HotPathDetector",
     "HotPathStats",
+    "InvalidRouteTransition",
     "JITOptimizer",
     "NoAdmissibleRoute",
     "OptimizerPolicy",
@@ -36,10 +45,14 @@ __all__ = [
     "PromotionEvaluator",
     "PromotionEvidence",
     "PromotionPolicy",
+    "RegisteredRoute",
     "ReplayRouteStats",
     "RiskAwareResultCache",
     "RouteCandidate",
     "RouteDecision",
+    "RouteRegistry",
+    "RouteState",
+    "RouteTransition",
     "ShadowAssessment",
     "ShadowExecutor",
     "ShadowObservation",
@@ -47,6 +60,7 @@ __all__ = [
     "ShadowResult",
     "ShadowRun",
     "ShadowTarget",
+    "StaleRouteGeneration",
     "TaskSignature",
     "TraceReplaySummary",
     "TraceReplayer",

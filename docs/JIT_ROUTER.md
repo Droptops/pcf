@@ -98,8 +98,33 @@ adjudicated observations and measures three distinct failure modes:
 - **semantic drift**: one fingerprint + semantic identity maps to more than one behavior identity
 - **split**: one semantic identity maps to more than one fingerprint, indicating an unstable or over-specific key
 
-The audit reports rates plus concrete examples. A clean hash function is not enough; the task-signature design must be
-validated on production-like traces before its fingerprints are allowed to drive hot-path compilation or route reuse.
+The audit reports rates plus concrete examples and the set of fingerprints actually covered by adjudication. A clean hash
+function is not enough; the task-signature design must be validated on production-like traces before its fingerprints are
+allowed to drive hot-path compilation or route reuse.
+
+## Staged route registry
+
+`pcf.jit.registry.RouteRegistry` turns promotion evidence into an explicit lifecycle without touching production traffic:
+
+```text
+shadow -> eligible -> canary -> active -> retired
+              ^         |
+              |---------|  rollback
+```
+
+Forward transitions are evidence-gated:
+
+- `shadow -> eligible` requires a passing `PromotionDecision` and collision/drift-free audit coverage for that exact task fingerprint
+- `eligible -> canary` requires an explicit traffic fraction strictly between 0 and 1
+- `canary -> active` requires fresh passing promotion evidence and clean fingerprint audit coverage again
+- replacement of an existing active route must be explicit and retires the old route in the same registry operation
+
+Every record has a monotonically increasing generation. Mutations require the caller's expected generation, so stale
+operators cannot overwrite a newer lifecycle decision. Transition timestamps cannot move backwards, every transition
+carries an `evidence_ref`, and retired routes are terminal. There can be at most one active route per task fingerprint.
+
+Rollback is explicit: a canary can return to eligible, and an active route can be demoted back to canary. The registry is
+an in-memory reference implementation; it changes route metadata only and does not deploy models or send traffic.
 
 ## JIT compilation trigger
 
@@ -115,14 +140,14 @@ compile candidate.
 
 ## Current boundary
 
-The runtime can score, fingerprint, shadow-run, replay, audit task-key collisions/drift, and statistically gate candidate
-routes, but it deliberately does **not** train models, synthesize executable code, invoke write-capable tools, or
-automatically mutate production routing.
+The runtime can score, fingerprint, shadow-run, replay, audit task-key collisions/drift, statistically gate candidates,
+and manage an evidence-backed route lifecycle. It deliberately does **not** train models, synthesize executable code,
+invoke write-capable tools, or send production traffic.
 
 Next experiments:
 
-1. Add a route registry with explicit staged states: shadow -> eligible -> canary -> active -> retired.
-2. Connect PCF prompt-cache cost estimates to shadow-run token/memory measurements.
-3. Connect FAAR/AAR authority decisions as a hard admissibility gate rather than another weighted feature.
-4. Feed fingerprint collision/drift gates into hot-path eligibility.
+1. Connect PCF prompt-cache cost estimates to shadow-run token/memory measurements.
+2. Connect FAAR/AAR authority decisions as a hard admissibility gate rather than another weighted feature.
+3. Feed fingerprint collision/drift gates into hot-path eligibility directly.
+4. Add durable registry persistence + transactional compare-and-swap semantics.
 5. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.
