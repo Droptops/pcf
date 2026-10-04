@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from pathlib import Path
 from threading import RLock
 from typing import Any, Callable, Mapping, TypeVar
 
@@ -12,7 +11,6 @@ from ..validation import number
 from .fingerprint import FingerprintAuditSummary
 from .promotion import PromotionDecision
 from .registry import (
-    InvalidRouteTransition,
     RegisteredRoute,
     RouteRegistry,
     RouteState,
@@ -76,7 +74,6 @@ class SQLiteRouteRegistry(RouteRegistry):
         try:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.execute("PRAGMA synchronous = FULL")
-            connection.execute("BEGIN IMMEDIATE")
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS jit_registry_meta (
@@ -122,6 +119,7 @@ class SQLiteRouteRegistry(RouteRegistry):
                     ON jit_route_history(route_id, sequence);
                 """
             )
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 "SELECT value FROM jit_registry_meta WHERE key = 'schema_version'"
             ).fetchone()
