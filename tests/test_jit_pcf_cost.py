@@ -124,8 +124,8 @@ def test_metered_runner_snapshots_cost_before_execution_populates_cache():
 
 
 def test_unknown_provider_cache_state_is_preserved_not_invented():
-    from pcf.families.openai import OpenAICompiler
     from pcf.cache import PrefixCache
+    from pcf.families.openai_adapter import OpenAICompiler
 
     compiler = OpenAICompiler("gpt-5.6")
     cand = Candidate(compiler, PrefixCache(compiler.descriptor.ttl_seconds), 2.0, 0.2)
