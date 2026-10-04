@@ -3,6 +3,18 @@
 from .cache import CacheEnvelope, RiskAwareResultCache
 from .hotpath import CompileEconomics, HotPathDetector, HotPathStats
 from .optimizer import JITOptimizer, NoAdmissibleRoute
+from .shadow import (
+    ReplayRouteStats,
+    ShadowAssessment,
+    ShadowExecutor,
+    ShadowObservation,
+    ShadowRequest,
+    ShadowResult,
+    ShadowRun,
+    ShadowTarget,
+    TraceReplaySummary,
+    TraceReplayer,
+)
 from .types import CandidateScore, ExecutionPrimitive, OptimizerPolicy, RouteCandidate, RouteDecision
 
 __all__ = [
@@ -15,7 +27,17 @@ __all__ = [
     "JITOptimizer",
     "NoAdmissibleRoute",
     "OptimizerPolicy",
+    "ReplayRouteStats",
     "RiskAwareResultCache",
     "RouteCandidate",
     "RouteDecision",
+    "ShadowAssessment",
+    "ShadowExecutor",
+    "ShadowObservation",
+    "ShadowRequest",
+    "ShadowResult",
+    "ShadowRun",
+    "ShadowTarget",
+    "TraceReplaySummary",
+    "TraceReplayer",
 ]
