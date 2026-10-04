@@ -2,6 +2,11 @@ name: Live Jev Smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/run/live-jev-smoke.trigger
 
 permissions:
   contents: read
