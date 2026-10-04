@@ -11,12 +11,14 @@ import json
 from pcf.jit.jev_benchmark import default_jev_benchmark_cases, run_jev_benchmark
 from pcf.jit.jev_ood_benchmark import hard_jev_benchmark_cases
 from pcf.jit.jev_openrouter import OpenRouterJevClient
+from pcf.jit.jev_selective import evaluate_jev_selective_evidence
 
 
 def main() -> int:
     client = OpenRouterJevClient.from_env()
     cases = default_jev_benchmark_cases() + hard_jev_benchmark_cases()
     summary = run_jev_benchmark(client, cases)
+    selective = evaluate_jev_selective_evidence(summary)
 
     for item in summary.observations:
         print(
@@ -56,6 +58,17 @@ def main() -> int:
                     },
                     "confusion_matrix": {
                         expected.value: row for expected, row in summary.confusion_matrix().items()
+                    },
+                    "selective_evidence": {
+                        "selected_cases": selective.selected_cases,
+                        "selected_matches": selective.selected_matches,
+                        "abstained_cases": selective.abstained_cases,
+                        "coverage": selective.coverage,
+                        "selected_accuracy": selective.selected_accuracy,
+                        "accuracy_lcb": selective.accuracy_lcb,
+                        "error_rate": selective.error_rate,
+                        "eligible": selective.eligible,
+                        "reasons": list(selective.reasons),
                     },
                 }
             },
