@@ -62,6 +62,29 @@ A `TraceReplayer` aggregates empirical route statistics across requests: success
 count, token cost, memory cost, latency, mean quality, and mean HTokens. This creates the evidence layer needed before
 any route can be promoted or compiled.
 
+## Promotion evidence
+
+`pcf.jit.promotion` compares a candidate route with a named baseline on matched shadow observations. Aggregate averages
+alone are not sufficient for promotion.
+
+The default promotion policy requires:
+
+- at least 100 matched successful observations
+- a Wilson lower confidence bound on route success of at least 0.99
+- a Wilson lower confidence bound on hard-gate admissibility of at least 0.99
+- a one-sided paired quality bound no worse than 0.01 below the baseline
+- mean candidate HTokens no greater than 0.05
+- a one-sided paired HToken bound showing no positive HToken regression
+- positive mean risk-adjusted savings per call
+- an explicit future-call projection whose net savings clear promotion fixed cost
+
+Quality and HToken bounds are currently normal-approximation bounds over paired samples; reliability/admissibility use
+Wilson bounds. These are engineering promotion gates, not claims of universal statistical validity. Heavy-tailed or
+high-consequence workloads should replace the approximate bounds with a domain-appropriate adjudication protocol.
+
+Promotion remains advisory: `PromotionEvaluator` returns evidence plus pass/fail reasons and never changes routing state.
+A skipped shadow run is itself disqualifying because it means the route has incomplete evidence under the replay set.
+
 ## JIT compilation trigger
 
 Compilation is justified only when projected future savings exceed build, evaluation, deployment, and risk-reserve costs:
@@ -76,14 +99,13 @@ compile candidate.
 
 ## Current boundary
 
-The runtime can now score, shadow-run, and replay execution routes, but it deliberately does **not** train models,
-synthesize executable code, invoke write-capable tools, or auto-promote a candidate. Those capabilities require
-empirical gates built from shadow evidence first.
+The runtime can score, shadow-run, replay, and statistically gate candidate routes, but it deliberately does **not** train
+models, synthesize executable code, invoke write-capable tools, or automatically mutate production routing.
 
 Next experiments:
 
 1. Add a task-fingerprint implementation and measure collision/semantic-drift rates.
 2. Connect PCF prompt-cache cost estimates to shadow-run token/memory measurements.
 3. Connect FAAR/AAR authority decisions as a hard admissibility gate rather than another weighted feature.
-4. Define promotion gates from replay evidence: sample size, quality delta, HToken bound, failure rate, and savings.
+4. Add a route registry with explicit staged states: shadow -> eligible -> canary -> active -> retired.
 5. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.
