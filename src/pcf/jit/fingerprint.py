@@ -79,6 +79,7 @@ class FingerprintAuditSummary:
     split_semantics: int
     split_rate: float
     observed_fingerprints: tuple[str, ...]
+    observation_counts: Mapping[str, int]
     collision_examples: Mapping[str, tuple[str, ...]]
     drift_examples: Mapping[str, tuple[str, ...]]
     split_examples: Mapping[str, tuple[str, ...]]
@@ -86,6 +87,10 @@ class FingerprintAuditSummary:
     @property
     def clean(self) -> bool:
         return self.collision_fingerprints == 0 and self.drift_fingerprints == 0
+
+    def observations_for(self, fingerprint: str) -> int:
+        nonempty(fingerprint, "fingerprint")
+        return int(self.observation_counts.get(fingerprint, 0))
 
 
 class FingerprintAudit:
@@ -101,6 +106,7 @@ class FingerprintAudit:
         self._semantics_by_fingerprint: dict[str, set[str]] = defaultdict(set)
         self._behaviors_by_pair: dict[tuple[str, str], set[str]] = defaultdict(set)
         self._fingerprints_by_semantic: dict[str, set[str]] = defaultdict(set)
+        self._observation_counts: dict[str, int] = defaultdict(int)
 
     def observe(
         self,
@@ -132,6 +138,7 @@ class FingerprintAudit:
         self._semantics_by_fingerprint[fingerprint].add(semantic_id)
         self._behaviors_by_pair[(fingerprint, semantic_id)].add(behavior_id)
         self._fingerprints_by_semantic[semantic_id].add(fingerprint)
+        self._observation_counts[fingerprint] += 1
         return observation
 
     def summary(self) -> FingerprintAuditSummary:
@@ -170,6 +177,7 @@ class FingerprintAudit:
             split_semantics=splits,
             split_rate=splits / semantics if semantics else 0.0,
             observed_fingerprints=tuple(sorted(self._semantics_by_fingerprint)),
+            observation_counts=dict(sorted(self._observation_counts.items())),
             collision_examples=collision_examples,
             drift_examples=drift_examples,
             split_examples=split_examples,
