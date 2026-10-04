@@ -2,8 +2,7 @@
 
 This module does not filter candidates. It evaluates whether benchmark evidence
 is strong enough to justify considering a future candidate-narrowing policy.
-Low-confidence or low-margin decisions abstain instead of being counted as
-selected routes.
+Low-confidence decisions abstain instead of being counted as selected routes.
 """
 from __future__ import annotations
 
@@ -18,14 +17,13 @@ class JevSelectivePolicy:
     """Evidence requirements before Jev may be considered for route narrowing."""
 
     min_confidence: float = 0.80
-    min_margin: float = 0.15
     min_selected_cases: int = 100
     min_accuracy_lcb: float = 0.98
     max_error_rate: float = 0.01
     z_score: float = 1.96
 
     def __post_init__(self) -> None:
-        for name in ("min_confidence", "min_margin", "min_accuracy_lcb", "max_error_rate"):
+        for name in ("min_confidence", "min_accuracy_lcb", "max_error_rate"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
                 raise ValueError(f"{name} must be between 0 and 1")
@@ -81,11 +79,7 @@ def evaluate_jev_selective_evidence(
     selected = [
         item
         for item in summary.observations
-        if item.succeeded
-        and item.confidence is not None
-        and item.margin is not None
-        and item.confidence >= policy.min_confidence
-        and item.margin >= policy.min_margin
+        if item.succeeded and item.confidence is not None and item.confidence >= policy.min_confidence
     ]
     selected_cases = len(selected)
     selected_matches = sum(item.matched for item in selected)
