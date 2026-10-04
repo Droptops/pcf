@@ -7,6 +7,7 @@ from .authority import (
     normalize_faar_authority_decision,
 )
 from .cache import CacheEnvelope, RiskAwareResultCache
+from .cost_calibration import CostCalibrationPolicy, CostCalibrationSnapshot, PCFCostCalibrator
 from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintObservation, TaskSignature
 from .hotpath import CompileEconomics, CompileEligibility, HotPathDetector, HotPathStats
 from .optimizer import JITOptimizer, NoAdmissibleRoute
@@ -54,6 +55,8 @@ __all__ = [
     "CandidateScore",
     "CompileEconomics",
     "CompileEligibility",
+    "CostCalibrationPolicy",
+    "CostCalibrationSnapshot",
     "ExecutionPrimitive",
     "FingerprintAudit",
     "FingerprintAuditSummary",
@@ -64,6 +67,7 @@ __all__ = [
     "JITOptimizer",
     "NoAdmissibleRoute",
     "OptimizerPolicy",
+    "PCFCostCalibrator",
     "PCFInputCostEstimate",
     "PCFInputCostReconciliation",
     "PCFReconciliationStats",
