@@ -32,6 +32,20 @@ def candidate(engine=None, **kwargs):
     )
 
 
+def populate_compiler_cache(cand, ctx, now):
+    compiled = cand.compiler.compile(ctx)
+    for _, digest, tokens in compiled.marker_prefixes:
+        if tokens >= cand.compiler.descriptor.min_cacheable_tokens:
+            cand.cache.write(
+                compiled.cache_key,
+                digest,
+                tokens,
+                now,
+                namespace=ctx.cache_namespace,
+                ttl_seconds=cand.compiler.descriptor.ttl_seconds,
+            )
+
+
 def test_cost_split_matches_existing_pcf_router_formula():
     cand = candidate()
     ctx = context()
@@ -58,11 +72,10 @@ def test_explicit_cache_write_price_is_respected():
 
 
 def test_warm_cache_moves_cost_from_creation_or_uncached_to_cache_read():
-    engine = family_a(min_cacheable=1)
-    cand = candidate(engine)
+    cand = candidate()
     ctx = context()
     cold = estimate_pcf_input_cost(ctx, cand, now=0)
-    engine.run(ctx, 0)
+    populate_compiler_cache(cand, ctx, 0)
     warm = estimate_pcf_input_cost(ctx, cand, now=1)
 
     assert cold.warm_tokens == 0
@@ -101,12 +114,11 @@ def test_apply_cost_rejects_double_metering_and_metadata_collision():
 
 
 def test_metered_runner_snapshots_cost_before_execution_populates_cache():
-    engine = family_a(min_cacheable=1)
-    cand = candidate(engine)
+    cand = candidate()
     ctx = context()
 
     def execute(request):
-        engine.run(request.payload, request.metadata["now"])
+        populate_compiler_cache(cand, request.payload, request.metadata["now"])
         return ShadowRun(output="ok", latency_ms=3)
 
     runner = make_pcf_metered_shadow_runner(
