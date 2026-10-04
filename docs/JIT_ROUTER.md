@@ -29,6 +29,24 @@ HTokens are not literal harmful output tokens. They are a normalized expected-ha
 risk without pretending every failure is equivalent. The conversion from HTokens to dollars is a policy parameter, not
 a universal constant.
 
+## Authority is a hard gate
+
+`pcf.jit.authority` consumes the public shape of FAAR's final authority-layer `Decision` without making PCF depend on the
+FAAR package. The adapter accepts the FAAR verdict vocabulary (`ALLOW`, `DENY`, `DEFER`, `STOP`), bounded reason codes,
+and requires `layer="authority"`.
+
+Only an explicit `ALLOW` sets the FAAR evidence to authorized. `DENY`, `DEFER`, and `STOP` all set the JIT route's
+`authority_ok` to false, which the existing optimizer rejects before economic comparison. A cheaper route therefore
+cannot buy its way past authority.
+
+The adapter is monotone: applying an `ALLOW` to a run that is already unauthorized cannot elevate it back to authorized.
+Authority verdict/layer/reason metadata uses reserved keys and collisions fail closed.
+
+PCF deliberately does **not** verify FAAR attestations, reimplement FAAR posture/primitive rules, or inspect permits. The
+caller must supply the result of FAAR's verified authority path. In FAAR itself, authority execution requires the
+`EXECUTE` posture with the `EXECUTE_ACTION` primitive; that policy remains owned and tested by FAAR rather than copied
+into PCF.
+
 ## Cache is an execution primitive
 
 A semantic/result cache is treated as a route, but cache reuse must be invalidated by:
@@ -169,14 +187,14 @@ compile candidate.
 
 ## Current boundary
 
-The runtime can score, fingerprint, shadow-run, meter PCF prompt-cache economics, replay, audit task-key collisions/drift,
-statistically gate candidates, and manage an evidence-backed route lifecycle. It deliberately does **not** train models,
-synthesize executable code, invoke write-capable tools, or send production traffic.
+The runtime can score, fingerprint, shadow-run, bind FAAR authority as a hard gate, meter PCF prompt-cache economics,
+replay, audit task-key collisions/drift, statistically gate candidates, and manage an evidence-backed route lifecycle. It
+deliberately does **not** verify FAAR signatures, train models, synthesize executable code, invoke write-capable tools, or
+send production traffic.
 
 Next experiments:
 
-1. Connect FAAR/AAR authority decisions as a hard admissibility gate rather than another weighted feature.
-2. Feed fingerprint collision/drift gates into hot-path eligibility directly.
-3. Add durable registry persistence + transactional compare-and-swap semantics.
-4. Add post-execution provider usage reconciliation so estimates can be compared with billed cache usage.
-5. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.
+1. Feed fingerprint collision/drift gates into hot-path eligibility directly.
+2. Add durable registry persistence + transactional compare-and-swap semantics.
+3. Add post-execution provider usage reconciliation so estimates can be compared with billed cache usage.
+4. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.

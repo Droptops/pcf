@@ -1,5 +1,11 @@
 """Experimental JIT cognitive execution optimizer."""
 
+from .authority import (
+    AuthorityEvidenceError,
+    AuthorityGateEvidence,
+    apply_faar_authority,
+    normalize_faar_authority_decision,
+)
 from .cache import CacheEnvelope, RiskAwareResultCache
 from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintObservation, TaskSignature
 from .hotpath import CompileEconomics, HotPathDetector, HotPathStats
@@ -34,6 +40,8 @@ from .shadow import (
 from .types import CandidateScore, ExecutionPrimitive, OptimizerPolicy, RouteCandidate, RouteDecision
 
 __all__ = [
+    "AuthorityEvidenceError",
+    "AuthorityGateEvidence",
     "CacheEnvelope",
     "CandidateScore",
     "CompileEconomics",
@@ -71,7 +79,9 @@ __all__ = [
     "TaskSignature",
     "TraceReplaySummary",
     "TraceReplayer",
+    "apply_faar_authority",
     "apply_pcf_input_cost",
     "estimate_pcf_input_cost",
     "make_pcf_metered_shadow_runner",
+    "normalize_faar_authority_decision",
 ]
