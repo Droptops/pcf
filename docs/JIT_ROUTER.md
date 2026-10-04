@@ -85,6 +85,22 @@ high-consequence workloads should replace the approximate bounds with a domain-a
 Promotion remains advisory: `PromotionEvaluator` returns evidence plus pass/fail reasons and never changes routing state.
 A skipped shadow run is itself disqualifying because it means the route has incomplete evidence under the replay set.
 
+## Task fingerprints and drift audit
+
+`pcf.jit.fingerprint.TaskSignature` hashes only declared stable task dimensions: operation, input/output schema identity,
+policy version, authority scope, optional tool contract, and caller-declared stable features. Raw request values are
+intentionally not part of the API so a task fingerprint does not silently become a user-data hash.
+
+A fingerprint is only a routing key. It is not evidence that two requests mean the same thing. `FingerprintAudit` takes
+adjudicated observations and measures three distinct failure modes:
+
+- **collision**: one fingerprint maps to more than one semantic identity
+- **semantic drift**: one fingerprint + semantic identity maps to more than one behavior identity
+- **split**: one semantic identity maps to more than one fingerprint, indicating an unstable or over-specific key
+
+The audit reports rates plus concrete examples. A clean hash function is not enough; the task-signature design must be
+validated on production-like traces before its fingerprints are allowed to drive hot-path compilation or route reuse.
+
 ## JIT compilation trigger
 
 Compilation is justified only when projected future savings exceed build, evaluation, deployment, and risk-reserve costs:
@@ -99,13 +115,14 @@ compile candidate.
 
 ## Current boundary
 
-The runtime can score, shadow-run, replay, and statistically gate candidate routes, but it deliberately does **not** train
-models, synthesize executable code, invoke write-capable tools, or automatically mutate production routing.
+The runtime can score, fingerprint, shadow-run, replay, audit task-key collisions/drift, and statistically gate candidate
+routes, but it deliberately does **not** train models, synthesize executable code, invoke write-capable tools, or
+automatically mutate production routing.
 
 Next experiments:
 
-1. Add a task-fingerprint implementation and measure collision/semantic-drift rates.
+1. Add a route registry with explicit staged states: shadow -> eligible -> canary -> active -> retired.
 2. Connect PCF prompt-cache cost estimates to shadow-run token/memory measurements.
 3. Connect FAAR/AAR authority decisions as a hard admissibility gate rather than another weighted feature.
-4. Add a route registry with explicit staged states: shadow -> eligible -> canary -> active -> retired.
+4. Feed fingerprint collision/drift gates into hot-path eligibility.
 5. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.

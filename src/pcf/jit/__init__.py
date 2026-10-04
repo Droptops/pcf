@@ -1,6 +1,7 @@
 """Experimental JIT cognitive execution optimizer."""
 
 from .cache import CacheEnvelope, RiskAwareResultCache
+from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintObservation, TaskSignature
 from .hotpath import CompileEconomics, HotPathDetector, HotPathStats
 from .optimizer import JITOptimizer, NoAdmissibleRoute
 from .promotion import PromotionDecision, PromotionEvaluator, PromotionEvidence, PromotionPolicy
@@ -23,6 +24,9 @@ __all__ = [
     "CandidateScore",
     "CompileEconomics",
     "ExecutionPrimitive",
+    "FingerprintAudit",
+    "FingerprintAuditSummary",
+    "FingerprintObservation",
     "HotPathDetector",
     "HotPathStats",
     "JITOptimizer",
@@ -43,6 +47,7 @@ __all__ = [
     "ShadowResult",
     "ShadowRun",
     "ShadowTarget",
+    "TaskSignature",
     "TraceReplaySummary",
     "TraceReplayer",
 ]
