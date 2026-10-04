@@ -145,9 +145,21 @@ adjudicated observations and measures three distinct failure modes:
 - **semantic drift**: one fingerprint + semantic identity maps to more than one behavior identity
 - **split**: one semantic identity maps to more than one fingerprint, indicating an unstable or over-specific key
 
-The audit reports rates plus concrete examples and the set of fingerprints actually covered by adjudication. A clean hash
-function is not enough; the task-signature design must be validated on production-like traces before its fingerprints are
-allowed to drive hot-path compilation or route reuse.
+The audit reports rates, concrete examples, the fingerprints covered by adjudication, and per-fingerprint observation
+counts. A clean hash function is not enough; the task-signature design must be validated on production-like traces before
+its fingerprints are allowed to drive hot-path compilation or route reuse.
+
+## Audited hot-path compilation gate
+
+`HotPathDetector.is_hot()` remains a descriptive volume/stability signal. It does **not** authorize compilation.
+`evaluate_compile_eligibility()` is the stronger gate. By default, a fingerprint needs at least 100 calls, 98% observed
+stability, and 20 adjudicated fingerprint observations before it can become a compile candidate.
+
+Compilation is blocked when the exact fingerprint is missing from audit coverage, is under-sampled, participates in a
+semantic collision, shows behavior drift, or participates in a semantic split across multiple fingerprints. This stops a
+frequent but incorrectly keyed workload from being compiled merely because its surface-level traffic looks repetitive.
+The result is a structured `CompileEligibility` record with explicit failure reasons; it still does not build or deploy
+anything.
 
 ## Staged route registry
 
@@ -182,19 +194,18 @@ projected_calls * (general_cost_per_call - compiled_cost_per_call)
     >= build_cost + evaluation_cost + deployment_cost + risk_reserve
 ```
 
-A hot-path detector separately requires enough observations and semantic stability before a workload is considered a
-compile candidate.
+The economic test is necessary but not sufficient: the audited hot-path gate must also pass before a workload is eligible
+to enter a compilation pipeline.
 
 ## Current boundary
 
 The runtime can score, fingerprint, shadow-run, bind FAAR authority as a hard gate, meter PCF prompt-cache economics,
-replay, audit task-key collisions/drift, statistically gate candidates, and manage an evidence-backed route lifecycle. It
-deliberately does **not** verify FAAR signatures, train models, synthesize executable code, invoke write-capable tools, or
-send production traffic.
+replay, audit task-key collisions/drift, gate hot-path compilation eligibility, statistically gate candidates, and manage
+an evidence-backed route lifecycle. It deliberately does **not** verify FAAR signatures, train models, synthesize
+executable code, invoke write-capable tools, or send production traffic.
 
 Next experiments:
 
-1. Feed fingerprint collision/drift gates into hot-path eligibility directly.
-2. Add durable registry persistence + transactional compare-and-swap semantics.
-3. Add post-execution provider usage reconciliation so estimates can be compared with billed cache usage.
-4. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.
+1. Add durable registry persistence + transactional compare-and-swap semantics.
+2. Add post-execution provider usage reconciliation so estimates can be compared with billed cache usage.
+3. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.

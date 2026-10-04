@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import ceil, inf
 
+from .fingerprint import FingerprintAuditSummary
+
 
 @dataclass(frozen=True)
 class CompileEconomics:
@@ -54,16 +56,42 @@ class HotPathStats:
         self.stable_calls += int(stable)
 
 
-class HotPathDetector:
-    """Identifies repetitive, semantically stable workloads worth considering for compilation."""
+@dataclass(frozen=True)
+class CompileEligibility:
+    """Evidence-backed decision about whether one hot path may enter compilation."""
 
-    def __init__(self, *, min_calls: int = 100, min_stability: float = 0.98) -> None:
+    fingerprint: str
+    eligible: bool
+    reasons: tuple[str, ...]
+    calls: int
+    stability: float
+    audit_observations: int
+
+
+class HotPathDetector:
+    """Identifies repetitive workloads and gates compilation on semantic audit evidence.
+
+    ``is_hot`` remains a volume/stability signal. ``evaluate_compile_eligibility`` is
+    the stronger gate that requires adjudicated fingerprint coverage and blocks
+    collisions, semantic drift, and fingerprint splits.
+    """
+
+    def __init__(
+        self,
+        *,
+        min_calls: int = 100,
+        min_stability: float = 0.98,
+        min_audit_observations: int = 20,
+    ) -> None:
         if min_calls <= 0:
             raise ValueError("min_calls must be positive")
         if not 0 <= min_stability <= 1:
             raise ValueError("min_stability must be between 0 and 1")
+        if min_audit_observations <= 0:
+            raise ValueError("min_audit_observations must be positive")
         self.min_calls = min_calls
         self.min_stability = min_stability
+        self.min_audit_observations = min_audit_observations
         self._stats: dict[str, HotPathStats] = {}
 
     def observe(self, fingerprint: str, *, stable: bool) -> HotPathStats:
@@ -76,3 +104,45 @@ class HotPathDetector:
     def is_hot(self, fingerprint: str) -> bool:
         stats = self._stats.get(fingerprint)
         return bool(stats and stats.calls >= self.min_calls and stats.stability >= self.min_stability)
+
+    def evaluate_compile_eligibility(
+        self,
+        fingerprint: str,
+        audit: FingerprintAuditSummary,
+    ) -> CompileEligibility:
+        if not fingerprint:
+            raise ValueError("fingerprint must be non-empty")
+        if not isinstance(audit, FingerprintAuditSummary):
+            raise ValueError("audit must be FingerprintAuditSummary")
+
+        stats = self._stats.get(fingerprint) or HotPathStats()
+        reasons: list[str] = []
+        if stats.calls < self.min_calls:
+            reasons.append("insufficient_calls")
+        if stats.stability < self.min_stability:
+            reasons.append("insufficient_stability")
+
+        audit_observations = audit.observations_for(fingerprint)
+        if audit_observations == 0:
+            reasons.append("audit_missing")
+        elif audit_observations < self.min_audit_observations:
+            reasons.append("insufficient_audit_observations")
+
+        if fingerprint in audit.collision_examples:
+            reasons.append("fingerprint_collision")
+        if any(key.split("|", 1)[0] == fingerprint for key in audit.drift_examples):
+            reasons.append("semantic_drift")
+        if any(fingerprint in fingerprints for fingerprints in audit.split_examples.values()):
+            reasons.append("fingerprint_split")
+
+        return CompileEligibility(
+            fingerprint=fingerprint,
+            eligible=not reasons,
+            reasons=tuple(reasons),
+            calls=stats.calls,
+            stability=stats.stability,
+            audit_observations=audit_observations,
+        )
+
+    def is_compile_eligible(self, fingerprint: str, audit: FingerprintAuditSummary) -> bool:
+        return self.evaluate_compile_eligibility(fingerprint, audit).eligible
