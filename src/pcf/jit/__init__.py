@@ -8,7 +8,7 @@ from .authority import (
 )
 from .cache import CacheEnvelope, RiskAwareResultCache
 from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintObservation, TaskSignature
-from .hotpath import CompileEconomics, HotPathDetector, HotPathStats
+from .hotpath import CompileEconomics, CompileEligibility, HotPathDetector, HotPathStats
 from .optimizer import JITOptimizer, NoAdmissibleRoute
 from .pcf_cost import (
     PCFInputCostEstimate,
@@ -45,6 +45,7 @@ __all__ = [
     "CacheEnvelope",
     "CandidateScore",
     "CompileEconomics",
+    "CompileEligibility",
     "ExecutionPrimitive",
     "FingerprintAudit",
     "FingerprintAuditSummary",
