@@ -10,6 +10,13 @@ from .cache import CacheEnvelope, RiskAwareResultCache
 from .cost_calibration import CostCalibrationPolicy, CostCalibrationSnapshot, PCFCostCalibrator
 from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintObservation, TaskSignature
 from .hotpath import CompileEconomics, CompileEligibility, HotPathDetector, HotPathStats
+from .jev_benchmark import (
+    JevBenchmarkCase,
+    JevBenchmarkObservation,
+    JevBenchmarkSummary,
+    default_jev_benchmark_cases,
+    run_jev_benchmark,
+)
 from .jev_openrouter import (
     DEFAULT_JEV_MODEL,
     DEFAULT_OPENROUTER_DECISIONS_URL,
@@ -77,6 +84,9 @@ __all__ = [
     "HotPathStats",
     "InvalidRouteTransition",
     "JITOptimizer",
+    "JevBenchmarkCase",
+    "JevBenchmarkObservation",
+    "JevBenchmarkSummary",
     "JevOpenRouterError",
     "JevRouteAdvice",
     "JevRouteBenchmarkStats",
@@ -117,9 +127,11 @@ __all__ = [
     "apply_faar_authority",
     "apply_pcf_input_cost",
     "apply_pcf_reconciled_input_cost",
+    "default_jev_benchmark_cases",
     "estimate_pcf_input_cost",
     "make_pcf_metered_shadow_runner",
     "make_pcf_reconciled_shadow_runner",
     "normalize_faar_authority_decision",
     "reconcile_pcf_input_cost",
+    "run_jev_benchmark",
 ]
