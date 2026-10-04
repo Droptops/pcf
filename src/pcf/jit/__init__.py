@@ -37,6 +37,7 @@ from .shadow import (
     TraceReplaySummary,
     TraceReplayer,
 )
+from .sqlite_registry import RegistryStorageError, SQLiteRouteRegistry
 from .types import CandidateScore, ExecutionPrimitive, OptimizerPolicy, RouteCandidate, RouteDecision
 
 __all__ = [
@@ -62,6 +63,7 @@ __all__ = [
     "PromotionEvidence",
     "PromotionPolicy",
     "RegisteredRoute",
+    "RegistryStorageError",
     "ReplayRouteStats",
     "RiskAwareResultCache",
     "RouteCandidate",
@@ -69,6 +71,7 @@ __all__ = [
     "RouteRegistry",
     "RouteState",
     "RouteTransition",
+    "SQLiteRouteRegistry",
     "ShadowAssessment",
     "ShadowExecutor",
     "ShadowObservation",

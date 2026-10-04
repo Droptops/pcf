@@ -182,8 +182,27 @@ Every record has a monotonically increasing generation. Mutations require the ca
 operators cannot overwrite a newer lifecycle decision. Transition timestamps cannot move backwards, every transition
 carries an `evidence_ref`, and retired routes are terminal. There can be at most one active route per task fingerprint.
 
-Rollback is explicit: a canary can return to eligible, and an active route can be demoted back to canary. The registry is
-an in-memory reference implementation; it changes route metadata only and does not deploy models or send traffic.
+Rollback is explicit: a canary can return to eligible, and an active route can be demoted back to canary. The base
+`RouteRegistry` remains the in-memory policy reference implementation and does not deploy models or send traffic.
+
+## Durable registry persistence
+
+`SQLiteRouteRegistry` applies the same lifecycle policy to a durable SQLite database. Each mutation takes a
+`BEGIN IMMEDIATE` transaction, reloads the current durable state, applies the existing `RouteRegistry` transition logic,
+and persists route updates plus transition history in one transaction.
+
+Generation updates use an additional SQL `WHERE generation = ?` compare-and-swap guard. Two registry instances pointing
+at the same database therefore cannot silently overwrite one another with stale generations. Partial unique indexes also
+defend the single-live-candidate and single-active-route invariants at the database layer. Active replacement persists
+the retirement of the old route before activating the new route inside the same transaction.
+
+Readers refresh from SQLite before returning route state, so a long-lived instance observes commits made by another
+instance. Route metadata is restricted to finite JSON-serializable data, schema versions fail closed, and invalid
+mutations roll back route state and transition history together.
+
+This is a durable single-database coordination implementation, not a claim of high availability or distributed
+consensus. SQLite file durability and locking are the availability boundary; a future networked control plane should use
+a transactional datastore with equivalent CAS and uniqueness constraints.
 
 ## JIT compilation trigger
 
@@ -201,11 +220,11 @@ to enter a compilation pipeline.
 
 The runtime can score, fingerprint, shadow-run, bind FAAR authority as a hard gate, meter PCF prompt-cache economics,
 replay, audit task-key collisions/drift, gate hot-path compilation eligibility, statistically gate candidates, and manage
-an evidence-backed route lifecycle. It deliberately does **not** verify FAAR signatures, train models, synthesize
-executable code, invoke write-capable tools, or send production traffic.
+an evidence-backed route lifecycle with optional durable SQLite persistence. It deliberately does **not** verify FAAR
+signatures, train models, synthesize executable code, invoke write-capable tools, or send production traffic.
 
 Next experiments:
 
-1. Add durable registry persistence + transactional compare-and-swap semantics.
-2. Add post-execution provider usage reconciliation so estimates can be compared with billed cache usage.
+1. Add post-execution provider usage reconciliation so estimates can be compared with billed cache usage.
+2. Add a networked transactional registry backend for HA/multi-host control planes.
 3. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.
