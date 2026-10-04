@@ -16,6 +16,13 @@ from .pcf_cost import (
     estimate_pcf_input_cost,
     make_pcf_metered_shadow_runner,
 )
+from .pcf_reconcile import (
+    PCFInputCostReconciliation,
+    PCFReconciliationStats,
+    apply_pcf_reconciled_input_cost,
+    make_pcf_reconciled_shadow_runner,
+    reconcile_pcf_input_cost,
+)
 from .promotion import PromotionDecision, PromotionEvaluator, PromotionEvidence, PromotionPolicy
 from .registry import (
     InvalidRouteTransition,
@@ -58,6 +65,8 @@ __all__ = [
     "NoAdmissibleRoute",
     "OptimizerPolicy",
     "PCFInputCostEstimate",
+    "PCFInputCostReconciliation",
+    "PCFReconciliationStats",
     "PromotionDecision",
     "PromotionEvaluator",
     "PromotionEvidence",
@@ -85,7 +94,10 @@ __all__ = [
     "TraceReplayer",
     "apply_faar_authority",
     "apply_pcf_input_cost",
+    "apply_pcf_reconciled_input_cost",
     "estimate_pcf_input_cost",
     "make_pcf_metered_shadow_runner",
+    "make_pcf_reconciled_shadow_runner",
     "normalize_faar_authority_decision",
+    "reconcile_pcf_input_cost",
 ]
