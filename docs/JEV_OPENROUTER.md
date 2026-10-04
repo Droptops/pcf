@@ -69,11 +69,32 @@ OPENROUTER_API_KEY=... python scripts/live_jev_smoke.py
 
 Do not commit or paste the key into source, tests, issues, or PR comments.
 
+## Live validation
+
+The first live smoke on October 4, 2026 completed successfully through OpenRouter with the pinned `typesafe/jev-1.13`
+alias and returned a TypeSafe-served Jev build. That proves the credential, endpoint, request shape, response parser, and
+sanitized telemetry path work together. A single smoke case is not routing evidence.
+
 ## Benchmarking
 
-`JevRouteBenchmarkStats` tracks labeled route-shape accuracy, low-confidence rate, mean confidence, decision cost, and
-latency without retaining request state.
+`JevRouteBenchmarkStats` remains a lightweight accumulator for ad-hoc labeled checks. The stronger benchmark path is:
 
-The first live benchmark should compare Jev's primitive classification with adjudicated labels. Only after that evidence
-is collected should PCF test any policy that uses Jev probabilities to reduce the candidate set. The v1 adapter does not
-filter candidates automatically.
+- `JevBenchmarkCase` for an adjudicated task-shape label and state
+- `run_jev_benchmark()` for matched live decisions
+- `JevBenchmarkSummary` for overall and per-primitive accuracy, confusion matrix, confidence, cost, latency, and errors
+- `default_jev_benchmark_cases()` for a balanced synthetic suite with three cases for each PCF primitive
+
+Benchmark results do **not** retain request state. Transport/schema failures count as misses in overall accuracy. Low
+classification accuracy does not fail CI by itself because the benchmark is evidence-producing, not self-approving.
+
+Run the live suite with:
+
+```bash
+OPENROUTER_API_KEY=... python scripts/live_jev_benchmark.py
+```
+
+or manually dispatch the **Live Jev Benchmark** GitHub Actions workflow.
+
+Only after the labeled evidence is collected should PCF test any policy that uses Jev probabilities to reduce the
+candidate set. The current adapter does not filter candidates automatically, and Jev can never override FAAR or PCF hard
+gates.
