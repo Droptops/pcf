@@ -42,6 +42,26 @@ A semantic/result cache is treated as a route, but cache reuse must be invalidat
 Prompt/KV cache economics remain the responsibility of PCF's existing cache-aware compiler. This layer decides whether
 inference is needed at all and, if so, what execution primitive should serve it.
 
+## Shadow runtime
+
+`pcf.jit.shadow` replays one semantic request against multiple candidate routes and feeds the observed economics and an
+external quality/risk adjudication back into `JITOptimizer`.
+
+Shadow execution fails closed:
+
+- a `ShadowTarget` defaults to `shadow_safe=False`
+- disabled or non-shadow-safe routes are recorded as skipped and are never invoked
+- each route receives a deep-copied request so in-process mutations do not leak to later candidates
+- one route failure does not prevent other candidates from completing
+- the runtime returns a recommendation only; it does not promote a route or perform production side effects
+
+`shadow_safe=True` is an adapter contract, not a sandbox. A caller must only mark runners safe when the underlying route
+cannot mutate external state. Tool execution and write-capable adapters remain outside this experiment.
+
+A `TraceReplayer` aggregates empirical route statistics across requests: successes/errors, admissibility, selection
+count, token cost, memory cost, latency, mean quality, and mean HTokens. This creates the evidence layer needed before
+any route can be promoted or compiled.
+
 ## JIT compilation trigger
 
 Compilation is justified only when projected future savings exceed build, evaluation, deployment, and risk-reserve costs:
@@ -54,16 +74,16 @@ projected_calls * (general_cost_per_call - compiled_cost_per_call)
 A hot-path detector separately requires enough observations and semantic stability before a workload is considered a
 compile candidate.
 
-## v0 boundaries
+## Current boundary
 
-This patch deliberately does **not** train models, synthesize code, or execute tools. It establishes the decision
-contract and safety/economic invariants needed before adding those capabilities.
+The runtime can now score, shadow-run, and replay execution routes, but it deliberately does **not** train models,
+synthesize executable code, invoke write-capable tools, or auto-promote a candidate. Those capabilities require
+empirical gates built from shadow evidence first.
 
 Next experiments:
 
-1. Replay production-like traces and estimate route-level HTokens from adjudicated failures.
-2. Add a shadow-mode route executor and compare cache/code/specialist/frontier candidates on identical requests.
-3. Learn a task fingerprint and measure collision/semantic-drift rates.
-4. Connect PCF prompt-cache cost estimates to the model-route cost term.
-5. Connect FAAR/AAR authority decisions as a hard admissibility gate rather than another weighted feature.
-6. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.
+1. Add a task-fingerprint implementation and measure collision/semantic-drift rates.
+2. Connect PCF prompt-cache cost estimates to shadow-run token/memory measurements.
+3. Connect FAAR/AAR authority decisions as a hard admissibility gate rather than another weighted feature.
+4. Define promotion gates from replay evidence: sample size, quality delta, HToken bound, failure rate, and savings.
+5. Add compile targets in order: deterministic rules, classifier, fine-tuned specialist, then distilled small LLM.
