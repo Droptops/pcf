@@ -30,7 +30,13 @@ class JITOptimizer:
 
         harm_cost = candidate.htokens * p.usd_per_htoken
         latency_cost = candidate.latency_ms * p.usd_per_ms
-        total = candidate.token_cost_usd + candidate.memory_cost_usd + harm_cost + latency_cost
+        total = (
+            candidate.token_cost_usd
+            + candidate.memory_cost_usd
+            + candidate.uncertainty_cost_usd
+            + harm_cost
+            + latency_cost
+        )
         return CandidateScore(
             name=candidate.name,
             primitive=candidate.primitive,
@@ -39,6 +45,7 @@ class JITOptimizer:
             htokens=candidate.htokens,
             token_cost_usd=candidate.token_cost_usd,
             memory_cost_usd=candidate.memory_cost_usd,
+            uncertainty_cost_usd=candidate.uncertainty_cost_usd,
             harm_cost_usd=harm_cost,
             latency_cost_usd=latency_cost,
             total_cost_usd=total,

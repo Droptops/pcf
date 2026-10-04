@@ -31,6 +31,7 @@ class RouteCandidate:
     freshness_ok: bool = True
     enabled: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
+    uncertainty_cost_usd: float = 0.0
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -38,6 +39,7 @@ class RouteCandidate:
         for field_name in (
             "token_cost_usd",
             "memory_cost_usd",
+            "uncertainty_cost_usd",
             "latency_ms",
             "harm_probability",
             "harm_severity",
@@ -85,6 +87,7 @@ class CandidateScore:
     htokens: float
     token_cost_usd: float
     memory_cost_usd: float
+    uncertainty_cost_usd: float
     harm_cost_usd: float
     latency_cost_usd: float
     total_cost_usd: float
