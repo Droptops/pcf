@@ -78,6 +78,7 @@ class FingerprintAuditSummary:
     drift_rate: float
     split_semantics: int
     split_rate: float
+    observed_fingerprints: tuple[str, ...]
     collision_examples: Mapping[str, tuple[str, ...]]
     drift_examples: Mapping[str, tuple[str, ...]]
     split_examples: Mapping[str, tuple[str, ...]]
@@ -168,6 +169,7 @@ class FingerprintAudit:
             drift_rate=drifts / fingerprints if fingerprints else 0.0,
             split_semantics=splits,
             split_rate=splits / semantics if semantics else 0.0,
+            observed_fingerprints=tuple(sorted(self._semantics_by_fingerprint)),
             collision_examples=collision_examples,
             drift_examples=drift_examples,
             split_examples=split_examples,
