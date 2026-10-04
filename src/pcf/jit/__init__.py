@@ -3,6 +3,7 @@
 from .cache import CacheEnvelope, RiskAwareResultCache
 from .hotpath import CompileEconomics, HotPathDetector, HotPathStats
 from .optimizer import JITOptimizer, NoAdmissibleRoute
+from .promotion import PromotionDecision, PromotionEvaluator, PromotionEvidence, PromotionPolicy
 from .shadow import (
     ReplayRouteStats,
     ShadowAssessment,
@@ -27,6 +28,10 @@ __all__ = [
     "JITOptimizer",
     "NoAdmissibleRoute",
     "OptimizerPolicy",
+    "PromotionDecision",
+    "PromotionEvaluator",
+    "PromotionEvidence",
+    "PromotionPolicy",
     "ReplayRouteStats",
     "RiskAwareResultCache",
     "RouteCandidate",
