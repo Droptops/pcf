@@ -27,6 +27,12 @@ from .jev_openrouter import (
     OpenRouterJevClient,
     annotate_candidates_with_jev,
 )
+from .jev_selective import (
+    JevSelectiveEvidence,
+    JevSelectivePolicy,
+    evaluate_jev_selective_evidence,
+    wilson_lower_bound,
+)
 from .optimizer import JITOptimizer, NoAdmissibleRoute
 from .pcf_cost import (
     PCFInputCostEstimate,
@@ -90,6 +96,8 @@ __all__ = [
     "JevOpenRouterError",
     "JevRouteAdvice",
     "JevRouteBenchmarkStats",
+    "JevSelectiveEvidence",
+    "JevSelectivePolicy",
     "JevUsage",
     "NoAdmissibleRoute",
     "OpenRouterJevClient",
@@ -129,9 +137,11 @@ __all__ = [
     "apply_pcf_reconciled_input_cost",
     "default_jev_benchmark_cases",
     "estimate_pcf_input_cost",
+    "evaluate_jev_selective_evidence",
     "make_pcf_metered_shadow_runner",
     "make_pcf_reconciled_shadow_runner",
     "normalize_faar_authority_decision",
     "reconcile_pcf_input_cost",
     "run_jev_benchmark",
+    "wilson_lower_bound",
 ]

@@ -1,3 +1,3 @@
 # Live Jev Benchmark trigger
 # Update this file on main to request one benchmark run.
-nonce: 1
+nonce: 2
