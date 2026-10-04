@@ -1,14 +1,10 @@
-"""OpenRouter Decisions API adapter for Jev route-shape advice.
-
-Jev is advisory here. It classifies the semantic execution shape; PCF still owns
-hard authority/freshness/quality/harm gates and final risk-adjusted economics.
-"""
+"""OpenRouter Decisions API adapter for advisory Jev route-shape classification."""
 from __future__ import annotations
 
 import json
 import os
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Mapping, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -91,7 +87,7 @@ class JevRouteAdvice:
 
 @dataclass
 class JevRouteBenchmarkStats:
-    """Aggregate Jev route-shape accuracy without retaining request state."""
+    """Aggregate route-shape accuracy without retaining request state."""
 
     observations: int = 0
     matches: int = 0
@@ -169,7 +165,7 @@ def _default_transport(
     body = json.dumps(payload, allow_nan=False, separators=(",", ":")).encode("utf-8")
     request = Request(url, data=body, headers=dict(headers), method="POST")
     try:
-        with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310 - fixed HTTPS endpoint by default
+        with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310
             raw = response.read()
     except HTTPError as exc:
         raise JevOpenRouterError(f"OpenRouter Decisions API returned HTTP {exc.code}") from exc
@@ -201,8 +197,8 @@ class OpenRouterJevClient:
             raise ValueError("api_key must be non-empty")
         if not isinstance(model, str) or not model.strip():
             raise ValueError("model must be non-empty")
-        if not isinstance(endpoint, str) or not endpoint.startswith("https://"):
-            raise ValueError("endpoint must be an https URL")
+        if not isinstance(endpoint, str) or not endpoint.startswith("https://openrouter.ai/"):
+            raise ValueError("endpoint must be an https://openrouter.ai/ URL")
         if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
         if transport is not None and not callable(transport):
@@ -225,17 +221,11 @@ class OpenRouterJevClient:
         return cls(key, **kwargs)
 
     def route(self, state: Any) -> JevRouteAdvice:
-        """Ask Jev which execution primitive best matches the semantic task shape.
-
-        This deliberately excludes authorization, safety, freshness, price, and live
-        route availability. Those remain PCF/FAAR responsibilities.
-        """
-
+        """Ask Jev for task-shape advice, excluding safety, authority, and economics."""
         try:
             json.dumps(state, allow_nan=False)
         except (TypeError, ValueError) as exc:
             raise ValueError("state must be finite JSON-serializable data") from exc
-
         criteria = {primitive.value: description for primitive, description in ROUTE_CRITERIA.items()}
         payload = {
             "model": self.model,
@@ -258,16 +248,13 @@ class OpenRouterJevClient:
         }
         started = time.perf_counter()
         response = self._transport(self.endpoint, headers, payload, self.timeout_seconds)
-        latency_ms = (time.perf_counter() - started) * 1000
-        return self._parse_route_response(response, latency_ms)
+        return self._parse_route_response(response, (time.perf_counter() - started) * 1000)
 
     def _parse_route_response(self, response: Mapping[str, Any], latency_ms: float) -> JevRouteAdvice:
         if not isinstance(response, Mapping):
             raise JevOpenRouterError("OpenRouter Decisions response must be an object")
         answers = response.get("answers")
-        if not isinstance(answers, Mapping):
-            raise JevOpenRouterError("OpenRouter Decisions response is missing answers")
-        answer = answers.get("execution_primitive")
+        answer = answers.get("execution_primitive") if isinstance(answers, Mapping) else None
         if not isinstance(answer, Mapping) or answer.get("type") != "choice":
             raise JevOpenRouterError("Jev execution_primitive answer must be a choice")
         choice = answer.get("choice")
@@ -296,13 +283,12 @@ class OpenRouterJevClient:
         usage = response.get("usage")
         if not isinstance(usage, Mapping):
             raise JevOpenRouterError("OpenRouter Decisions response is missing usage")
-        input_tokens = _integer(_usage_field(usage, "input_tokens", "inputTokens", 0), "input_tokens")
-        output_tokens = _integer(_usage_field(usage, "output_tokens", "outputTokens", 0), "output_tokens")
-        cost = _number(usage.get("cost", 0.0), "usage.cost")
-
-        served_model = response.get("model")
-        provider = response.get("provider")
-        decision_id = response.get("id")
+        normalized_usage = JevUsage(
+            input_tokens=_integer(_usage_field(usage, "input_tokens", "inputTokens", 0), "input_tokens"),
+            output_tokens=_integer(_usage_field(usage, "output_tokens", "outputTokens", 0), "output_tokens"),
+            cost_usd=_number(usage.get("cost", 0.0), "usage.cost"),
+        )
+        served_model, provider, decision_id = response.get("model"), response.get("provider"), response.get("id")
         if not all(isinstance(item, str) and item for item in (served_model, provider, decision_id)):
             raise JevOpenRouterError("OpenRouter Decisions response is missing model/provider/id")
         return JevRouteAdvice(
@@ -313,7 +299,7 @@ class OpenRouterJevClient:
             primitive=primitive,
             probabilities=probabilities,
             confidence=confidence,
-            usage=JevUsage(input_tokens=input_tokens, output_tokens=output_tokens, cost_usd=cost),
+            usage=normalized_usage,
             latency_ms=latency_ms,
         )
 
@@ -332,11 +318,9 @@ _JEV_METADATA_KEYS = {
 
 
 def annotate_candidates_with_jev(
-    candidates: Sequence[RouteCandidate],
-    advice: JevRouteAdvice,
+    candidates: Sequence[RouteCandidate], advice: JevRouteAdvice
 ) -> tuple[RouteCandidate, ...]:
     """Attach Jev evidence without changing route eligibility or economics."""
-
     if not isinstance(advice, JevRouteAdvice):
         raise ValueError("advice must be JevRouteAdvice")
     annotated: list[RouteCandidate] = []
