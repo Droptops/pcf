@@ -22,7 +22,6 @@ class RouteCandidate:
     primitive: ExecutionPrimitive
     token_cost_usd: float = 0.0
     memory_cost_usd: float = 0.0
-    uncertainty_cost_usd: float = 0.0
     latency_ms: float = 0.0
     expected_quality: float = 1.0
     harm_probability: float = 0.0
@@ -32,6 +31,7 @@ class RouteCandidate:
     freshness_ok: bool = True
     enabled: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
+    uncertainty_cost_usd: float = 0.0
 
     def __post_init__(self) -> None:
         if not self.name:
