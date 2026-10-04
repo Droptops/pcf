@@ -4,6 +4,12 @@ from .cache import CacheEnvelope, RiskAwareResultCache
 from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintObservation, TaskSignature
 from .hotpath import CompileEconomics, HotPathDetector, HotPathStats
 from .optimizer import JITOptimizer, NoAdmissibleRoute
+from .pcf_cost import (
+    PCFInputCostEstimate,
+    apply_pcf_input_cost,
+    estimate_pcf_input_cost,
+    make_pcf_metered_shadow_runner,
+)
 from .promotion import PromotionDecision, PromotionEvaluator, PromotionEvidence, PromotionPolicy
 from .registry import (
     InvalidRouteTransition,
@@ -41,6 +47,7 @@ __all__ = [
     "JITOptimizer",
     "NoAdmissibleRoute",
     "OptimizerPolicy",
+    "PCFInputCostEstimate",
     "PromotionDecision",
     "PromotionEvaluator",
     "PromotionEvidence",
@@ -64,4 +71,7 @@ __all__ = [
     "TaskSignature",
     "TraceReplaySummary",
     "TraceReplayer",
+    "apply_pcf_input_cost",
+    "estimate_pcf_input_cost",
+    "make_pcf_metered_shadow_runner",
 ]
