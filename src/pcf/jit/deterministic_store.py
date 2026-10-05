@@ -9,7 +9,7 @@ from threading import RLock
 from typing import Any
 
 from .deterministic import DeterministicArtifact, compile_deterministic_artifact
-from .deterministic_pipeline import DeterministicPipelineError, verify_deterministic_artifact
+from .deterministic_pipeline import verify_deterministic_artifact
 from .registry import RegisteredRoute, RouteRegistry
 from .types import ExecutionPrimitive
 
