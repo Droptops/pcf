@@ -1,5 +1,16 @@
 # Release evidence
 
+## v0.3 reference milestone
+
+The completed v0.3 reference-system milestone is frozen in:
+
+- `release/v0.3.0-reference.md` — human-readable release notes and claim boundary.
+- `release/evidence/reference-v0.3.0.json` — canonical machine-readable live-validation evidence.
+
+This is a **reference milestone**, not a production-release gate pass. The stable/RC production gate below remains intentionally unchanged.
+
+## Production release gate
+
 `v0.3.0rc1` and stable releases are blocked until a real four-arm production pilot finishes. Do not copy the
 example into `production-pilot.json` and change `pending` to `pass` by hand.
 
