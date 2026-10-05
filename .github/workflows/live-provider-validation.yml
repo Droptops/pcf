@@ -19,7 +19,7 @@ jobs:
   openai:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout trusted main commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -54,12 +54,12 @@ jobs:
           --turns 1 --repeats 1 --arms front --history-style varied
           --workers 1 > /tmp/openai-smoke.json
 
-      - name: OpenAI bounded 12-turn matrix
+      - name: OpenAI bounded 24-turn replicated matrix
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: >-
           python scripts/live_memory_placement.py --run --provider openai
-          --turns 12 --repeats 1 --arms front tail placed --history-style varied
+          --turns 24 --repeats 3 --arms front tail placed --history-style varied
           --workers 1 > /tmp/openai-matrix.json
 
       - name: Print sanitized OpenAI summary
@@ -91,7 +91,7 @@ jobs:
   anthropic:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout trusted main commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -130,7 +130,7 @@ jobs:
           --turns 1 --repeats 1 --arms front --history-style varied
           > /tmp/anthropic-smoke.json
 
-      - name: Anthropic bounded 12-turn matrix
+      - name: Anthropic bounded 24-turn replicated matrix
         env:
           PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -138,7 +138,7 @@ jobs:
           ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
         run: >-
           python scripts/live_anthropic_workspace.py
-          --turns 12 --repeats 1 --arms front tail placed --history-style varied
+          --turns 24 --repeats 3 --arms front tail placed --history-style varied
           > /tmp/anthropic-matrix.json
 
       - name: Print sanitized Anthropic summary
