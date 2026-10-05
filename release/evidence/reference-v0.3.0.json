@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "milestone": "v0.3.0-reference",
+  "date": "2026-10-05",
+  "status": "complete-reference-system",
+  "production_release_status": "not-claimed",
+  "scope": "single-node PCF reference system with deterministic JIT lifecycle and live MemoryPlacer validation",
+  "source": {
+    "repository": "Droptops/pcf",
+    "git_sha": "2d0c856da4af4e885dc13a440956695c694ec964",
+    "workflow": "Live Provider Validation",
+    "workflow_run": 37348905559,
+    "workflow_url": "https://github.com/Droptops/pcf/actions/runs/37348905559",
+    "fixture": "synthetic-safe-v1",
+    "turns": 24,
+    "repeats": 3,
+    "arms": ["front", "tail", "placed"]
+  },
+  "openai": {
+    "model": "gpt-5.6",
+    "output_contract": "question-local-v1",
+    "front": {
+      "mean_billed_input_units": 78543,
+      "mean_billed_total_units": 87496,
+      "correct": "58/72",
+      "correct_on_stale_traps": "29/39",
+      "gave_stale": 4,
+      "copied_filler": "28/72",
+      "too_long": "0/72"
+    },
+    "tail": {
+      "mean_billed_input_units": 20528,
+      "mean_billed_total_units": 33688,
+      "correct": "72/72",
+      "correct_on_stale_traps": "39/39",
+      "gave_stale": 0,
+      "copied_filler": "0/72",
+      "too_long": "0/72"
+    },
+    "memory_placer": {
+      "mean_billed_input_units": 18593,
+      "mean_billed_total_units": 32618,
+      "correct": "72/72",
+      "correct_on_stale_traps": "39/39",
+      "gave_stale": 0,
+      "copied_filler": "0/72",
+      "too_long": "0/72",
+      "input_reduction_vs_front_pct": 76.33,
+      "input_reduction_vs_tail_pct": 9.43,
+      "total_reduction_vs_front_pct": 62.72,
+      "total_reduction_vs_tail_pct": 3.18
+    }
+  },
+  "anthropic": {
+    "model": "claude-sonnet-5",
+    "route": "direct",
+    "output_contract": "anthropic-exact-value-v1",
+    "front": {
+      "mean_billed_input_units": 44708,
+      "mean_billed_total_units": 47835,
+      "correct": "51/72",
+      "correct_on_stale_traps": "21/39",
+      "gave_stale": 0,
+      "copied_filler": "55/72",
+      "too_long": "0/72"
+    },
+    "tail": {
+      "mean_billed_input_units": 32276,
+      "mean_billed_total_units": 32876,
+      "correct": "72/72",
+      "correct_on_stale_traps": "39/39",
+      "gave_stale": 0,
+      "copied_filler": "1/72",
+      "too_long": "0/72"
+    },
+    "memory_placer": {
+      "mean_billed_input_units": 25336,
+      "mean_billed_total_units": 26243,
+      "correct": "72/72",
+      "correct_on_stale_traps": "39/39",
+      "gave_stale": 0,
+      "copied_filler": "7/72",
+      "too_long": "0/72",
+      "contract_repaired": "7/72",
+      "input_reduction_vs_front_pct": 43.33,
+      "input_reduction_vs_tail_pct": 21.5,
+      "total_reduction_vs_front_pct": 45.14,
+      "total_reduction_vs_tail_pct": 20.18
+    }
+  },
+  "claim_boundary": {
+    "supported": [
+      "complete tested single-node deterministic JIT reference lifecycle",
+      "live replicated MemoryPlacer validation on GPT-5.6 and Claude Sonnet 5",
+      "72/72 MemoryPlacer correctness and 39/39 stale-trap correctness on both providers in the canonical run",
+      "provider-specific cache economics and output-contract telemetry"
+    ],
+    "not_claimed": [
+      "distributed or multi-region production readiness",
+      "high availability or consensus guarantees",
+      "independent third-party security certification",
+      "passing real production-pilot release gate",
+      "learned classifier or specialist-model compile targets as production authority"
+    ]
+  }
+}
