@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import math
 import os
 import sys
 
@@ -19,6 +20,12 @@ import live_memory_placement as live  # noqa: E402
 
 WORKSPACE_ID_NAMES = ("PCF_ANTHROPIC_WORKSPACE_ID", "ANTHROPIC_WORKSPACE_ID")
 FIXTURE_ID = "synthetic-safe-v1"
+QUESTION_TYPES = ("open_ticket_count", "current_plan", "contact_channel", "preferred_language")
+ANTHROPIC_OUTPUT_CONTRACT = (
+    "Benchmark response contract: return exactly one answer value and nothing else. "
+    "For counts, return digits only. For plan, contact-channel, and language questions, return only the exact "
+    "configured value. Do not explain, quote, cite, summarize, or repeat synthetic history."
+)
 
 
 def _safe_profile() -> dict:
@@ -95,6 +102,88 @@ def _provider_error_code(exc: Exception) -> str:
     return type(exc).__name__
 
 
+def _system_text(provider: str, nonce: str) -> str:
+    contract = f"\n{ANTHROPIC_OUTPUT_CONTRACT}" if provider == "anthropic" else ""
+    return f"Benchmark session {nonce}.{contract}\n" + "\n".join(live.POLICIES)
+
+
+def _grade_safe(
+    answer: str,
+    turn: int,
+    expected: str,
+    stale: str | None,
+    style: str,
+    violation_tokens: int,
+) -> dict:
+    """Preserve the legacy grade while splitting format failure causes.
+
+    `contract_output` is a deterministic extraction of the bounded answer value. It is
+    diagnostic/fallback evidence only; raw provider format compliance remains separately visible.
+    """
+    base = live.grade(answer, turn, expected, stale, style, violation_tokens)
+    fillers = [live.TEMPLATE_FILLER] if style == "template" else [
+        filler.split("{n}")[1].strip() for filler in live.VARIED_FILLER
+    ]
+    copied_filler = any(filler.lower() in answer.lower() for filler in fillers)
+    too_long = math.ceil(len(answer) / 4) > violation_tokens
+    format_violation = copied_filler or too_long
+    if base["violation"] != format_violation:
+        raise AssertionError("safe fixture format diagnostics drifted from legacy grading")
+    contract_output = base["value"]
+    return {
+        **base,
+        "copied_filler": copied_filler,
+        "too_long": too_long,
+        "format_violation": format_violation,
+        "contract_output": contract_output,
+        "contract_repaired": format_violation and bool(contract_output),
+    }
+
+
+def _summarize(rows: list[dict], cfg, write_multiplier: float) -> dict:
+    summary = live.summarize(rows, cfg, write_multiplier)
+    total = len(rows)
+    for key in ("copied_filler", "too_long", "format_violation", "contract_repaired"):
+        summary[key] = f"{sum(bool(row[key]) for row in rows)}/{total}"
+    return summary
+
+
+def _aggregate(runs: list[dict], arms) -> dict:
+    aggregate = live.aggregate(runs, arms)
+    for arm in arms:
+        if arm not in aggregate:
+            continue
+        summaries = [run["summary"][arm] for run in runs]
+        for key in ("copied_filler", "too_long", "format_violation", "contract_repaired"):
+            pairs = [summary[key].split("/") for summary in summaries]
+            aggregate[arm][key] = f"{sum(int(a) for a, _ in pairs)}/{sum(int(b) for _, b in pairs)}"
+    return aggregate
+
+
+def _sanitized_misses(runs: list[dict], arms) -> list[dict]:
+    misses = []
+    for repeat_index, run in enumerate(runs, start=1):
+        for arm in arms:
+            for row in run[arm]:
+                if row.get("correct"):
+                    continue
+                misses.append(
+                    {
+                        "repeat": repeat_index,
+                        "arm": arm,
+                        "turn": row["turn"],
+                        "question_type": QUESTION_TYPES[row["turn"] % len(QUESTION_TYPES)],
+                        "expected": row["expected"],
+                        "extracted": row.get("contract_output", ""),
+                        "stale_trap": bool(row["stale_trap"]),
+                        "copied_filler": bool(row.get("copied_filler")),
+                        "too_long": bool(row.get("too_long")),
+                        "format_violation": bool(row.get("format_violation")),
+                    }
+                )
+    return misses
+
+
 def _make_client(provider: str):
     if provider == "openai":
         return live.make_client("openai")
@@ -117,7 +206,7 @@ def _session(arm: str, nonce: str, cfg, client) -> list[dict]:
         write_multiplier=compiler.descriptor.cache_write_multiplier,
         read_multiplier=cfg.read_multiplier,
     )
-    system = live.Segment("s", "system", f"Benchmark session {nonce}.\n" + "\n".join(live.POLICIES))
+    system = live.Segment("s", "system", _system_text(cfg.provider, nonce))
     history, rows, said = [], [], {}
     prefix_tokens = compiler.tokenizer.count(system.content)
     for turn in range(cfg.turns):
@@ -156,7 +245,7 @@ def _session(arm: str, nonce: str, cfg, client) -> list[dict]:
             uncached=usage.input_tokens,
             answer=answer,
             **out,
-            **live.grade(answer, turn, expected, stale, cfg.history_style, cfg.violation_tokens),
+            **_grade_safe(answer, turn, expected, stale, cfg.history_style, cfg.violation_tokens),
         )
         rows.append(row)
         said[text] = expected
@@ -188,7 +277,7 @@ def run(cfg) -> dict:
     runs = []
     for index in range(cfg.repeats):
         one = {arm: done[(index, arm)] for arm in cfg.arms}
-        one["summary"] = {arm: live.summarize(one[arm], cfg, writes) for arm in cfg.arms}
+        one["summary"] = {arm: _summarize(one[arm], cfg, writes) for arm in cfg.arms}
         runs.append(one)
     meta = {
         "date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
@@ -209,11 +298,17 @@ def run(cfg) -> dict:
         "nonce_scope": "session",
         "workers": cfg.workers,
         "fixture": FIXTURE_ID,
+        "output_contract": "anthropic-exact-value-v1" if cfg.provider == "anthropic" else "question-local-v1",
         "workspace_header_configured": (
             any(os.environ.get(name) for name in WORKSPACE_ID_NAMES) if cfg.provider == "anthropic" else None
         ),
     }
-    return {"meta": meta, "runs": runs, "aggregate": live.aggregate(runs, cfg.arms)}
+    return {
+        "meta": meta,
+        "runs": runs,
+        "aggregate": _aggregate(runs, cfg.arms),
+        "misses": _sanitized_misses(runs, cfg.arms),
+    }
 
 
 if __name__ == "__main__":
