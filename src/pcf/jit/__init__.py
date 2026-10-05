@@ -24,12 +24,6 @@ from .deterministic_canary import (
     rollback_failed_deterministic_canary,
     start_deterministic_canary,
 )
-from .deterministic_monitor import (
-    DeterministicHealthEvidence,
-    DeterministicMonitorPolicy,
-    demote_unhealthy_deterministic_active,
-    evaluate_deterministic_active_health,
-)
 from .deterministic_pipeline import (
     DeterministicBuildEvidence,
     DeterministicBuildPolicy,
@@ -44,6 +38,13 @@ from .deterministic_pipeline import (
     prepare_deterministic_candidate,
     register_deterministic_shadow_candidate,
     verify_deterministic_artifact,
+)
+from .deterministic_store import (
+    DeterministicArtifactStoreError,
+    SQLiteDeterministicArtifactStore,
+    StoredDeterministicArtifact,
+    resolve_active_deterministic_artifact,
+    resolve_registered_deterministic_artifact,
 )
 from .deterministic_synthesis import (
     SYNTHESIS_VERSION,
@@ -129,6 +130,7 @@ __all__ = [
     "DEFAULT_JEV_MODEL",
     "DEFAULT_OPENROUTER_DECISIONS_URL",
     "DeterministicArtifact",
+    "DeterministicArtifactStoreError",
     "DeterministicBuildEvidence",
     "DeterministicBuildPolicy",
     "DeterministicCanaryEvidence",
@@ -136,8 +138,6 @@ __all__ = [
     "DeterministicCandidateBuild",
     "DeterministicCompileError",
     "DeterministicExecutionError",
-    "DeterministicHealthEvidence",
-    "DeterministicMonitorPolicy",
     "DeterministicPipelineError",
     "DeterministicPolicy",
     "DeterministicShadowEvaluation",
@@ -184,6 +184,7 @@ __all__ = [
     "RouteState",
     "RouteTransition",
     "SYNTHESIS_VERSION",
+    "SQLiteDeterministicArtifactStore",
     "SQLiteRouteRegistry",
     "ShadowAssessment",
     "ShadowExecutor",
@@ -193,6 +194,7 @@ __all__ = [
     "ShadowRun",
     "ShadowTarget",
     "StaleRouteGeneration",
+    "StoredDeterministicArtifact",
     "TaskSignature",
     "TraceReplaySummary",
     "TraceReplayer",
@@ -203,9 +205,7 @@ __all__ = [
     "apply_pcf_reconciled_input_cost",
     "compile_deterministic_artifact",
     "default_jev_benchmark_cases",
-    "demote_unhealthy_deterministic_active",
     "estimate_pcf_input_cost",
-    "evaluate_deterministic_active_health",
     "evaluate_deterministic_canary",
     "evaluate_deterministic_shadow",
     "evaluate_jev_selective_evidence",
@@ -219,6 +219,8 @@ __all__ = [
     "prepare_deterministic_candidate",
     "reconcile_pcf_input_cost",
     "register_deterministic_shadow_candidate",
+    "resolve_active_deterministic_artifact",
+    "resolve_registered_deterministic_artifact",
     "rollback_failed_deterministic_canary",
     "run_jev_benchmark",
     "start_deterministic_canary",
