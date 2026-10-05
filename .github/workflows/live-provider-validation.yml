@@ -84,6 +84,7 @@ jobs:
                   "repeats": meta.get("repeats"),
                   "arms": meta.get("arms"),
                   "git_sha": meta.get("git_sha"),
+                  "repeat_summaries": [run.get("summary", {}) for run in data.get("runs", [])],
                   "aggregate": data.get("aggregate"),
               }
           print(json.dumps(summary, indent=2, sort_keys=True))
@@ -166,6 +167,7 @@ jobs:
                   "repeats": meta.get("repeats"),
                   "arms": meta.get("arms"),
                   "git_sha": meta.get("git_sha"),
+                  "repeat_summaries": [run.get("summary", {}) for run in data.get("runs", [])],
                   "aggregate": data.get("aggregate"),
               }
           print(json.dumps(summary, indent=2, sort_keys=True))
