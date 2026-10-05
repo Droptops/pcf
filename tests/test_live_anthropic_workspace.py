@@ -56,6 +56,17 @@ def test_workspace_id_fallback_is_supported(monkeypatch):
     assert client["default_headers"] == {"anthropic-workspace-id": "wrkspc_fallback"}
 
 
+def test_pcf_workspace_id_takes_precedence_over_fallback(monkeypatch):
+    _clear(monkeypatch)
+    _fake_sdk(monkeypatch)
+    monkeypatch.setenv("PCF_ANTHROPIC_API_KEY", "key")
+    monkeypatch.setenv("PCF_ANTHROPIC_WORKSPACE_ID", "wrkspc_pcf")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "wrkspc_fallback")
+
+    client = workspace.make_client()
+    assert client["default_headers"] == {"anthropic-workspace-id": "wrkspc_pcf"}
+
+
 def test_missing_anthropic_key_fails_before_sdk_use(monkeypatch):
     _clear(monkeypatch)
     with pytest.raises(SystemExit, match="PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY"):
