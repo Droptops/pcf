@@ -8,6 +8,14 @@ from .authority import (
 )
 from .cache import CacheEnvelope, RiskAwareResultCache
 from .cost_calibration import CostCalibrationPolicy, CostCalibrationSnapshot, PCFCostCalibrator
+from .deterministic import (
+    DeterministicArtifact,
+    DeterministicCompileError,
+    DeterministicExecutionError,
+    DeterministicPolicy,
+    compile_deterministic_artifact,
+    execute_deterministic_artifact,
+)
 from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintObservation, TaskSignature
 from .hotpath import CompileEconomics, CompileEligibility, HotPathDetector, HotPathStats
 from .jev_benchmark import (
@@ -82,6 +90,10 @@ __all__ = [
     "CostCalibrationSnapshot",
     "DEFAULT_JEV_MODEL",
     "DEFAULT_OPENROUTER_DECISIONS_URL",
+    "DeterministicArtifact",
+    "DeterministicCompileError",
+    "DeterministicExecutionError",
+    "DeterministicPolicy",
     "ExecutionPrimitive",
     "FingerprintAudit",
     "FingerprintAuditSummary",
@@ -135,9 +147,11 @@ __all__ = [
     "apply_faar_authority",
     "apply_pcf_input_cost",
     "apply_pcf_reconciled_input_cost",
+    "compile_deterministic_artifact",
     "default_jev_benchmark_cases",
     "estimate_pcf_input_cost",
     "evaluate_jev_selective_evidence",
+    "execute_deterministic_artifact",
     "make_pcf_metered_shadow_runner",
     "make_pcf_reconciled_shadow_runner",
     "normalize_faar_authority_decision",
