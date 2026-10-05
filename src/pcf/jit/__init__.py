@@ -24,6 +24,12 @@ from .deterministic_canary import (
     rollback_failed_deterministic_canary,
     start_deterministic_canary,
 )
+from .deterministic_monitor import (
+    DeterministicHealthEvidence,
+    DeterministicMonitorPolicy,
+    demote_unhealthy_deterministic_active,
+    evaluate_deterministic_active_health,
+)
 from .deterministic_pipeline import (
     DeterministicBuildEvidence,
     DeterministicBuildPolicy,
@@ -130,6 +136,8 @@ __all__ = [
     "DeterministicCandidateBuild",
     "DeterministicCompileError",
     "DeterministicExecutionError",
+    "DeterministicHealthEvidence",
+    "DeterministicMonitorPolicy",
     "DeterministicPipelineError",
     "DeterministicPolicy",
     "DeterministicShadowEvaluation",
@@ -195,7 +203,9 @@ __all__ = [
     "apply_pcf_reconciled_input_cost",
     "compile_deterministic_artifact",
     "default_jev_benchmark_cases",
+    "demote_unhealthy_deterministic_active",
     "estimate_pcf_input_cost",
+    "evaluate_deterministic_active_health",
     "evaluate_deterministic_canary",
     "evaluate_deterministic_shadow",
     "evaluate_jev_selective_evidence",
