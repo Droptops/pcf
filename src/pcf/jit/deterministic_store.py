@@ -128,8 +128,9 @@ class SQLiteDeterministicArtifactStore:
             isinstance(created_at, bool)
             or not isinstance(created_at, (int, float))
             or not math.isfinite(float(created_at))
+            or created_at < 0
         ):
-            raise ValueError("created_at must be finite")
+            raise ValueError("created_at must be finite and non-negative")
         payload = self._encode_payload(artifact)
         with self._lock:
             connection = self._connect()
@@ -173,8 +174,8 @@ class SQLiteDeterministicArtifactStore:
                 if not isinstance(item, list) or len(item) != 2:
                     raise ValueError("invalid dependency entry")
                 key, value = item
-                if key in dependencies:
-                    raise ValueError("duplicate dependency")
+                if not isinstance(key, str) or not isinstance(value, str) or key in dependencies:
+                    raise ValueError("invalid or duplicate dependency")
                 dependencies[key] = value
             artifact = compile_deterministic_artifact(
                 name=payload["name"],
@@ -190,7 +191,9 @@ class SQLiteDeterministicArtifactStore:
                 raise ValueError("stored artifact structure counters do not match")
             verify_deterministic_artifact(artifact)
             return artifact
-        except (KeyError, TypeError, ValueError, DeterministicPipelineError) as exc:
+        except Exception as exc:
+            if isinstance(exc, DeterministicArtifactStoreError):
+                raise
             raise DeterministicArtifactStoreError("stored deterministic artifact is corrupt") from exc
 
     def get(self, artifact_sha256: str) -> DeterministicArtifact:

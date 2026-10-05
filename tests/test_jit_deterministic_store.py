@@ -127,9 +127,7 @@ def test_route_name_or_version_mismatch_fails_closed(tmp_path) -> None:
     store = SQLiteDeterministicArtifactStore(str(tmp_path / "artifacts.sqlite"))
     store.put(artifact, created_at=10.0)
     route = _route(artifact)
-    wrong = RegisteredRoute(
-        **{**route.__dict__, "name": "different"}
-    )
+    wrong = RegisteredRoute(**{**route.__dict__, "name": "different"})
     with pytest.raises(DeterministicArtifactStoreError, match="metadata does not match"):
         resolve_registered_deterministic_artifact(wrong, store)
 
