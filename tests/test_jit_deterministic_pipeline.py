@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pcf.jit.deterministic import DeterministicExecutionError, compile_deterministic_artifact
+from pcf.jit.deterministic import compile_deterministic_artifact, execute_deterministic_artifact
 from pcf.jit.deterministic_pipeline import (
     DeterministicBuildPolicy,
     DeterministicPipelineError,
@@ -124,15 +124,22 @@ def test_prepare_rejects_validation_mismatch() -> None:
         )
 
 
-def test_verified_execution_detects_post_compile_mutation() -> None:
+def test_compiled_artifact_is_isolated_from_source_and_exposed_expression_mutation() -> None:
+    source = {"op": "input", "path": "value"}
     artifact = compile_deterministic_artifact(
-        name="mutable_surface",
+        name="immutable_surface",
         version="1",
-        expression={"op": "input", "path": "value"},
+        expression=source,
     )
-    artifact.expression["path"] = "other"
-    with pytest.raises(DeterministicExecutionError, match="integrity validation failed"):
-        execute_verified_deterministic_artifact(artifact, {"value": 1, "other": 2})
+
+    source["path"] = "other"
+    exposed = artifact.expression
+    exposed["path"] = "other"
+
+    inputs = {"value": 1, "other": 2}
+    assert execute_deterministic_artifact(artifact, inputs) == 1
+    assert execute_verified_deterministic_artifact(artifact, inputs) == 1
+    assert artifact.expression == {"op": "input", "path": "value"}
 
 
 def test_shadow_runner_does_not_self_authorize() -> None:
