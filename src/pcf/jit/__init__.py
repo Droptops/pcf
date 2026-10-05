@@ -31,6 +31,15 @@ from .deterministic_pipeline import (
     register_deterministic_shadow_candidate,
     verify_deterministic_artifact,
 )
+from .deterministic_synthesis import (
+    SYNTHESIS_VERSION,
+    DeterministicSynthesisError,
+    DeterministicSynthesisEvidence,
+    DeterministicSynthesisPolicy,
+    DeterministicSynthesisResult,
+    synthesize_and_prepare_deterministic_candidate,
+    synthesize_deterministic_expression,
+)
 from .fingerprint import FingerprintAudit, FingerprintAuditSummary, FingerprintObservation, TaskSignature
 from .hotpath import CompileEconomics, CompileEligibility, HotPathDetector, HotPathStats
 from .jev_benchmark import (
@@ -114,6 +123,10 @@ __all__ = [
     "DeterministicPipelineError",
     "DeterministicPolicy",
     "DeterministicShadowEvaluation",
+    "DeterministicSynthesisError",
+    "DeterministicSynthesisEvidence",
+    "DeterministicSynthesisPolicy",
+    "DeterministicSynthesisResult",
     "DeterministicValidationExample",
     "ExecutionPrimitive",
     "FingerprintAudit",
@@ -152,6 +165,7 @@ __all__ = [
     "RouteRegistry",
     "RouteState",
     "RouteTransition",
+    "SYNTHESIS_VERSION",
     "SQLiteRouteRegistry",
     "ShadowAssessment",
     "ShadowExecutor",
@@ -184,6 +198,8 @@ __all__ = [
     "reconcile_pcf_input_cost",
     "register_deterministic_shadow_candidate",
     "run_jev_benchmark",
+    "synthesize_and_prepare_deterministic_candidate",
+    "synthesize_deterministic_expression",
     "verify_deterministic_artifact",
     "wilson_lower_bound",
 ]
