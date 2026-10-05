@@ -30,6 +30,7 @@ class DeterministicMonitorPolicy:
 @dataclass(frozen=True)
 class DeterministicHealthEvidence:
     healthy: bool
+    demote: bool
     reasons: tuple[str, ...]
     route_id: str
     route_generation: int
@@ -93,14 +94,19 @@ def evaluate_deterministic_active_health(
         projected_future_calls=projected_future_calls,
     )
     monitor_policy = policy or DeterministicMonitorPolicy()
+    enough_evidence = attempted >= monitor_policy.min_attempted_requests
+    healthy = enough_evidence and promotion.promote
+    demote = enough_evidence and not promotion.promote
+
     reasons: list[str] = []
-    if attempted < monitor_policy.min_attempted_requests:
+    if not enough_evidence:
         reasons.append("insufficient_monitor_attempts")
-    if not promotion.promote:
+    if enough_evidence and not promotion.promote:
         reasons.extend(f"health:{reason}" for reason in promotion.reasons)
 
     return DeterministicHealthEvidence(
-        healthy=not reasons,
+        healthy=healthy,
+        demote=demote,
         reasons=tuple(reasons),
         route_id=route.route_id,
         route_generation=route.generation,
@@ -136,13 +142,15 @@ def demote_unhealthy_deterministic_active(
     now: float,
     policy: DeterministicMonitorPolicy | None = None,
 ) -> RegisteredRoute:
-    """Demote ACTIVE -> CANARY only with failing evidence bound to this generation."""
+    """Demote ACTIVE -> CANARY only with actionable failing evidence for this generation."""
     if not isinstance(registry, RouteRegistry):
         raise DeterministicPipelineError("registry must be RouteRegistry")
     _require_active_route_matches_build(route, build)
     _require_health_evidence(route, evidence)
-    if evidence.healthy:
-        raise DeterministicPipelineError("healthy evidence cannot demote an active route")
+    if not evidence.demote:
+        if evidence.healthy:
+            raise DeterministicPipelineError("healthy evidence cannot demote an active route")
+        raise DeterministicPipelineError("insufficient health evidence cannot demote an active route")
     monitor_policy = policy or DeterministicMonitorPolicy()
     return registry.demote_active(
         route.route_id,
