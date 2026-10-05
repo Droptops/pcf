@@ -6,10 +6,11 @@ and outputs are finite JSON-like values only.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 import math
+from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 
@@ -47,6 +48,7 @@ _ALLOWED_OPS = frozenset(
         "strip",
     }
 )
+_ARTIFACT_SEAL = object()
 
 
 @dataclass(frozen=True)
@@ -63,15 +65,48 @@ class DeterministicPolicy:
                 raise ValueError(f"{name} must be a positive integer")
 
 
-@dataclass(frozen=True)
+def _freeze_json(value: Any) -> Any:
+    """Recursively freeze a finite JSON-like value without changing its semantics."""
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _freeze_json(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_json(item) for item in value)
+    return value
+
+
+def _thaw_json(value: Any) -> Any:
+    """Return a detached mutable JSON-compatible snapshot of a frozen value."""
+    if isinstance(value, Mapping):
+        return {key: _thaw_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_thaw_json(item) for item in value]
+    return value
+
+
+@dataclass(frozen=True, init=False)
 class DeterministicArtifact:
+    """Compiler-produced immutable deterministic program.
+
+    The executable expression is kept in a recursively immutable internal form.
+    ``expression`` exposes only a detached JSON-compatible snapshot so callers cannot
+    mutate the program after its content hash has been computed.
+    """
+
     name: str
     version: str
-    expression: Mapping[str, Any]
+    _expression: Mapping[str, Any] = field(repr=False)
     dependencies: tuple[tuple[str, str], ...]
     artifact_sha256: str
     node_count: int
     max_depth: int
+    _seal: object = field(repr=False, compare=False)
+
+    def __new__(cls):
+        raise TypeError("DeterministicArtifact must be created by compile_deterministic_artifact")
+
+    @property
+    def expression(self) -> Mapping[str, Any]:
+        return _thaw_json(self._expression)
 
 
 def _finite_json(value: Any, *, policy: DeterministicPolicy, depth: int = 0) -> None:
@@ -146,7 +181,7 @@ def _walk_expression(expr: Any, *, policy: DeterministicPolicy, depth: int = 1) 
     elif op == "if":
         if keys != {"op", "condition", "then", "else"}:
             raise DeterministicCompileError("if requires condition, then, and else")
-        children.extend((expr["condition"], expr["then"], expr["else"] ))
+        children.extend((expr["condition"], expr["then"], expr["else"]))
     else:
         if keys != {"op", "args"} or not isinstance(expr.get("args"), Sequence) or isinstance(expr["args"], (str, bytes)):
             raise DeterministicCompileError(f"{op} requires an args array")
@@ -177,12 +212,14 @@ def compile_deterministic_artifact(
     dependencies: Mapping[str, str] | None = None,
     policy: DeterministicPolicy | None = None,
 ) -> DeterministicArtifact:
-    """Validate and freeze a deterministic artifact with a stable content hash."""
+    """Validate and seal a deterministic artifact with a stable content hash."""
     policy = policy or DeterministicPolicy()
     if not isinstance(name, str) or not name.strip():
         raise DeterministicCompileError("name must be non-empty")
     if not isinstance(version, str) or not version.strip():
         raise DeterministicCompileError("version must be non-empty")
+    if not isinstance(expression, Mapping):
+        raise DeterministicCompileError("expression must be a mapping")
     deps = dependencies or {}
     if not isinstance(deps, Mapping):
         raise DeterministicCompileError("dependencies must be a mapping")
@@ -192,27 +229,39 @@ def compile_deterministic_artifact(
             raise DeterministicCompileError("dependency names and versions must be non-empty strings")
         normalized_deps.append((key, value))
     normalized_deps.sort()
-    node_count, max_depth = _walk_expression(expression, policy=policy)
+
+    # Snapshot the caller-owned expression before validation and hashing. The artifact
+    # never retains references to caller-owned dicts/lists.
+    expression_snapshot = _thaw_json(expression)
+    node_count, max_depth = _walk_expression(expression_snapshot, policy=policy)
     payload = {
         "schema": "pcf.deterministic.v1",
         "name": name,
         "version": version,
         "dependencies": normalized_deps,
-        "expression": expression,
+        "expression": expression_snapshot,
     }
     try:
-        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
+        canonical = json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode()
     except (TypeError, ValueError) as exc:
         raise DeterministicCompileError("artifact is not canonical JSON") from exc
-    return DeterministicArtifact(
-        name=name,
-        version=version,
-        expression=dict(expression),
-        dependencies=tuple(normalized_deps),
-        artifact_sha256=sha256(canonical).hexdigest(),
-        node_count=node_count,
-        max_depth=max_depth,
-    )
+
+    artifact = object.__new__(DeterministicArtifact)
+    object.__setattr__(artifact, "name", name)
+    object.__setattr__(artifact, "version", version)
+    object.__setattr__(artifact, "_expression", _freeze_json(expression_snapshot))
+    object.__setattr__(artifact, "dependencies", tuple(normalized_deps))
+    object.__setattr__(artifact, "artifact_sha256", sha256(canonical).hexdigest())
+    object.__setattr__(artifact, "node_count", node_count)
+    object.__setattr__(artifact, "max_depth", max_depth)
+    object.__setattr__(artifact, "_seal", _ARTIFACT_SEAL)
+    return artifact
 
 
 def _numeric(value: Any, op: str) -> int | float:
@@ -296,9 +345,9 @@ def execute_deterministic_artifact(
     *,
     policy: DeterministicPolicy | None = None,
 ) -> Any:
-    """Execute a validated artifact over finite JSON-like inputs."""
-    if not isinstance(artifact, DeterministicArtifact):
-        raise DeterministicExecutionError("artifact must be DeterministicArtifact")
+    """Execute a compiler-produced immutable artifact over finite JSON-like inputs."""
+    if type(artifact) is not DeterministicArtifact or getattr(artifact, "_seal", None) is not _ARTIFACT_SEAL:
+        raise DeterministicExecutionError("artifact must be produced by compile_deterministic_artifact")
     if not isinstance(inputs, Mapping):
         raise DeterministicExecutionError("inputs must be a mapping")
     policy = policy or DeterministicPolicy()
@@ -306,9 +355,9 @@ def execute_deterministic_artifact(
         _finite_json(inputs, policy=policy)
     except DeterministicCompileError as exc:
         raise DeterministicExecutionError(str(exc)) from exc
-    result = _eval(artifact.expression, inputs, policy)
+    result = _eval(artifact._expression, inputs, policy)
     try:
         _finite_json(result, policy=policy)
     except DeterministicCompileError as exc:
         raise DeterministicExecutionError(str(exc)) from exc
-    return result
+    return _thaw_json(result)
