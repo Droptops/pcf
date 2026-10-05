@@ -80,12 +80,14 @@ jobs:
                   "provider": meta.get("provider"),
                   "model": meta.get("model"),
                   "fixture": meta.get("fixture"),
+                  "output_contract": meta.get("output_contract"),
                   "turns": meta.get("turns"),
                   "repeats": meta.get("repeats"),
                   "arms": meta.get("arms"),
                   "git_sha": meta.get("git_sha"),
                   "repeat_summaries": [run.get("summary", {}) for run in data.get("runs", [])],
                   "aggregate": data.get("aggregate"),
+                  "misses": data.get("misses", []),
               }
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
@@ -161,6 +163,7 @@ jobs:
                   "provider": meta.get("provider"),
                   "model": meta.get("model"),
                   "fixture": meta.get("fixture"),
+                  "output_contract": meta.get("output_contract"),
                   "anthropic_route": meta.get("anthropic_route"),
                   "workspace_header_configured": meta.get("workspace_header_configured"),
                   "turns": meta.get("turns"),
@@ -169,6 +172,7 @@ jobs:
                   "git_sha": meta.get("git_sha"),
                   "repeat_summaries": [run.get("summary", {}) for run in data.get("runs", [])],
                   "aggregate": data.get("aggregate"),
+                  "misses": data.get("misses", []),
               }
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
