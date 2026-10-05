@@ -11,7 +11,6 @@ import argparse
 import datetime
 import json
 import os
-import statistics
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -45,7 +44,12 @@ def run(cfg) -> dict:
     cfg.workers = 1
 
     client = make_client()
-    writes = live.make_compiler(cfg.provider, cfg.model, effort=cfg.effort, thinking=cfg.thinking).descriptor.cache_write_multiplier
+    writes = live.make_compiler(
+        cfg.provider,
+        cfg.model,
+        effort=cfg.effort,
+        thinking=cfg.thinking,
+    ).descriptor.cache_write_multiplier
     jobs = [(index, arm) for index in range(cfg.repeats) for arm in cfg.arms]
     nonces = live.session_nonces(jobs, True)
     done = {job: live.session(job[1], nonces[job], cfg, client) for job in jobs}
