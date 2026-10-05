@@ -50,17 +50,17 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: >-
-          python scripts/live_memory_placement.py --run --provider openai
+          python scripts/live_safe_memory_matrix.py --provider openai
           --turns 1 --repeats 1 --arms front --history-style varied
-          --workers 1 > /tmp/openai-smoke.json
+          > /tmp/openai-smoke.json
 
       - name: OpenAI bounded 24-turn replicated matrix
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: >-
-          python scripts/live_memory_placement.py --run --provider openai
+          python scripts/live_safe_memory_matrix.py --provider openai
           --turns 24 --repeats 3 --arms front tail placed --history-style varied
-          --workers 1 > /tmp/openai-matrix.json
+          > /tmp/openai-matrix.json
 
       - name: Print sanitized OpenAI summary
         shell: bash
@@ -79,10 +79,12 @@ jobs:
               summary[name] = {
                   "provider": meta.get("provider"),
                   "model": meta.get("model"),
+                  "fixture": meta.get("fixture"),
                   "turns": meta.get("turns"),
                   "repeats": meta.get("repeats"),
                   "arms": meta.get("arms"),
                   "git_sha": meta.get("git_sha"),
+                  "repeat_summaries": [run.get("summary", {}) for run in data.get("runs", [])],
                   "aggregate": data.get("aggregate"),
               }
           print(json.dumps(summary, indent=2, sort_keys=True))
@@ -126,7 +128,7 @@ jobs:
           PCF_ANTHROPIC_WORKSPACE_ID: ${{ secrets.PCF_ANTHROPIC_WORKSPACE_ID }}
           ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
         run: >-
-          python scripts/live_anthropic_workspace.py
+          python scripts/live_safe_memory_matrix.py --provider anthropic
           --turns 1 --repeats 1 --arms front --history-style varied
           > /tmp/anthropic-smoke.json
 
@@ -137,7 +139,7 @@ jobs:
           PCF_ANTHROPIC_WORKSPACE_ID: ${{ secrets.PCF_ANTHROPIC_WORKSPACE_ID }}
           ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
         run: >-
-          python scripts/live_anthropic_workspace.py
+          python scripts/live_safe_memory_matrix.py --provider anthropic
           --turns 24 --repeats 3 --arms front tail placed --history-style varied
           > /tmp/anthropic-matrix.json
 
@@ -158,12 +160,14 @@ jobs:
               summary[name] = {
                   "provider": meta.get("provider"),
                   "model": meta.get("model"),
+                  "fixture": meta.get("fixture"),
                   "anthropic_route": meta.get("anthropic_route"),
                   "workspace_header_configured": meta.get("workspace_header_configured"),
                   "turns": meta.get("turns"),
                   "repeats": meta.get("repeats"),
                   "arms": meta.get("arms"),
                   "git_sha": meta.get("git_sha"),
+                  "repeat_summaries": [run.get("summary", {}) for run in data.get("runs", [])],
                   "aggregate": data.get("aggregate"),
               }
           print(json.dumps(summary, indent=2, sort_keys=True))
