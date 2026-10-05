@@ -78,7 +78,7 @@ def _thaw_json(value: Any) -> Any:
     """Return a detached mutable JSON-compatible snapshot of a frozen value."""
     if isinstance(value, Mapping):
         return {key: _thaw_json(item) for key, item in value.items()}
-    if isinstance(value, tuple):
+    if isinstance(value, (list, tuple)):
         return [_thaw_json(item) for item in value]
     return value
 
@@ -100,6 +100,9 @@ class DeterministicArtifact:
     node_count: int
     max_depth: int
     _seal: object = field(repr=False, compare=False)
+
+    def __new__(cls):
+        raise TypeError("DeterministicArtifact must be created by compile_deterministic_artifact")
 
     @property
     def expression(self) -> Mapping[str, Any]:
@@ -343,7 +346,7 @@ def execute_deterministic_artifact(
     policy: DeterministicPolicy | None = None,
 ) -> Any:
     """Execute a compiler-produced immutable artifact over finite JSON-like inputs."""
-    if type(artifact) is not DeterministicArtifact or artifact._seal is not _ARTIFACT_SEAL:
+    if type(artifact) is not DeterministicArtifact or getattr(artifact, "_seal", None) is not _ARTIFACT_SEAL:
         raise DeterministicExecutionError("artifact must be produced by compile_deterministic_artifact")
     if not isinstance(inputs, Mapping):
         raise DeterministicExecutionError("inputs must be a mapping")
