@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate:
+  openai:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -34,23 +34,17 @@ jobs:
       - name: Install live dependencies
         run: python -m pip install -e '.[live]'
 
-      - name: Require provider credentials
+      - name: Require OpenAI credential
         shell: bash
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
           if [[ -z "${OPENAI_API_KEY:-}" ]]; then
             echo "OPENAI_API_KEY is not configured"
             exit 2
           fi
-          if [[ -z "${PCF_ANTHROPIC_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
-            echo "PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY is not configured"
-            exit 2
-          fi
-          echo "Provider credentials are configured"
+          echo "OpenAI credential is configured"
 
       - name: OpenAI one-call smoke
         env:
@@ -60,16 +54,6 @@ jobs:
           --turns 1 --repeats 1 --arms front --history-style varied
           --workers 1 > /tmp/openai-smoke.json
 
-      - name: Anthropic one-call smoke
-        env:
-          PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: >-
-          python scripts/live_memory_placement.py --run --provider anthropic
-          --anthropic-route direct --thinking disabled
-          --turns 1 --repeats 1 --arms front --history-style varied
-          --workers 1 > /tmp/anthropic-smoke.json
-
       - name: OpenAI bounded 12-turn matrix
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -78,37 +62,104 @@ jobs:
           --turns 12 --repeats 1 --arms front tail placed --history-style varied
           --workers 1 > /tmp/openai-matrix.json
 
-      - name: Anthropic bounded 12-turn matrix
-        env:
-          PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: >-
-          python scripts/live_memory_placement.py --run --provider anthropic
-          --anthropic-route direct --thinking disabled
-          --turns 12 --repeats 1 --arms front tail placed --history-style varied
-          --workers 1 > /tmp/anthropic-matrix.json
-
-      - name: Print sanitized benchmark summary
+      - name: Print sanitized OpenAI summary
         shell: bash
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
 
-          files = {
-              "openai_smoke": Path("/tmp/openai-smoke.json"),
-              "anthropic_smoke": Path("/tmp/anthropic-smoke.json"),
-              "openai_matrix": Path("/tmp/openai-matrix.json"),
-              "anthropic_matrix": Path("/tmp/anthropic-matrix.json"),
-          }
           summary = {}
-          for name, path in files.items():
-              data = json.loads(path.read_text())
+          for name, filename in (
+              ("openai_smoke", "/tmp/openai-smoke.json"),
+              ("openai_matrix", "/tmp/openai-matrix.json"),
+          ):
+              data = json.loads(Path(filename).read_text())
+              meta = data.get("meta", {})
+              summary[name] = {
+                  "provider": meta.get("provider"),
+                  "model": meta.get("model"),
+                  "turns": meta.get("turns"),
+                  "repeats": meta.get("repeats"),
+                  "arms": meta.get("arms"),
+                  "git_sha": meta.get("git_sha"),
+                  "aggregate": data.get("aggregate"),
+              }
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+
+  anthropic:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout trusted main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+
+      - name: Install live dependencies
+        run: python -m pip install -e '.[live]'
+
+      - name: Require Anthropic credential
+        shell: bash
+        env:
+          PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PCF_ANTHROPIC_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+            echo "PCF_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY is not configured"
+            exit 2
+          fi
+          echo "Anthropic credential is configured"
+
+      - name: Anthropic one-call smoke
+        env:
+          PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PCF_ANTHROPIC_WORKSPACE_ID: ${{ secrets.PCF_ANTHROPIC_WORKSPACE_ID }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
+        run: >-
+          python scripts/live_anthropic_workspace.py
+          --turns 1 --repeats 1 --arms front --history-style varied
+          > /tmp/anthropic-smoke.json
+
+      - name: Anthropic bounded 12-turn matrix
+        env:
+          PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PCF_ANTHROPIC_WORKSPACE_ID: ${{ secrets.PCF_ANTHROPIC_WORKSPACE_ID }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
+        run: >-
+          python scripts/live_anthropic_workspace.py
+          --turns 12 --repeats 1 --arms front tail placed --history-style varied
+          > /tmp/anthropic-matrix.json
+
+      - name: Print sanitized Anthropic summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = {}
+          for name, filename in (
+              ("anthropic_smoke", "/tmp/anthropic-smoke.json"),
+              ("anthropic_matrix", "/tmp/anthropic-matrix.json"),
+          ):
+              data = json.loads(Path(filename).read_text())
               meta = data.get("meta", {})
               summary[name] = {
                   "provider": meta.get("provider"),
                   "model": meta.get("model"),
                   "anthropic_route": meta.get("anthropic_route"),
+                  "workspace_header_configured": meta.get("workspace_header_configured"),
                   "turns": meta.get("turns"),
                   "repeats": meta.get("repeats"),
                   "arms": meta.get("arms"),
