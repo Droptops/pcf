@@ -39,6 +39,13 @@ from .deterministic_pipeline import (
     register_deterministic_shadow_candidate,
     verify_deterministic_artifact,
 )
+from .deterministic_store import (
+    DeterministicArtifactStoreError,
+    SQLiteDeterministicArtifactStore,
+    StoredDeterministicArtifact,
+    resolve_active_deterministic_artifact,
+    resolve_registered_deterministic_artifact,
+)
 from .deterministic_synthesis import (
     SYNTHESIS_VERSION,
     DeterministicSynthesisError,
@@ -123,6 +130,7 @@ __all__ = [
     "DEFAULT_JEV_MODEL",
     "DEFAULT_OPENROUTER_DECISIONS_URL",
     "DeterministicArtifact",
+    "DeterministicArtifactStoreError",
     "DeterministicBuildEvidence",
     "DeterministicBuildPolicy",
     "DeterministicCanaryEvidence",
@@ -176,6 +184,7 @@ __all__ = [
     "RouteState",
     "RouteTransition",
     "SYNTHESIS_VERSION",
+    "SQLiteDeterministicArtifactStore",
     "SQLiteRouteRegistry",
     "ShadowAssessment",
     "ShadowExecutor",
@@ -185,6 +194,7 @@ __all__ = [
     "ShadowRun",
     "ShadowTarget",
     "StaleRouteGeneration",
+    "StoredDeterministicArtifact",
     "TaskSignature",
     "TraceReplaySummary",
     "TraceReplayer",
@@ -209,6 +219,8 @@ __all__ = [
     "prepare_deterministic_candidate",
     "reconcile_pcf_input_cost",
     "register_deterministic_shadow_candidate",
+    "resolve_active_deterministic_artifact",
+    "resolve_registered_deterministic_artifact",
     "rollback_failed_deterministic_canary",
     "run_jev_benchmark",
     "start_deterministic_canary",
