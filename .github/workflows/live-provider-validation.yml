@@ -17,12 +17,9 @@ concurrency:
 
 jobs:
   validate:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - name: Checkout trusted main commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -39,6 +36,10 @@ jobs:
 
       - name: Require provider credentials
         shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
           if [[ -z "${OPENAI_API_KEY:-}" ]]; then
@@ -52,12 +53,17 @@ jobs:
           echo "Provider credentials are configured"
 
       - name: OpenAI one-call smoke
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: >-
           python scripts/live_memory_placement.py --run --provider openai
           --turns 1 --repeats 1 --arms front --history-style varied
           --workers 1 > /tmp/openai-smoke.json
 
       - name: Anthropic one-call smoke
+        env:
+          PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: >-
           python scripts/live_memory_placement.py --run --provider anthropic
           --anthropic-route direct --thinking disabled
@@ -65,12 +71,17 @@ jobs:
           --workers 1 > /tmp/anthropic-smoke.json
 
       - name: OpenAI bounded 12-turn matrix
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: >-
           python scripts/live_memory_placement.py --run --provider openai
           --turns 12 --repeats 1 --arms front tail placed --history-style varied
           --workers 1 > /tmp/openai-matrix.json
 
       - name: Anthropic bounded 12-turn matrix
+        env:
+          PCF_ANTHROPIC_API_KEY: ${{ secrets.PCF_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: >-
           python scripts/live_memory_placement.py --run --provider anthropic
           --anthropic-route direct --thinking disabled
